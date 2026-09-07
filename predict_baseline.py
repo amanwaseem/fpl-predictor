@@ -54,11 +54,6 @@ def load_snapshot():
 
     snap = Path("data/raw") / latest_file.read_text().strip()
     players_dir = snap / "players"
-    if not players_dir.exists():
-        raise SystemExit(
-            f"Snapshot {snap} has no per-player history.\n"
-            "It was probably taken with --skip-players. Run: python fetch_fpl.py"
-        )
 
     manifest_path = snap / "manifest.json"
     if not manifest_path.exists():
@@ -71,6 +66,17 @@ def load_snapshot():
         )
 
     manifest = json.loads(manifest_path.read_text())
+    if not manifest.get("has_players"):
+        raise SystemExit(
+            f"Snapshot {snap} was taken with --skip-players and has no "
+            "per-player history.\nRun: python fetch_fpl.py"
+        )
+    if not players_dir.is_dir():
+        raise SystemExit(
+            f"Snapshot {snap} claims player history but has no players/ "
+            "directory.\nRun: python fetch_fpl.py"
+        )
+
     bootstrap = json.loads((snap / "bootstrap.json").read_text())
     fixtures = json.loads((snap / "fixtures.json").read_text())
 
@@ -105,11 +111,24 @@ def resolve_target_gw(events, requested):
     violation that leaves no trace in the output.
     """
     upcoming = next((e for e in events if e.get("is_next")), None)
+    if upcoming is None:
+        # Between the last deadline and the API flipping the flag, and at
+        # season end, no event carries is_next. Fall back to the first
+        # unfinished gameweek; if every gameweek is finished, any target is a
+        # backtest and there is no safe forward boundary at all.
+        upcoming = next((e for e in events if not e.get("finished")), None)
+
     if requested is not None:
         event = next((e for e in events if e["id"] == requested), None)
         if event is None:
             raise SystemExit(f"No gameweek {requested} in this snapshot.")
-        if upcoming is not None and requested < upcoming["id"]:
+        if upcoming is None:
+            raise SystemExit(
+                f"Refusing to predict GW{requested}: this snapshot has no "
+                "upcoming gameweek, so every target is in the past.\n"
+                "Availability, price and status would all be post-deadline."
+            )
+        if requested < upcoming["id"]:
             raise SystemExit(
                 f"Refusing to predict GW{requested} from a snapshot whose next "
                 f"gameweek is GW{upcoming['id']}.\n"
@@ -300,6 +319,13 @@ def main(requested_gw, out_dir):
             "n_fixtures": n_fix,
             "status": player.get("status", ""),
         })
+
+    if not rows:
+        raise SystemExit(
+            "No players produced a prediction — refusing to write an empty "
+            "log entry.\nA header-only CSV in predictions/ would be permanent "
+            "under hard rule 1 and indistinguishable from a real entry."
+        )
 
     rows.sort(key=lambda r: r["predicted_points"], reverse=True)
 
