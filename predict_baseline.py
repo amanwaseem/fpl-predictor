@@ -51,8 +51,36 @@ def load_snapshot():
             "It was probably taken with --skip-players. Run: python fetch_fpl.py"
         )
 
+    manifest_path = snap / "manifest.json"
+    if not manifest_path.exists():
+        raise SystemExit(
+            f"Snapshot {snap} has no manifest.json — it is incomplete.\n"
+            "An interrupted fetch leaves a directory that looks finished but is "
+            "missing players, and those players would be dropped from the "
+            "prediction log silently.\n"
+            "Resume it with: python fetch_fpl.py --resume"
+        )
+
+    manifest = json.loads(manifest_path.read_text())
     bootstrap = json.loads((snap / "bootstrap.json").read_text())
     fixtures = json.loads((snap / "fixtures.json").read_text())
+
+    # Belt and braces: the manifest says the fetch finished, but verify the
+    # files are actually on disk before building a log entry from them. A
+    # prediction missing an arbitrary subset of players is worse than no
+    # prediction, because nothing in the committed CSV reveals the gap.
+    missing = [p["id"] for p in bootstrap["elements"]
+               if not (players_dir / f"{p['id']}.json").exists()]
+    if missing:
+        shown = ", ".join(str(i) for i in missing[:10])
+        more = f" (and {len(missing) - 10} more)" if len(missing) > 10 else ""
+        raise SystemExit(
+            f"Snapshot {snap} claims {manifest.get('element_count')} players but "
+            f"{len(missing)} history files are missing: {shown}{more}.\n"
+            "Refusing to write a partial prediction log.\n"
+            "Resume it with: python fetch_fpl.py --resume"
+        )
+
     return snap, bootstrap, fixtures, players_dir
 
 
