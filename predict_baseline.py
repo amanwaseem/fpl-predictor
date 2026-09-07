@@ -13,6 +13,7 @@ committed BEFORE the deadline and is never rewritten.
 Usage:
     python predict_baseline.py              # predict the next gameweek
     python predict_baseline.py --gw 4       # predict a specific gameweek
+    python predict_baseline.py --out scratch/   # exploratory run, not the log
 """
 
 import argparse
@@ -151,7 +152,7 @@ def predict_player(player, history, position, n_fixtures):
     return round(predicted, 2), round(exp_minutes, 1), round(pp90, 2)
 
 
-def main(requested_gw):
+def main(requested_gw, out_dir):
     global TARGET_GW
 
     snap, bootstrap, fixtures, players_dir = load_snapshot()
@@ -202,8 +203,8 @@ def main(requested_gw):
     rows.sort(key=lambda r: r["predicted_points"], reverse=True)
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    outdir = Path("predictions")
-    outdir.mkdir(exist_ok=True)
+    outdir = Path(out_dir)
+    outdir.mkdir(parents=True, exist_ok=True)
     outpath = outdir / f"gw{TARGET_GW:02d}_{MODEL_VERSION}.csv"
 
     if outpath.exists():
@@ -237,4 +238,12 @@ def main(requested_gw):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--gw", type=int, default=None, help="target gameweek (default: next)")
-    main(ap.parse_args().gw)
+    ap.add_argument(
+        "--out",
+        default="predictions",
+        metavar="DIR",
+        help="output directory (default: predictions/). Use a scratch directory "
+             "for exploratory runs — predictions/ is the append-only log.",
+    )
+    args = ap.parse_args()
+    main(args.gw, args.out)
