@@ -36,6 +36,15 @@ PRIOR_MINUTES = 270.0
 # Rough points-per-90 for a regular starter, by position.
 POSITION_PRIOR_PP90 = {"GKP": 3.2, "DEF": 3.3, "MID": 3.6, "FWD": 3.8}
 
+# The prediction log schema, in SPEC section 5 order. Declared rather than
+# inferred from the first row: the column set is part of the log contract, and
+# every gameweek has to stay comparable to the ones already committed.
+FIELDS = [
+    "gameweek", "player_id", "web_name", "team", "position", "price",
+    "predicted_points", "expected_minutes", "points_per_90", "n_fixtures",
+    "status", "model_version", "snapshot_id", "generated_at_utc", "deadline_utc",
+]
+
 
 def load_snapshot():
     """Load the most recent raw snapshot written by fetch_fpl.py."""
@@ -174,12 +183,12 @@ def availability(player):
     return 1.0 if player.get("status") == "a" else 0.0
 
 
-def predict_player(player, history, position, n_fixtures, usable):
+def predict_player(player, history, position, n_fixtures, target_gw, usable):
     """Expected points for one player in the target gameweek."""
     if n_fixtures == 0:
         return 0.0, 0.0, 0.0  # blank gameweek
 
-    recent = recent_history(history, TARGET_GW, usable)
+    recent = recent_history(history, target_gw, usable)
     if not recent:
         return 0.0, 0.0, 0.0  # no appearances to reason from
 
@@ -201,18 +210,16 @@ def predict_player(player, history, position, n_fixtures, usable):
 
 
 def main(requested_gw, out_dir):
-    global TARGET_GW
-
     snap, bootstrap, fixtures, players_dir = load_snapshot()
-    TARGET_GW, deadline = resolve_target_gw(bootstrap["events"], requested_gw)
+    target_gw, deadline = resolve_target_gw(bootstrap["events"], requested_gw)
 
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
     positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
-    counts = fixture_counts(fixtures, TARGET_GW)
-    usable, excluded = usable_rounds(bootstrap["events"], TARGET_GW)
+    counts = fixture_counts(fixtures, target_gw)
+    usable, excluded = usable_rounds(bootstrap["events"], target_gw)
 
     print(f"snapshot:  {snap.name}")
-    print(f"target:    GW{TARGET_GW}")
+    print(f"target:    GW{target_gw}")
     print(f"deadline:  {deadline}")
 
     # Always reported, never behind a flag: which rounds fed the prediction is
@@ -226,7 +233,7 @@ def main(requested_gw, out_dir):
         why = (f"data_checked is false for: {exc_txt}" if excluded
                else "no earlier gameweeks exist in this snapshot")
         raise SystemExit(
-            f"\nNo usable history before GW{TARGET_GW} — {why}.\n"
+            f"\nNo usable history before GW{target_gw} — {why}.\n"
             "Refusing to predict from provisional data. Nothing was written.\n"
             "Take a fresh snapshot once the previous gameweek is settled."
         )
@@ -250,11 +257,11 @@ def main(requested_gw, out_dir):
         n_fix = counts.get(player["team"], 0)
 
         predicted, exp_min, pp90 = predict_player(
-            player, history, position, n_fix, usable
+            player, history, position, n_fix, target_gw, usable
         )
 
         rows.append({
-            "gameweek": TARGET_GW,
+            "gameweek": target_gw,
             "player_id": pid,
             "web_name": player["web_name"],
             "team": teams.get(player["team"], "UNK"),
@@ -272,7 +279,7 @@ def main(requested_gw, out_dir):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     outdir = Path(out_dir)
     outdir.mkdir(parents=True, exist_ok=True)
-    outpath = outdir / f"gw{TARGET_GW:02d}_{MODEL_VERSION}.csv"
+    outpath = outdir / f"gw{target_gw:02d}_{MODEL_VERSION}.csv"
 
     if outpath.exists():
         raise SystemExit(
@@ -281,9 +288,8 @@ def main(requested_gw, out_dir):
             "Delete it manually only if it was never committed."
         )
 
-    fields = list(rows[0].keys()) + ["model_version", "snapshot_id", "generated_at_utc", "deadline_utc"]
     with outpath.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
+        writer = csv.DictWriter(f, fieldnames=FIELDS)
         writer.writeheader()
         for r in rows:
             r.update({
