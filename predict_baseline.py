@@ -1,0 +1,240 @@
+"""Rolling-form baseline predictor.
+
+Deliberately simple: no training, no ML. Predicts a player's points for the
+target gameweek from their recent minutes and scoring rate, adjusted for
+availability and fixture count.
+
+This is the number every future model has to beat. If a component model can't
+outperform "what did they do recently", it isn't earning its complexity.
+
+Writes an immutable prediction log entry to predictions/. That file gets
+committed BEFORE the deadline and is never rewritten.
+
+Usage:
+    python predict_baseline.py              # predict the next gameweek
+    python predict_baseline.py --gw 4       # predict a specific gameweek
+"""
+
+import argparse
+import csv
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+MODEL_VERSION = "baseline-v1"
+
+# Exponential decay over recent gameweeks, most recent first.
+# Roughly a half-life of two gameweeks.
+DECAY = 0.7
+LOOKBACK = 5
+
+# Shrinkage: pseudo-minutes of league-average scoring blended into every
+# player's rate. Stops 12-minute cameos dominating the top of the table.
+PRIOR_MINUTES = 270.0
+
+# Rough points-per-90 for a regular starter, by position.
+POSITION_PRIOR_PP90 = {"GKP": 3.2, "DEF": 3.3, "MID": 3.6, "FWD": 3.8}
+
+
+def load_snapshot():
+    """Load the most recent raw snapshot written by fetch_fpl.py."""
+    latest_file = Path("data/raw/LATEST")
+    if not latest_file.exists():
+        raise SystemExit("No snapshot found. Run: python fetch_fpl.py")
+
+    snap = Path("data/raw") / latest_file.read_text().strip()
+    players_dir = snap / "players"
+    if not players_dir.exists():
+        raise SystemExit(
+            f"Snapshot {snap} has no per-player history.\n"
+            "It was probably taken with --skip-players. Run: python fetch_fpl.py"
+        )
+
+    bootstrap = json.loads((snap / "bootstrap.json").read_text())
+    fixtures = json.loads((snap / "fixtures.json").read_text())
+    return snap, bootstrap, fixtures, players_dir
+
+
+def resolve_target_gw(events, requested):
+    """Pick the gameweek to predict, and return it with its deadline."""
+    if requested is not None:
+        event = next((e for e in events if e["id"] == requested), None)
+        if event is None:
+            raise SystemExit(f"No gameweek {requested} in this snapshot.")
+    else:
+        event = next((e for e in events if e.get("is_next")), None)
+        if event is None:
+            raise SystemExit("No upcoming gameweek found — season may be over.")
+    return event["id"], event["deadline_time"]
+
+
+def fixture_counts(fixtures, target_gw):
+    """How many fixtures each team has in the target gameweek.
+
+    Almost always 1, but blanks (0) and doubles (2) happen and are the most
+    common source of badly wrong predictions.
+    """
+    counts = {}
+    for f in fixtures:
+        if f.get("event") != target_gw:
+            continue
+        for side in ("team_h", "team_a"):
+            counts[f[side]] = counts.get(f[side], 0) + 1
+    return counts
+
+
+def recent_history(history, target_gw):
+    """Recent gameweeks, most recent first, aggregated per round.
+
+    Doubles produce two rows for one round, so sum them. Only rounds strictly
+    before the target are used — never look at the gameweek being predicted.
+    """
+    by_round = {}
+    for h in history:
+        rnd = h.get("round")
+        if rnd is None or rnd >= target_gw:
+            continue
+        entry = by_round.setdefault(rnd, {"minutes": 0, "points": 0})
+        entry["minutes"] += h.get("minutes", 0) or 0
+        entry["points"] += h.get("total_points", 0) or 0
+
+    ordered = sorted(by_round.items(), key=lambda kv: kv[0], reverse=True)
+    return [v for _, v in ordered[:LOOKBACK]]
+
+
+def weighted(values):
+    """Exponentially decayed mean. Input is most-recent-first."""
+    if not values:
+        return 0.0, 0.0
+    total = weight_sum = 0.0
+    for i, v in enumerate(values):
+        w = DECAY ** i
+        total += v * w
+        weight_sum += w
+    return total / weight_sum, weight_sum
+
+
+def availability(player):
+    """Fraction of normal minutes expected, from injury/suspension flags.
+
+    status: a=available, d=doubtful, i=injured, s=suspended, u=unavailable
+    """
+    chance = player.get("chance_of_playing_next_round")
+    if chance is not None:
+        return chance / 100.0
+    return 1.0 if player.get("status") == "a" else 0.0
+
+
+def predict_player(player, history, position, n_fixtures):
+    """Expected points for one player in the target gameweek."""
+    if n_fixtures == 0:
+        return 0.0, 0.0, 0.0  # blank gameweek
+
+    recent = recent_history(history, TARGET_GW)
+    if not recent:
+        return 0.0, 0.0, 0.0  # no appearances to reason from
+
+    minutes_list = [r["minutes"] for r in recent]
+    avg_minutes, _ = weighted(minutes_list)
+    exp_minutes = min(avg_minutes, 90.0) * availability(player)
+
+    # Points per 90, shrunk toward the positional prior. A player with few
+    # observed minutes sits close to the prior; a regular starter dominates it.
+    obs_minutes = sum(r["minutes"] for r in recent)
+    obs_points = sum(r["points"] for r in recent)
+    prior_pp90 = POSITION_PRIOR_PP90.get(position, 3.5)
+    prior_points = prior_pp90 * (PRIOR_MINUTES / 90.0)
+
+    pp90 = (obs_points + prior_points) / ((obs_minutes + PRIOR_MINUTES) / 90.0)
+
+    predicted = pp90 * (exp_minutes / 90.0) * n_fixtures
+    return round(predicted, 2), round(exp_minutes, 1), round(pp90, 2)
+
+
+def main(requested_gw):
+    global TARGET_GW
+
+    snap, bootstrap, fixtures, players_dir = load_snapshot()
+    TARGET_GW, deadline = resolve_target_gw(bootstrap["events"], requested_gw)
+
+    teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
+    positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
+    counts = fixture_counts(fixtures, TARGET_GW)
+
+    print(f"snapshot:  {snap.name}")
+    print(f"target:    GW{TARGET_GW}")
+    print(f"deadline:  {deadline}")
+
+    blanks = [teams[t] for t in teams if counts.get(t, 0) == 0]
+    doubles = [teams[t] for t in teams if counts.get(t, 0) > 1]
+    if blanks:
+        print(f"blanking:  {', '.join(sorted(blanks))}")
+    if doubles:
+        print(f"doubles:   {', '.join(sorted(doubles))}")
+
+    rows = []
+    for player in bootstrap["elements"]:
+        pid = player["id"]
+        path = players_dir / f"{pid}.json"
+        if not path.exists():
+            continue
+
+        history = json.loads(path.read_text()).get("history", [])
+        position = positions.get(player["element_type"], "UNK")
+        n_fix = counts.get(player["team"], 0)
+
+        predicted, exp_min, pp90 = predict_player(player, history, position, n_fix)
+
+        rows.append({
+            "gameweek": TARGET_GW,
+            "player_id": pid,
+            "web_name": player["web_name"],
+            "team": teams.get(player["team"], "UNK"),
+            "position": position,
+            "price": player["now_cost"] / 10.0,
+            "predicted_points": predicted,
+            "expected_minutes": exp_min,
+            "points_per_90": pp90,
+            "n_fixtures": n_fix,
+            "status": player.get("status", ""),
+        })
+
+    rows.sort(key=lambda r: r["predicted_points"], reverse=True)
+
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    outdir = Path("predictions")
+    outdir.mkdir(exist_ok=True)
+    outpath = outdir / f"gw{TARGET_GW:02d}_{MODEL_VERSION}.csv"
+
+    if outpath.exists():
+        raise SystemExit(
+            f"{outpath} already exists.\n"
+            "The prediction log is append-only — entries are never rewritten. "
+            "Delete it manually only if it was never committed."
+        )
+
+    fields = list(rows[0].keys()) + ["model_version", "snapshot_id", "generated_at_utc", "deadline_utc"]
+    with outpath.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        for r in rows:
+            r.update({
+                "model_version": MODEL_VERSION,
+                "snapshot_id": snap.name,
+                "generated_at_utc": generated_at,
+                "deadline_utc": deadline,
+            })
+            writer.writerow(r)
+
+    print(f"\nwrote {len(rows)} predictions -> {outpath}\n")
+    print(f"{'player':<18}{'team':<6}{'pos':<5}{'pred':>6}{'mins':>7}{'pp90':>7}")
+    print("-" * 49)
+    for r in rows[:20]:
+        print(f"{r['web_name'][:17]:<18}{r['team']:<6}{r['position']:<5}"
+              f"{r['predicted_points']:>6}{r['expected_minutes']:>7}{r['points_per_90']:>7}")
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--gw", type=int, default=None, help="target gameweek (default: next)")
+    main(ap.parse_args().gw)
