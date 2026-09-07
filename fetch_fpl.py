@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import json
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,18 +46,49 @@ def get(path):
 
 
 def write(outdir: Path, name: str, payload) -> None:
+    """Write JSON atomically.
+
+    A partial write is worse than no write: resume trusts exists(), so a
+    0-byte file left by a Ctrl-C mid-write would be skipped as "already
+    fetched" and then blessed by the manifest. Write to a temp file in the
+    same directory and rename, which is atomic on POSIX.
+    """
     path = outdir / name
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2))
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2))
+    os.replace(tmp, path)
 
 
 def find_incomplete():
-    """Most recent snapshot directory with no manifest, or None."""
+    """Most recent interrupted full fetch, or None.
+
+    Deliberately narrow. A manifest-less directory is not automatically
+    resumable: a bootstrap-only snapshot taken days ago has no players/ at
+    all, and continuing it would pair today's player histories with a stale
+    bootstrap — the temporal mixing resume exists to avoid. Only a directory
+    that already holds at least one player file represents a full fetch that
+    was interrupted partway.
+
+    Anything at or older than LATEST is skipped too: a complete newer snapshot
+    already exists, so finishing an older one gains nothing and risks pointing
+    the predictor at staler data.
+    """
     root = Path("data/raw")
     if not root.exists():
         return None
-    candidates = [d for d in root.iterdir()
-                  if d.is_dir() and not (d / "manifest.json").exists()]
+
+    latest_file = root / "LATEST"
+    latest = latest_file.read_text().strip() if latest_file.exists() else ""
+
+    candidates = [
+        d for d in root.iterdir()
+        if d.is_dir()
+        and not (d / "manifest.json").exists()
+        and (d / "players").is_dir()
+        and any((d / "players").iterdir())
+        and d.name > latest
+    ]
     return max(candidates, key=lambda d: d.name) if candidates else None
 
 
@@ -72,6 +104,17 @@ def main(skip_players: bool, resume: bool) -> None:
         outdir = Path("data/raw") / stamp
         print(f"snapshot -> {outdir}")
     outdir.mkdir(parents=True, exist_ok=True)
+
+    players_dir = outdir / "players"
+    partial = players_dir.is_dir() and any(players_dir.iterdir())
+    if skip_players and partial:
+        raise SystemExit(
+            f"{outdir} already holds partial player history.\n"
+            "--skip-players would mark it complete while players are still "
+            "missing, and the resulting snapshot would look usable.\n"
+            "Drop --skip-players to finish it."
+        )
+
 
     # On resume, reuse what is already on disk. Refetching bootstrap or
     # fixtures would mix data from two points in time into one snapshot,
