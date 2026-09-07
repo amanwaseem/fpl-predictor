@@ -3,9 +3,15 @@
 Writes an immutable, timestamped snapshot so every prediction can be traced
 back to exactly the data it was produced from.
 
+A snapshot is only usable once manifest.json exists. That file is written
+last, so an interrupted fetch leaves a directory that is visibly incomplete
+rather than one that merely looks finished. Re-running resumes: player files
+already on disk are not refetched.
+
 Usage:
     python fetch_fpl.py                 # full snapshot (slow, ~6 min)
     python fetch_fpl.py --skip-players  # bootstrap + fixtures only (fast)
+    python fetch_fpl.py                 # re-run to resume an interrupted fetch
 """
 
 import argparse
@@ -44,15 +50,40 @@ def write(outdir: Path, name: str, payload) -> None:
     path.write_text(json.dumps(payload, indent=2))
 
 
-def main(skip_players: bool) -> None:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    outdir = Path("data/raw") / stamp
-    outdir.mkdir(parents=True, exist_ok=True)
-    print(f"snapshot -> {outdir}")
+def find_incomplete():
+    """Most recent snapshot directory with no manifest, or None."""
+    root = Path("data/raw")
+    if not root.exists():
+        return None
+    candidates = [d for d in root.iterdir()
+                  if d.is_dir() and not (d / "manifest.json").exists()]
+    return max(candidates, key=lambda d: d.name) if candidates else None
 
-    print("fetching bootstrap-static ...")
-    bootstrap = get("bootstrap-static/")
-    write(outdir, "bootstrap.json", bootstrap)
+
+def main(skip_players: bool, resume: bool) -> None:
+    if resume:
+        outdir = find_incomplete()
+        if outdir is None:
+            raise SystemExit("Nothing to resume: every snapshot has a manifest.")
+        stamp = outdir.name
+        print(f"resuming -> {outdir}")
+    else:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        outdir = Path("data/raw") / stamp
+        print(f"snapshot -> {outdir}")
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    # On resume, reuse what is already on disk. Refetching bootstrap or
+    # fixtures would mix data from two points in time into one snapshot,
+    # which defeats the purpose of snapshotting at all.
+    bootstrap_path = outdir / "bootstrap.json"
+    if resume and bootstrap_path.exists():
+        print("reusing bootstrap-static from disk")
+        bootstrap = json.loads(bootstrap_path.read_text())
+    else:
+        print("fetching bootstrap-static ...")
+        bootstrap = get("bootstrap-static/")
+        write(outdir, "bootstrap.json", bootstrap)
 
     players = bootstrap["elements"]
     events = bootstrap["events"]
@@ -65,27 +96,75 @@ def main(skip_players: bool) -> None:
     if upcoming:
         print(f"  next gameweek: GW{upcoming['id']}  deadline: {upcoming['deadline_time']}")
 
-    print("fetching fixtures ...")
-    write(outdir, "fixtures.json", get("fixtures/"))
+    if resume and (outdir / "fixtures.json").exists():
+        print("reusing fixtures from disk")
+    else:
+        print("fetching fixtures ...")
+        write(outdir, "fixtures.json", get("fixtures/"))
 
     if skip_players:
         print("skipping per-player history")
     else:
         print(f"fetching per-player history for {len(players)} players ...")
+        fetched = skipped = 0
         for i, p in enumerate(players, start=1):
             pid = p["id"]
+            # Resume: a six-minute fetch that dies at 80% should not restart.
+            if (outdir / "players" / f"{pid}.json").exists():
+                skipped += 1
+                continue
             write(outdir, f"players/{pid}.json", get(f"element-summary/{pid}/"))
+            fetched += 1
             if i % 50 == 0:
                 print(f"  {i}/{len(players)}")
             time.sleep(DELAY)
+        if skipped:
+            print(f"  resumed: {skipped} already on disk, {fetched} fetched")
 
-    # Stable pointer to the most recent snapshot, so downstream code
-    # doesn't need to guess at timestamps.
-    Path("data/raw/LATEST").write_text(stamp)
-    print(f"done: {outdir}")
+        missing = [p["id"] for p in players
+                   if not (outdir / "players" / f"{p['id']}.json").exists()]
+        if missing:
+            raise SystemExit(
+                f"\n{len(missing)} player files missing after fetch. "
+                "No manifest written, so this snapshot cannot be used.\n"
+                "Re-run to resume."
+            )
+
+    # Written last, and only on success. Its absence is what marks a snapshot
+    # as unusable — a half-finished directory is otherwise indistinguishable
+    # from a complete one, and a partial snapshot silently produces a partial
+    # prediction log that hard rule 1 then makes permanent.
+    write(outdir, "manifest.json", {
+        "snapshot_id": stamp,
+        "element_count": len(players),
+        "has_players": not skip_players,
+        "completed_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    })
+
+    # Stable pointer to the most recent snapshot, so downstream code doesn't
+    # need to guess at timestamps. Only a full snapshot earns the pointer:
+    # otherwise one fast bootstrap-only fetch destroys the reference to the
+    # last snapshot that was actually usable for prediction.
+    latest = Path("data/raw/LATEST")
+    current = latest.read_text().strip() if latest.exists() else ""
+    if skip_players:
+        print(f"done (bootstrap only): {outdir}")
+        print("LATEST unchanged — bootstrap-only snapshots cannot be predicted from.")
+    elif stamp < current:
+        # Timestamps sort lexicographically, so this is a real ordering.
+        # Resuming an old interrupted snapshot must never drag the pointer
+        # backwards onto staler data than the predictor already has.
+        print(f"done: {outdir}")
+        print(f"LATEST unchanged — {current} is newer than this snapshot.")
+    else:
+        latest.write_text(stamp)
+        print(f"done: {outdir}")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-players", action="store_true", help="skip slow per-player fetch")
-    main(ap.parse_args().skip_players)
+    ap.add_argument("--resume", action="store_true",
+                    help="continue the most recent snapshot that has no manifest")
+    args = ap.parse_args()
+    main(args.skip_players, args.resume)
