@@ -30,7 +30,9 @@ These are not style preferences. Breaking them destroys the point of the project
 Early development, 2026/27 season.
 
 - `fetch_fpl.py` — working. Snapshots the FPL API to `data/raw/<timestamp>/`.
-- `predict_baseline.py` — in progress. Rolling-form baseline.
+- `predict_baseline.py` — runs end to end against a full snapshot. Untuned. Has
+  no `--out` flag, so it can only write to `predictions/` — use a scratch working
+  directory for exploratory runs until that is fixed.
 - Everything else — not built. See `SPEC.md`.
 
 ## Timeline
@@ -55,6 +57,25 @@ ingestion is snapshot-first rather than live-fetched at prediction time.
 Key endpoints: `bootstrap-static/`, `fixtures/`, `element-summary/{id}/`,
 `event/{id}/live/`, `event-status/`.
 
+### Snapshot timing
+
+Take snapshots between gameweeks, not during one. A snapshot taken mid-gameweek
+still contains a history row for every player, including those whose fixture has
+not kicked off yet. That row reads 0 minutes and 0 points, and nothing
+distinguishes it from a player who was left out — so a rolling-form feature
+silently treats an unplayed match as a non-appearance. Bonus points are also
+provisional until `data_checked` is true.
+
+This is not a rule 2 violation, since the rounds involved are strictly before the
+target. It is a completeness problem, and it biases predictions toward whichever
+teams happened to have played before the snapshot was taken.
+
+Worked example: `20260905T222906Z` was taken mid-GW3 with 8 of 10 fixtures
+started and none finished. All 120 players across ARS, CHE, EVE and MUN carry a
+zeroed GW3 row for a match that had not begun. Check `finished` and
+`data_checked` on the rounds being read before trusting predictions built on
+them.
+
 ## Conventions
 
 - Python 3.13, standard library plus `requests`. Add dependencies only when
@@ -62,6 +83,8 @@ Key endpoints: `bootstrap-static/`, `fixtures/`, `element-summary/{id}/`,
 - All timestamps UTC. FPL deadlines are published in UTC and timezone ambiguity
   near a deadline-sensitive system is unacceptable.
 - Gameweek filenames zero-padded: `gw04`, not `gw4`.
+- `scratch/` is gitignored space for exploratory runs. Never put a real
+  prediction there, and never put an exploratory run in `predictions/`.
 - Prefer explicit and readable over clever. This repo is read by humans
   evaluating the author.
 
