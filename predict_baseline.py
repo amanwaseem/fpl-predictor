@@ -84,16 +84,36 @@ def fixture_counts(fixtures, target_gw):
     return counts
 
 
-def recent_history(history, target_gw):
+def usable_rounds(events, target_gw):
+    """Split rounds before the target into (usable, excluded).
+
+    A round is usable only once its results are final. The API reports that as
+    data_checked, which flips true when bonus points are settled.
+
+    A snapshot taken mid-gameweek still carries a history row for every player,
+    including those whose fixture has not kicked off. That row reads 0 minutes
+    and 0 points and is indistinguishable from a genuine non-appearance, so
+    including it silently scores an unplayed match as a benching.
+    """
+    before = [e for e in events if e["id"] < target_gw]
+    usable = {e["id"] for e in before if e.get("data_checked")}
+    excluded = sorted(e["id"] for e in before if not e.get("data_checked"))
+    return usable, excluded
+
+
+def recent_history(history, target_gw, usable):
     """Recent gameweeks, most recent first, aggregated per round.
 
     Doubles produce two rows for one round, so sum them. Only rounds strictly
-    before the target are used — never look at the gameweek being predicted.
+    before the target are used — never look at the gameweek being predicted —
+    and only rounds whose results are final. The target check is redundant with
+    `usable` by construction and kept anyway: a leak here invalidates the whole
+    track record.
     """
     by_round = {}
     for h in history:
         rnd = h.get("round")
-        if rnd is None or rnd >= target_gw:
+        if rnd is None or rnd >= target_gw or rnd not in usable:
             continue
         entry = by_round.setdefault(rnd, {"minutes": 0, "points": 0})
         entry["minutes"] += h.get("minutes", 0) or 0
@@ -126,12 +146,12 @@ def availability(player):
     return 1.0 if player.get("status") == "a" else 0.0
 
 
-def predict_player(player, history, position, n_fixtures):
+def predict_player(player, history, position, n_fixtures, usable):
     """Expected points for one player in the target gameweek."""
     if n_fixtures == 0:
         return 0.0, 0.0, 0.0  # blank gameweek
 
-    recent = recent_history(history, TARGET_GW)
+    recent = recent_history(history, TARGET_GW, usable)
     if not recent:
         return 0.0, 0.0, 0.0  # no appearances to reason from
 
@@ -161,10 +181,27 @@ def main(requested_gw, out_dir):
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
     positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
     counts = fixture_counts(fixtures, TARGET_GW)
+    usable, excluded = usable_rounds(bootstrap["events"], TARGET_GW)
 
     print(f"snapshot:  {snap.name}")
     print(f"target:    GW{TARGET_GW}")
     print(f"deadline:  {deadline}")
+
+    # Always reported, never behind a flag: which rounds fed the prediction is
+    # part of reading it. A silently narrowed history looks like bad form.
+    inc_txt = ", ".join(str(r) for r in sorted(usable)) or "none"
+    exc_txt = ", ".join(str(r) for r in excluded) or "none"
+    print(f"included: {inc_txt}")
+    print(f"excluded: {exc_txt}" + ("  (results not final)" if excluded else ""))
+
+    if not usable:
+        why = (f"data_checked is false for: {exc_txt}" if excluded
+               else "no earlier gameweeks exist in this snapshot")
+        raise SystemExit(
+            f"\nNo usable history before GW{TARGET_GW} — {why}.\n"
+            "Refusing to predict from provisional data. Nothing was written.\n"
+            "Take a fresh snapshot once the previous gameweek is settled."
+        )
 
     blanks = [teams[t] for t in teams if counts.get(t, 0) == 0]
     doubles = [teams[t] for t in teams if counts.get(t, 0) > 1]
@@ -184,7 +221,9 @@ def main(requested_gw, out_dir):
         position = positions.get(player["element_type"], "UNK")
         n_fix = counts.get(player["team"], 0)
 
-        predicted, exp_min, pp90 = predict_player(player, history, position, n_fix)
+        predicted, exp_min, pp90 = predict_player(
+            player, history, position, n_fix, usable
+        )
 
         rows.append({
             "gameweek": TARGET_GW,
