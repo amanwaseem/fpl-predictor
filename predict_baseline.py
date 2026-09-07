@@ -161,7 +161,9 @@ def usable_rounds(events, target_gw):
 def recent_history(history, target_gw, usable):
     """Recent gameweeks, most recent first, aggregated per round.
 
-    Doubles produce two rows for one round, so sum them. Only rounds strictly
+    Doubles produce two rows for one round, so sum them and record how many
+    fixtures the round held — minutes have to be read per fixture later, while
+    points stay summed. Only rounds strictly
     before the target are used — never look at the gameweek being predicted —
     and only rounds whose results are final. The target check is redundant with
     `usable` by construction and kept anyway: a leak here invalidates the whole
@@ -172,9 +174,10 @@ def recent_history(history, target_gw, usable):
         rnd = h.get("round")
         if rnd is None or rnd >= target_gw or rnd not in usable:
             continue
-        entry = by_round.setdefault(rnd, {"minutes": 0, "points": 0})
+        entry = by_round.setdefault(rnd, {"minutes": 0, "points": 0, "fixtures": 0})
         entry["minutes"] += h.get("minutes", 0) or 0
         entry["points"] += h.get("total_points", 0) or 0
+        entry["fixtures"] += 1
 
     ordered = sorted(by_round.items(), key=lambda kv: kv[0], reverse=True)
     return [v for _, v in ordered[:LOOKBACK]]
@@ -212,7 +215,11 @@ def predict_player(player, history, position, n_fixtures, target_gw, usable):
     if not recent:
         return 0.0, 0.0, 0.0  # no appearances to reason from
 
-    minutes_list = [r["minutes"] for r in recent]
+    # Minutes per fixture, not per round. A past double gameweek puts up to
+    # 180 minutes in one round; averaging that raw and only then clipping to 90
+    # drags the mean upward across the whole lookback window, inflating every
+    # prediction for a player who happened to have a double recently.
+    minutes_list = [r["minutes"] / r["fixtures"] for r in recent]
     avg_minutes, _ = weighted(minutes_list)
     exp_minutes = min(avg_minutes, 90.0) * availability(player)
 
