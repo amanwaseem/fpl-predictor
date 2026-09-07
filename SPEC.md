@@ -59,14 +59,17 @@ evaluated and improved independently, and the failure modes are legible — if
 predictions are bad for defenders specifically, the clean sheet model is the
 first suspect.
 
-Every component conforms to a common `ComponentModel` interface so the pipeline
-can run with any mix of implementations.
+Components are intended to conform to a common `ComponentModel` interface so the
+pipeline can run with any mix of implementations. That interface **does not exist
+yet** — it gets defined alongside the first component models, after the break.
 
 ### Baseline
 
-A rolling-form model (`predict_baseline.py`) implements the same interface using
-no machine learning: recent minutes and points-per-90, shrunk toward a positional
-prior, scaled by availability and fixture count.
+A rolling-form model (`predict_baseline.py`) covers the same ground using no
+machine learning: recent minutes and points-per-90, shrunk toward a positional
+prior, scaled by availability and fixture count. It is a standalone script rather
+than a `ComponentModel` implementation, and gets retrofitted once that interface
+exists.
 
 The baseline exists so the full pipeline — optimiser, API, frontend — can be
 built and validated end to end without waiting on model accuracy. It is also the
@@ -165,3 +168,8 @@ make the locally optimal move frequently wrong.
   components absorb it.
 - Whether the log should record predictions for all ~650 players or only those
   with non-trivial expected minutes. Currently all, for completeness.
+- Whether prediction *inputs* should require `data_checked` on the rounds they
+  read, the way scoring already does. A snapshot taken mid-gameweek carries a
+  history row for every player including those whose fixture has not kicked off,
+  and that row is indistinguishable from a genuine non-appearance. See the
+  snapshot timing note in `CLAUDE.md`.
