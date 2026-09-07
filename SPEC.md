@@ -75,6 +75,23 @@ The baseline exists so the full pipeline — optimiser, API, frontend — can be
 built and validated end to end without waiting on model accuracy. It is also the
 benchmark: **any component model that does not beat the baseline does not ship.**
 
+### Input requirements
+
+Features are built only from gameweeks whose results are final — `data_checked`
+true in the API — matching what section 6 already requires of scoring. This is
+settled, not a preference.
+
+A snapshot taken mid-gameweek carries a history row for every player, including
+those whose fixture has not kicked off. That row reads 0 minutes and 0 points
+and is indistinguishable from a genuine non-appearance, so an unplayed match
+would otherwise be scored as a benching, biasing predictions toward whichever
+teams happened to have played before the snapshot was taken. It is not a
+leakage problem — the rounds are strictly before the target — but it corrupts
+the features just as effectively.
+
+Every run prints which rounds were included and excluded. If no round before
+the target has final results, the run writes nothing and exits non-zero.
+
 ## 5. Prediction log
 
 The core artifact. One CSV per gameweek per model version, in `predictions/`,
@@ -168,8 +185,3 @@ make the locally optimal move frequently wrong.
   components absorb it.
 - Whether the log should record predictions for all ~650 players or only those
   with non-trivial expected minutes. Currently all, for completeness.
-- Whether prediction *inputs* should require `data_checked` on the rounds they
-  read, the way scoring already does. A snapshot taken mid-gameweek carries a
-  history row for every player including those whose fixture has not kicked off,
-  and that row is indistinguishable from a genuine non-appearance. See the
-  snapshot timing note in `CLAUDE.md`.

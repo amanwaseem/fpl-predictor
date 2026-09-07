@@ -30,9 +30,9 @@ These are not style preferences. Breaking them destroys the point of the project
 Early development, 2026/27 season.
 
 - `fetch_fpl.py` — working. Snapshots the FPL API to `data/raw/<timestamp>/`.
-- `predict_baseline.py` — runs end to end against a full snapshot. Untuned. Has
-  no `--out` flag, so it can only write to `predictions/` — use a scratch working
-  directory for exploratory runs until that is fixed.
+- `predict_baseline.py` — runs end to end against a full snapshot. Untuned.
+  Takes `--out DIR` (defaults to `predictions/`); use `--out scratch/` for
+  exploratory runs.
 - Everything else — not built. See `SPEC.md`.
 
 ## Timeline
@@ -72,9 +72,12 @@ teams happened to have played before the snapshot was taken.
 
 Worked example: `20260905T222906Z` was taken mid-GW3 with 8 of 10 fixtures
 started and none finished. All 120 players across ARS, CHE, EVE and MUN carry a
-zeroed GW3 row for a match that had not begun. Check `finished` and
-`data_checked` on the rounds being read before trusting predictions built on
-them.
+zeroed GW3 row for a match that had not begun.
+
+`predict_baseline.py` now excludes such rounds automatically and prints which
+rounds it included and excluded on every run — read those two lines before
+trusting the output. A snapshot taken between gameweeks is still preferable,
+since an excluded round is data thrown away.
 
 ## Conventions
 
