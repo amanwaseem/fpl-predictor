@@ -94,11 +94,31 @@ def load_snapshot():
 
 
 def resolve_target_gw(events, requested):
-    """Pick the gameweek to predict, and return it with its deadline."""
+    """Pick the gameweek to predict, and return it with its deadline.
+
+    Refuses to target a gameweek earlier than the snapshot's own next one.
+    usable_rounds bounds *history* to rounds before the target, but the
+    bootstrap fields are not bounded: chance_of_playing_next_round means "next
+    round as of this snapshot", and now_cost and status are snapshot-time too.
+    Predicting forward is fine. Backtesting GW4 from a later snapshot would
+    feed post-deadline availability and price into the model — a rule 2
+    violation that leaves no trace in the output.
+    """
+    upcoming = next((e for e in events if e.get("is_next")), None)
     if requested is not None:
         event = next((e for e in events if e["id"] == requested), None)
         if event is None:
             raise SystemExit(f"No gameweek {requested} in this snapshot.")
+        if upcoming is not None and requested < upcoming["id"]:
+            raise SystemExit(
+                f"Refusing to predict GW{requested} from a snapshot whose next "
+                f"gameweek is GW{upcoming['id']}.\n"
+                "Availability, price and status in this snapshot are all "
+                "post-deadline for GW{}, so the prediction would be "
+                "contaminated.\n"
+                "Backtesting needs a snapshot taken before that deadline."
+                .format(requested)
+            )
     else:
         event = next((e for e in events if e.get("is_next")), None)
         if event is None:
