@@ -15,6 +15,10 @@ These are not style preferences. Breaking them destroys the point of the project
 1. **Never rewrite a committed prediction.** Files in `predictions/` are
    immutable once pushed. If a prediction was wrong, it stays wrong and gets
    scored as wrong. No amended files, no force pushes touching that directory.
+   This applies to `predictions/` and nothing else — `scores/` is derived
+   output, recomputable from the committed predictions plus a snapshot, and is
+   meant to be rewritten when a metric definition changes. Over-applying the
+   rule there would freeze the metrics instead of the evidence.
 
 2. **Never use post-deadline information to predict a gameweek.** When building
    features for GW N, use only data from gameweeks strictly before N. Any
@@ -65,6 +69,11 @@ ingestion is snapshot-first rather than live-fetched at prediction time.
 
 Key endpoints: `bootstrap-static/`, `fixtures/`, `element-summary/{id}/`,
 `event/{id}/live/`, `event-status/`.
+
+`event/{id}/live/` is the scoring harness's source of actual points. `fetch.py`
+does not call it yet — when it does, it writes `<snapshot>/live/<gw>.json` for
+gameweeks whose `data_checked` is true. One request per gameweek, so scoring
+will not need a six-minute per-player refetch.
 
 ### Snapshot timing
 
