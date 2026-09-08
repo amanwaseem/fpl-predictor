@@ -220,3 +220,7 @@ data/raw/
 
 # Exploratory runs — throwaway, never a real prediction
 scratch/
+
+# Partial log entries — write_entry cleans these up, but a hard kill
+# could leave one, and a truncated entry must never be committed.
+predictions/*.tmp
