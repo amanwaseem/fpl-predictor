@@ -21,7 +21,7 @@ These are not style preferences. Breaking them destroys the point of the project
    accidental leak invalidates the whole track record.
 
 3. **Never commit raw data.** `data/raw/` is gitignored. Snapshots are large and
-   regenerable via `fetch_fpl.py`.
+   regenerable via `fpl/fetch.py`.
 
 4. **Don't push to `main`.** Work on branches, open PRs.
 
@@ -29,8 +29,8 @@ These are not style preferences. Breaking them destroys the point of the project
 
 Early development, 2026/27 season.
 
-- `fetch_fpl.py` — working. Snapshots the FPL API to `data/raw/<timestamp>/`.
-- `predict_baseline.py` — runs end to end against a full snapshot. Untuned.
+- `fpl/fetch.py` — working. Snapshots the FPL API to `data/raw/<timestamp>/`.
+- `fpl/predict_baseline.py` — runs end to end against a full snapshot. Untuned.
   Takes `--out DIR` (defaults to `predictions/`); use `--out scratch/` for
   exploratory runs.
 - Everything else — not built. See `SPEC.md`.
@@ -74,7 +74,7 @@ Worked example: `20260905T222906Z` was taken mid-GW3 with 8 of 10 fixtures
 started and none finished. All 120 players across ARS, CHE, EVE and MUN carry a
 zeroed GW3 row for a match that had not begun.
 
-`predict_baseline.py` now excludes such rounds automatically and prints which
+`fpl/predict_baseline.py` now excludes such rounds automatically and prints which
 rounds it included and excluded on every run — read those two lines before
 trusting the output. A snapshot taken between gameweeks is still preferable,
 since an excluded round is data thrown away.
