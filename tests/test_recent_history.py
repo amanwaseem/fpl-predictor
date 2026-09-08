@@ -5,7 +5,7 @@ information to predict a gameweek. Everything else in the repo is recoverable;
 a leak is not, because the track record it invalidates is the whole point of
 the project.
 
-Run: python -m unittest discover tests
+Run from the repository root: python -m unittest discover tests
 """
 
 import unittest
@@ -142,6 +142,3 @@ class TestOrdering(unittest.TestCase):
         out = recent_history(hist, target_gw=12, usable=set(range(1, 12)))
         self.assertEqual(len(out), 5, "LOOKBACK caps the window at 5 rounds")
 
-
-if __name__ == "__main__":
-    unittest.main()
