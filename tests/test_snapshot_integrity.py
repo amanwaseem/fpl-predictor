@@ -5,7 +5,7 @@ version of that work shipped with 16 tests, none of which touched any of it —
 and review found two high-severity bugs living in exactly the untested parts.
 Tests here run against a temporary data/raw, never the real one.
 
-Run: python -m unittest discover tests
+Run from the repository root: python -m unittest discover tests
 """
 
 import json
@@ -168,6 +168,3 @@ class TestLoadSnapshot(TempCwd):
         with self.assertRaises(SystemExit):
             load_snapshot()
 
-
-if __name__ == "__main__":
-    unittest.main()
