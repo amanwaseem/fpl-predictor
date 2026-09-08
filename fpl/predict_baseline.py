@@ -20,17 +20,18 @@ directory, not this file.
 """
 
 import argparse
-import csv
 import json
-from datetime import datetime, timezone
-from pathlib import Path
+
+from fpl.features import availability, recent_history, weighted
+from fpl.log import write_entry
+from fpl.snapshot import (
+    fixture_counts,
+    load_snapshot,
+    resolve_target_gw,
+    usable_rounds,
+)
 
 MODEL_VERSION = "baseline-v1"
-
-# Exponential decay over recent gameweeks, most recent first.
-# Roughly a half-life of two gameweeks.
-DECAY = 0.7
-LOOKBACK = 5
 
 # Shrinkage: pseudo-minutes of league-average scoring blended into every
 # player's rate. Stops 12-minute cameos dominating the top of the table.
@@ -38,194 +39,6 @@ PRIOR_MINUTES = 270.0
 
 # Rough points-per-90 for a regular starter, by position.
 POSITION_PRIOR_PP90 = {"GKP": 3.2, "DEF": 3.3, "MID": 3.6, "FWD": 3.8}
-
-# The prediction log schema, in SPEC section 5 order. Declared rather than
-# inferred from the first row: the column set is part of the log contract, and
-# every gameweek has to stay comparable to the ones already committed.
-FIELDS = [
-    "gameweek", "player_id", "web_name", "team", "position", "price",
-    "predicted_points", "expected_minutes", "points_per_90", "n_fixtures",
-    "status", "model_version", "snapshot_id", "generated_at_utc", "deadline_utc",
-]
-
-
-def load_snapshot():
-    """Load the most recent raw snapshot written by fpl/fetch.py."""
-    latest_file = Path("data/raw/LATEST")
-    if not latest_file.exists():
-        raise SystemExit("No snapshot found. Run: python -m fpl.fetch")
-
-    snap = Path("data/raw") / latest_file.read_text().strip()
-    players_dir = snap / "players"
-
-    manifest_path = snap / "manifest.json"
-    if not manifest_path.exists():
-        raise SystemExit(
-            f"Snapshot {snap} has no manifest.json — it is incomplete.\n"
-            "An interrupted fetch leaves a directory that looks finished but is "
-            "missing players, and those players would be dropped from the "
-            "prediction log silently.\n"
-            "Resume it with: python -m fpl.fetch --resume"
-        )
-
-    manifest = json.loads(manifest_path.read_text())
-    if not manifest.get("has_players"):
-        raise SystemExit(
-            f"Snapshot {snap} was taken with --skip-players and has no "
-            "per-player history.\nRun: python -m fpl.fetch"
-        )
-    if not players_dir.is_dir():
-        raise SystemExit(
-            f"Snapshot {snap} claims player history but has no players/ "
-            "directory.\nRun: python -m fpl.fetch"
-        )
-
-    bootstrap = json.loads((snap / "bootstrap.json").read_text())
-    fixtures = json.loads((snap / "fixtures.json").read_text())
-
-    # Belt and braces: the manifest says the fetch finished, but verify the
-    # files are actually on disk before building a log entry from them. A
-    # prediction missing an arbitrary subset of players is worse than no
-    # prediction, because nothing in the committed CSV reveals the gap.
-    missing = [p["id"] for p in bootstrap["elements"]
-               if not (players_dir / f"{p['id']}.json").exists()]
-    if missing:
-        shown = ", ".join(str(i) for i in missing[:10])
-        more = f" (and {len(missing) - 10} more)" if len(missing) > 10 else ""
-        raise SystemExit(
-            f"Snapshot {snap} claims {manifest.get('element_count')} players but "
-            f"{len(missing)} history files are missing: {shown}{more}.\n"
-            "Refusing to write a partial prediction log.\n"
-            "Resume it with: python -m fpl.fetch --resume"
-        )
-
-    return snap, bootstrap, fixtures, players_dir
-
-
-def resolve_target_gw(events, requested):
-    """Pick the gameweek to predict, and return it with its deadline.
-
-    Refuses to target a gameweek earlier than the snapshot's own next one.
-    usable_rounds bounds *history* to rounds before the target, but the
-    bootstrap fields are not bounded: chance_of_playing_next_round means "next
-    round as of this snapshot", and now_cost and status are snapshot-time too.
-    Predicting forward is fine. Backtesting GW4 from a later snapshot would
-    feed post-deadline availability and price into the model — a rule 2
-    violation that leaves no trace in the output.
-    """
-    upcoming = next((e for e in events if e.get("is_next")), None)
-    if upcoming is None:
-        # Between the last deadline and the API flipping the flag, and at
-        # season end, no event carries is_next. Fall back to the first
-        # unfinished gameweek; if every gameweek is finished, any target is a
-        # backtest and there is no safe forward boundary at all.
-        upcoming = next((e for e in events if not e.get("finished")), None)
-
-    if requested is not None:
-        event = next((e for e in events if e["id"] == requested), None)
-        if event is None:
-            raise SystemExit(f"No gameweek {requested} in this snapshot.")
-        if upcoming is None:
-            raise SystemExit(
-                f"Refusing to predict GW{requested}: this snapshot has no "
-                "upcoming gameweek, so every target is in the past.\n"
-                "Availability, price and status would all be post-deadline."
-            )
-        if requested < upcoming["id"]:
-            raise SystemExit(
-                f"Refusing to predict GW{requested} from a snapshot whose next "
-                f"gameweek is GW{upcoming['id']}.\n"
-                "Availability, price and status in this snapshot are all "
-                "post-deadline for GW{}, so the prediction would be "
-                "contaminated.\n"
-                "Backtesting needs a snapshot taken before that deadline."
-                .format(requested)
-            )
-    else:
-        event = next((e for e in events if e.get("is_next")), None)
-        if event is None:
-            raise SystemExit("No upcoming gameweek found — season may be over.")
-    return event["id"], event["deadline_time"]
-
-
-def fixture_counts(fixtures, target_gw):
-    """How many fixtures each team has in the target gameweek.
-
-    Almost always 1, but blanks (0) and doubles (2) happen and are the most
-    common source of badly wrong predictions.
-    """
-    counts = {}
-    for f in fixtures:
-        if f.get("event") != target_gw:
-            continue
-        for side in ("team_h", "team_a"):
-            counts[f[side]] = counts.get(f[side], 0) + 1
-    return counts
-
-
-def usable_rounds(events, target_gw):
-    """Split rounds before the target into (usable, excluded).
-
-    A round is usable only once its results are final. The API reports that as
-    data_checked, which flips true when bonus points are settled.
-
-    A snapshot taken mid-gameweek still carries a history row for every player,
-    including those whose fixture has not kicked off. That row reads 0 minutes
-    and 0 points and is indistinguishable from a genuine non-appearance, so
-    including it silently scores an unplayed match as a benching.
-    """
-    before = [e for e in events if e["id"] < target_gw]
-    usable = {e["id"] for e in before if e.get("data_checked")}
-    excluded = sorted(e["id"] for e in before if not e.get("data_checked"))
-    return usable, excluded
-
-
-def recent_history(history, target_gw, usable):
-    """Recent gameweeks, most recent first, aggregated per round.
-
-    Doubles produce two rows for one round, so sum them and record how many
-    fixtures the round held — minutes have to be read per fixture later, while
-    points stay summed. Only rounds strictly
-    before the target are used — never look at the gameweek being predicted —
-    and only rounds whose results are final. The target check is redundant with
-    `usable` by construction and kept anyway: a leak here invalidates the whole
-    track record.
-    """
-    by_round = {}
-    for h in history:
-        rnd = h.get("round")
-        if rnd is None or rnd >= target_gw or rnd not in usable:
-            continue
-        entry = by_round.setdefault(rnd, {"minutes": 0, "points": 0, "fixtures": 0})
-        entry["minutes"] += h.get("minutes", 0) or 0
-        entry["points"] += h.get("total_points", 0) or 0
-        entry["fixtures"] += 1
-
-    ordered = sorted(by_round.items(), key=lambda kv: kv[0], reverse=True)
-    return [v for _, v in ordered[:LOOKBACK]]
-
-
-def weighted(values):
-    """Exponentially decayed mean. Input is most-recent-first."""
-    if not values:
-        return 0.0, 0.0
-    total = weight_sum = 0.0
-    for i, v in enumerate(values):
-        w = DECAY ** i
-        total += v * w
-        weight_sum += w
-    return total / weight_sum, weight_sum
-
-
-def availability(player):
-    """Fraction of normal minutes expected, from injury/suspension flags.
-
-    status: a=available, d=doubtful, i=injured, s=suspended, u=unavailable
-    """
-    chance = player.get("chance_of_playing_next_round")
-    if chance is not None:
-        return chance / 100.0
-    return 1.0 if player.get("status") == "a" else 0.0
 
 
 def predict_player(player, history, position, n_fixtures, target_gw, usable):
@@ -323,38 +136,11 @@ def main(requested_gw, out_dir):
             "status": player.get("status", ""),
         })
 
-    if not rows:
-        raise SystemExit(
-            "No players produced a prediction — refusing to write an empty "
-            "log entry.\nA header-only CSV in predictions/ would be permanent "
-            "under hard rule 1 and indistinguishable from a real entry."
-        )
-
     rows.sort(key=lambda r: r["predicted_points"], reverse=True)
 
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    outdir = Path(out_dir)
-    outdir.mkdir(parents=True, exist_ok=True)
-    outpath = outdir / f"gw{target_gw:02d}_{MODEL_VERSION}.csv"
-
-    if outpath.exists():
-        raise SystemExit(
-            f"{outpath} already exists.\n"
-            "The prediction log is append-only — entries are never rewritten. "
-            "Delete it manually only if it was never committed."
-        )
-
-    with outpath.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
-        writer.writeheader()
-        for r in rows:
-            r.update({
-                "model_version": MODEL_VERSION,
-                "snapshot_id": snap.name,
-                "generated_at_utc": generated_at,
-                "deadline_utc": deadline,
-            })
-            writer.writerow(r)
+    outpath = write_entry(
+        rows, out_dir, target_gw, MODEL_VERSION, snap.name, deadline
+    )
 
     print(f"\nwrote {len(rows)} predictions -> {outpath}\n")
     print(f"{'player':<18}{'team':<6}{'pos':<5}{'pred':>6}{'mins':>7}{'pp90':>7}")

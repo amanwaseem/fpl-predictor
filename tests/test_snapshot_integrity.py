@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 from fpl import fetch
-from fpl.predict_baseline import load_snapshot, resolve_target_gw
+from fpl.snapshot import load_snapshot, resolve_target_gw
 
 
 class TempCwd(unittest.TestCase):
