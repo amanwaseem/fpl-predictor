@@ -45,11 +45,12 @@ Early development, building against the 2026/27 season.
 **Working**
 
 - Raw data ingestion from the official FPL API, written to immutable timestamped snapshots
+- Rolling-form baseline model, running end to end against a full snapshot
 
 **In progress**
 
-- Rolling-form baseline model
-- Prediction log format and scoring harness
+- Prediction log schema and its immutability checks
+- Scoring harness
 
 **Planned**
 
@@ -70,6 +71,11 @@ pip install requests
 python -m fpl.fetch --skip-players   # bootstrap + fixtures only, a few seconds
 python -m fpl.fetch                  # full snapshot including per-player history
 ```
+
+A full snapshot will also pull `event/<gw>/live/` for every completed gameweek — the scoring
+harness's source of actual points — fetched only once a gameweek's `data_checked` is true,
+because bonus points are provisional until then. **Not built yet**; it lands with the scoring
+harness.
 
 Snapshots are written to `data/raw/<timestamp>/` and are gitignored — they are large and fully
 regenerable. `data/raw/LATEST` points at the most recent one.
