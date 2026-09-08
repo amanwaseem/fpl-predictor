@@ -31,7 +31,7 @@ accuracy verifiable.
 Source: the unofficial FPL API. No authentication, no documentation, no
 stability guarantees.
 
-Ingestion is **snapshot-first**: `fetch_fpl.py` writes an immutable timestamped
+Ingestion is **snapshot-first**: `fpl/fetch.py` writes an immutable timestamped
 copy of the raw API response to `data/raw/<timestamp>/`. Every prediction records
 the `snapshot_id` it was produced from, so any prediction can be reproduced
 exactly, and schema changes can be diagnosed by diffing snapshots.
@@ -65,7 +65,7 @@ yet** — it gets defined alongside the first component models, after the break.
 
 ### Baseline
 
-A rolling-form model (`predict_baseline.py`) covers the same ground using no
+A rolling-form model (`fpl/predict_baseline.py`) covers the same ground using no
 machine learning: recent minutes and points-per-90, shrunk toward a positional
 prior, scaled by availability and fixture count. It is a standalone script rather
 than a `ComponentModel` implementation, and gets retrofitted once that interface

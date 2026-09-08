@@ -67,8 +67,8 @@ replaces it; any model that doesn't, doesn't ship.
 python3 -m venv .venv && source .venv/bin/activate
 pip install requests
 
-python fetch_fpl.py --skip-players   # bootstrap + fixtures only, a few seconds
-python fetch_fpl.py                  # full snapshot including per-player history
+python -m fpl.fetch --skip-players   # bootstrap + fixtures only, a few seconds
+python -m fpl.fetch                  # full snapshot including per-player history
 ```
 
 Snapshots are written to `data/raw/<timestamp>/` and are gitignored — they are large and fully

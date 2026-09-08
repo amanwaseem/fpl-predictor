@@ -8,13 +8,9 @@ the project.
 Run: python -m unittest discover tests
 """
 
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from predict_baseline import (  # noqa: E402
+from fpl.predict_baseline import (
     predict_player,
     recent_history,
     usable_rounds,
