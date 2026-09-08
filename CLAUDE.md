@@ -33,7 +33,16 @@ Early development, 2026/27 season.
 - `fpl/predict_baseline.py` — runs end to end against a full snapshot. Untuned.
   Takes `--out DIR` (defaults to `predictions/`); use `--out scratch/` for
   exploratory runs.
+- `fpl/snapshot.py` — loading a snapshot and bounding what may be read from it.
+  Both rule 2 guards live here: `resolve_target_gw` refuses to backtest from a
+  later snapshot, `usable_rounds` drops rounds whose results are not final.
+- `fpl/features.py` — snapshot rows to model inputs. Owns the form window.
+- `fpl/log.py` — the log schema and the append-only write. Rule 1 lives here.
 - Everything else — not built. See `SPEC.md`.
+
+New models import from `snapshot`, `features` and `log` — never from
+`predict_baseline`. The baseline is meant to be beaten and deleted, so nothing
+should depend on it.
 
 ## Timeline
 

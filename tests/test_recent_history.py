@@ -10,12 +10,9 @@ Run: python -m unittest discover tests
 
 import unittest
 
-from fpl.predict_baseline import (
-    predict_player,
-    recent_history,
-    usable_rounds,
-    weighted,
-)
+from fpl.features import recent_history, weighted
+from fpl.predict_baseline import predict_player
+from fpl.snapshot import usable_rounds
 
 
 def row(rnd, minutes=90, points=5):
