@@ -9,9 +9,12 @@ rather than one that merely looks finished. Re-running resumes: player files
 already on disk are not refetched.
 
 Usage:
-    python fetch_fpl.py                 # full snapshot (slow, ~6 min)
-    python fetch_fpl.py --skip-players  # bootstrap + fixtures only (fast)
-    python fetch_fpl.py                 # re-run to resume an interrupted fetch
+    python -m fpl.fetch                 # full snapshot (slow, ~6 min)
+    python -m fpl.fetch --skip-players  # bootstrap + fixtures only (fast)
+    python -m fpl.fetch                 # re-run to resume an interrupted fetch
+
+Run from the repository root: paths are resolved against the working
+directory, not this file.
 """
 
 import argparse

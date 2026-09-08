@@ -11,9 +11,12 @@ Writes an immutable prediction log entry to predictions/. That file gets
 committed BEFORE the deadline and is never rewritten.
 
 Usage:
-    python predict_baseline.py              # predict the next gameweek
-    python predict_baseline.py --gw 4       # predict a specific gameweek
-    python predict_baseline.py --out scratch/   # exploratory run, not the log
+    python -m fpl.predict_baseline            # predict the next gameweek
+    python -m fpl.predict_baseline --gw 4     # predict a specific gameweek
+    python -m fpl.predict_baseline --out scratch/  # exploratory, not the log
+
+Run from the repository root: paths are resolved against the working
+directory, not this file.
 """
 
 import argparse
@@ -47,10 +50,10 @@ FIELDS = [
 
 
 def load_snapshot():
-    """Load the most recent raw snapshot written by fetch_fpl.py."""
+    """Load the most recent raw snapshot written by fpl/fetch.py."""
     latest_file = Path("data/raw/LATEST")
     if not latest_file.exists():
-        raise SystemExit("No snapshot found. Run: python fetch_fpl.py")
+        raise SystemExit("No snapshot found. Run: python -m fpl.fetch")
 
     snap = Path("data/raw") / latest_file.read_text().strip()
     players_dir = snap / "players"
@@ -62,19 +65,19 @@ def load_snapshot():
             "An interrupted fetch leaves a directory that looks finished but is "
             "missing players, and those players would be dropped from the "
             "prediction log silently.\n"
-            "Resume it with: python fetch_fpl.py --resume"
+            "Resume it with: python -m fpl.fetch --resume"
         )
 
     manifest = json.loads(manifest_path.read_text())
     if not manifest.get("has_players"):
         raise SystemExit(
             f"Snapshot {snap} was taken with --skip-players and has no "
-            "per-player history.\nRun: python fetch_fpl.py"
+            "per-player history.\nRun: python -m fpl.fetch"
         )
     if not players_dir.is_dir():
         raise SystemExit(
             f"Snapshot {snap} claims player history but has no players/ "
-            "directory.\nRun: python fetch_fpl.py"
+            "directory.\nRun: python -m fpl.fetch"
         )
 
     bootstrap = json.loads((snap / "bootstrap.json").read_text())
@@ -93,7 +96,7 @@ def load_snapshot():
             f"Snapshot {snap} claims {manifest.get('element_count')} players but "
             f"{len(missing)} history files are missing: {shown}{more}.\n"
             "Refusing to write a partial prediction log.\n"
-            "Resume it with: python fetch_fpl.py --resume"
+            "Resume it with: python -m fpl.fetch --resume"
         )
 
     return snap, bootstrap, fixtures, players_dir

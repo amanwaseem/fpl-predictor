@@ -11,15 +11,12 @@ Run: python -m unittest discover tests
 import json
 import os
 import shutil
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-import fetch_fpl  # noqa: E402
-from predict_baseline import load_snapshot, resolve_target_gw  # noqa: E402
+from fpl import fetch
+from fpl.predict_baseline import load_snapshot, resolve_target_gw
 
 
 class TempCwd(unittest.TestCase):
@@ -60,7 +57,7 @@ class TempCwd(unittest.TestCase):
 class TestFindIncomplete(TempCwd):
     def test_picks_interrupted_full_fetch(self):
         self.snap("20260910T000000Z", players=2)
-        self.assertEqual(fetch_fpl.find_incomplete().name, "20260910T000000Z")
+        self.assertEqual(fetch.find_incomplete().name, "20260910T000000Z")
 
     def test_ignores_bootstrap_only_snapshot(self):
         """No players/ content means a stale bootstrap, not a resumable fetch.
@@ -71,27 +68,27 @@ class TestFindIncomplete(TempCwd):
         d = self.tmp / "data/raw/20260910T000000Z"
         d.mkdir(parents=True)
         (d / "bootstrap.json").write_text("{}")
-        self.assertIsNone(fetch_fpl.find_incomplete())
+        self.assertIsNone(fetch.find_incomplete())
 
     def test_ignores_snapshot_older_than_latest(self):
         self.snap("20260101T000000Z", players=2)
         (self.tmp / "data/raw/LATEST").write_text("20260905T000000Z")
-        self.assertIsNone(fetch_fpl.find_incomplete())
+        self.assertIsNone(fetch.find_incomplete())
 
     def test_ignores_completed_snapshot(self):
         self.snap("20260910T000000Z", players=2, manifest={"has_players": True})
-        self.assertIsNone(fetch_fpl.find_incomplete())
+        self.assertIsNone(fetch.find_incomplete())
 
 
 class TestAtomicWrite(TempCwd):
     def test_no_temp_file_left_behind(self):
         d = self.tmp / "out"
-        fetch_fpl.write(d, "a.json", {"x": 1})
+        fetch.write(d, "a.json", {"x": 1})
         self.assertEqual([p.name for p in d.iterdir()], ["a.json"])
 
     def test_content_round_trips(self):
         d = self.tmp / "out"
-        fetch_fpl.write(d, "a.json", {"x": 1})
+        fetch.write(d, "a.json", {"x": 1})
         self.assertEqual(json.loads((d / "a.json").read_text()), {"x": 1})
 
 
