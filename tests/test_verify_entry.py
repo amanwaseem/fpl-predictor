@@ -18,7 +18,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-import fixtures
+from tests import fixtures
 from fpl import verify_entry
 
 SNAPSHOT_ID = "20260910T000000Z"

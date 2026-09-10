@@ -109,13 +109,23 @@ def load_snapshot(snapshot_id=None):
 def resolve_target_gw(events, requested):
     """Pick the gameweek to predict, and return it with its deadline.
 
-    Refuses to target a gameweek earlier than the snapshot's own next one.
-    usable_rounds bounds *history* to rounds before the target, but the
-    bootstrap fields are not bounded: chance_of_playing_next_round means "next
-    round as of this snapshot", and now_cost and status are snapshot-time too.
-    Predicting forward is fine. Backtesting GW4 from a later snapshot would
-    feed post-deadline availability and price into the model — a rule 2
-    violation that leaves no trace in the output.
+    A snapshot can only predict its own next gameweek. Both directions away
+    from it are refused, for different reasons.
+
+    Backwards is a rule 2 violation. usable_rounds bounds *history* to rounds
+    before the target, but the bootstrap fields are not bounded:
+    chance_of_playing_next_round means "next round as of this snapshot", and
+    now_cost and status are snapshot-time too. Backtesting GW4 from a later
+    snapshot would feed post-deadline availability and price into the model
+    and leave no trace in the output.
+
+    Forwards is not a leak — every flag involved is pre-deadline information —
+    but it is silently wrong in the same way. chance_of_playing_next_round is
+    scoped to the snapshot's own next gameweek, so predicting GW6 from a
+    pre-GW4 snapshot scales GW6 minutes by GW4 availability, and the entry
+    records neither the substitution nor the fact that one happened. The
+    runbook avoids this in practice by fetching before each deadline, but a
+    procedure is not a guard.
     """
     upcoming = next((e for e in events if e.get("is_next")), None)
     if upcoming is None:
@@ -144,6 +154,17 @@ def resolve_target_gw(events, requested):
                 "contaminated.\n"
                 "Backtesting needs a snapshot taken before that deadline."
                 .format(requested)
+            )
+        if requested > upcoming["id"]:
+            raise SystemExit(
+                f"Refusing to predict GW{requested} from a snapshot whose next "
+                f"gameweek is GW{upcoming['id']}.\n"
+                "chance_of_playing_next_round means 'next round as of this "
+                f"snapshot', so every availability flag here is scoped to "
+                f"GW{upcoming['id']}. Predicting GW{requested} would scale its "
+                "minutes by the wrong gameweek's injury news, and nothing in "
+                "the entry would show that it had happened.\n"
+                f"Take a snapshot closer to the GW{requested} deadline."
             )
     else:
         event = next((e for e in events if e.get("is_next")), None)

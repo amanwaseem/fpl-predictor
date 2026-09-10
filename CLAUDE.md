@@ -40,13 +40,22 @@ Early development, 2026/27 season.
 - `fpl/snapshot.py` — loading a snapshot and bounding what may be read from it.
   Both rule 2 guards live here: `resolve_target_gw` refuses to backtest from a
   later snapshot, `usable_rounds` drops rounds whose results are not final.
+  `resolve_target_gw` also refuses to predict *past* the snapshot's own next
+  gameweek, where `chance_of_playing_next_round` would be scoped to the wrong
+  one — a snapshot predicts its own next gameweek and nothing else.
 - `fpl/features.py` — snapshot rows to model inputs. Owns the form window.
 - `fpl/log.py` — the log schema and the append-only write. Rule 1 lives here.
 - `fpl/verify_entry.py` — checks a written entry against the snapshot that
   produced it, and exits non-zero on any disagreement. Run it before committing
   an entry; after the commit nothing can be fixed. Takes the entry path.
+- `fpl/summarise.py` — the readable digest of a committed entry, written to
+  `reports/`. Derived output like `scores/`: regenerable, and rule 1 does not
+  apply to it. Reads the entry alone, never a snapshot, so it still works from
+  a clean checkout once `data/raw/` is long gone.
 - `tests/fixtures.py` — synthetic snapshots and entries, shared by every suite.
-  Build test data from here rather than hand-rolling snapshot JSON.
+  Build test data from here rather than hand-rolling snapshot JSON. Test
+  modules import it as `from tests import fixtures`, which is what makes all
+  three `unittest discover` spellings work.
 - Everything else — not built. See `SPEC.md`.
 
 New models import from `snapshot`, `features` and `log` — never from

@@ -16,7 +16,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-import fixtures
+from tests import fixtures
 from fpl import predict_baseline, verify_entry
 from fpl.log import FIELDS
 

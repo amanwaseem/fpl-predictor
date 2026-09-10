@@ -1,0 +1,20 @@
+# Pinned so a prediction in the log can be reproduced from the environment that
+# produced it, not just from its snapshot_id. The snapshot fixes the data; this
+# fixes the code around it.
+#
+# Direct dependency: requests. The rest are its transitive dependencies, pinned
+# because an unpinned transitive is exactly as capable of changing behaviour as
+# a direct one.
+#
+# Python 3.13. Superseded by pyproject.toml in #5; this file is the input to
+# that conversion rather than throwaway work.
+#
+#   python3 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+
+requests==2.34.2
+
+certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.19
+urllib3==2.7.0
