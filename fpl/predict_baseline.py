@@ -77,6 +77,21 @@ def main(requested_gw, out_dir):
 
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
     positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
+
+    # Fail here rather than at the write, where the diagnosis would be
+    # "position is 'UNK'" against a row number in a 654-row entry. FPL has
+    # added an element_type mid-era before now — managers, in 2024/25 — and a
+    # snapshot the position map does not cover has to stop the run rather than
+    # enter the log as UNK.
+    unknown = sorted({p["element_type"] for p in bootstrap["elements"]
+                      if p["element_type"] not in positions})
+    if unknown:
+        raise SystemExit(
+            f"element_type(s) {unknown} appear on players but have no entry in "
+            f"this snapshot's element_types ({sorted(positions)}).\n"
+            "Refusing to write 'UNK' as a position. Nothing was written."
+        )
+
     counts = fixture_counts(fixtures, target_gw)
     usable, excluded = usable_rounds(bootstrap["events"], target_gw)
 
