@@ -46,10 +46,13 @@ Early development, building against the 2026/27 season.
 
 - Raw data ingestion from the official FPL API, written to immutable timestamped snapshots
 - Rolling-form baseline model, running end to end against a full snapshot
+- Prediction log: a declared schema, validated before every write, with the append-only rule
+  enforced mechanically rather than by discipline
+- Pre-commit verification of an entry against the snapshot that produced it
+- Human-readable digests of a committed entry
 
 **In progress**
 
-- Prediction log schema and its immutability checks
 - Scoring harness
 
 **Planned**
@@ -66,11 +69,39 @@ replaces it; any model that doesn't, doesn't ship.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install requests
+pip install -r requirements.txt
 
 python -m fpl.fetch --skip-players   # bootstrap + fixtures only, a few seconds
 python -m fpl.fetch                  # full snapshot including per-player history
 ```
+
+Dependencies are pinned, transitive ones included. Every entry in the prediction log claims
+reproducibility from its `snapshot_id`; that claim covers the data, and the pin covers the code
+around it.
+
+Predicting, and committing a prediction:
+
+```bash
+python -m fpl.predict_baseline --gw 4 --out scratch/   # exploratory, never the log
+python -m fpl.predict_baseline --gw 4                  # writes predictions/gw04_baseline-v1.csv
+
+python -m fpl.verify_entry predictions/gw04_baseline-v1.csv   # run before committing
+python -m fpl.summarise predictions/gw04_baseline-v1.csv --out reports/
+```
+
+`predictions/` is the append-only log and is never rewritten. `scratch/` is gitignored space for
+exploratory runs. `verify_entry` checks a written entry against the snapshot named in its own
+rows and exits non-zero on any disagreement — it is the last check before an entry becomes
+permanent, because after the commit nothing can be corrected.
+
+## Tests
+
+```bash
+python -m unittest discover tests
+```
+
+No third-party test runner. `python -m unittest discover -s tests -t .` and a bare
+`python -m unittest` from the repository root work too, and all three run the same suite.
 
 A snapshot also pulls `event/<gw>/live/` for every settled gameweek — the scoring harness's
 source of actual points — fetched only once a gameweek's `data_checked` is true, because bonus

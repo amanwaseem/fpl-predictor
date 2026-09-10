@@ -11,7 +11,7 @@ Run from the repository root: python -m unittest discover tests
 import json
 import unittest
 
-import fixtures
+from tests import fixtures
 from fpl import fetch
 from fpl.snapshot import load_snapshot, resolve_target_gw
 
@@ -88,10 +88,28 @@ class TestBacktestGuard(unittest.TestCase):
     def test_next_gameweek_allowed(self):
         self.assertEqual(resolve_target_gw(self.FORWARD, 3)[0], 3)
 
-    def test_future_gameweek_allowed(self):
+    def test_future_gameweek_refused(self):
+        """Not a leak, but scoped to the wrong gameweek and silent about it.
+
+        chance_of_playing_next_round means "next round as of this snapshot",
+        so predicting past that scales minutes by another gameweek's injury
+        news. Previously allowed; the forward direction was unguarded while
+        the backward one refused.
+        """
         events = self.FORWARD + [{"id": 4, "is_next": False, "finished": False,
                                   "deadline_time": "t"}]
-        self.assertEqual(resolve_target_gw(events, 4)[0], 4)
+        with self.assertRaises(SystemExit) as cm:
+            resolve_target_gw(events, 4)
+        self.assertIn("chance_of_playing_next_round", str(cm.exception))
+
+    def test_the_snapshots_own_next_gameweek_is_the_only_target(self):
+        """Both directions away from is_next are refused, one gameweek apart."""
+        events = self.FORWARD + [{"id": 4, "is_next": False, "finished": False,
+                                  "deadline_time": "t"}]
+        self.assertEqual(resolve_target_gw(events, 3)[0], 3)
+        for beyond in (2, 4):
+            with self.assertRaises(SystemExit):
+                resolve_target_gw(events, beyond)
 
     def test_guard_holds_when_is_next_absent(self):
         """The bug review found: a missing flag skipped the check entirely."""
