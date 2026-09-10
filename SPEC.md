@@ -36,16 +36,23 @@ copy of the raw API response to `data/raw/<timestamp>/`. Every prediction record
 the `snapshot_id` it was produced from, so any prediction can be reproduced
 exactly, and schema changes can be diagnosed by diffing snapshots.
 
-A snapshot holds `bootstrap.json`, `fixtures.json` and per-player history under
-`players/`. `manifest.json` is written last and records what the snapshot
-actually contains, so an interrupted fetch is visibly incomplete rather than
-merely looking finished.
+A snapshot holds `bootstrap.json`, `fixtures.json`, per-player history under
+`players/`, and `live/<gw>.json` for each settled gameweek. `manifest.json` is
+written last and records what the snapshot actually contains — `element_count`,
+`has_players`, and `live_gameweeks` — so an interrupted fetch is visibly
+incomplete rather than merely looking finished.
 
-It will also hold `live/<gw>.json` — one file per completed gameweek, from
-`event/{gw}/live/`, carrying the actual points the scoring harness joins
-against, fetched only for gameweeks whose `data_checked` is true since bonus is
-provisional until then. That **does not exist yet**; it lands with the scoring
-harness in section 6.
+`live/<gw>.json` is the response from `event/{gw}/live/`, carrying the actual
+points the scoring harness joins predictions against. One request per gameweek
+rather than per player, so scoring never needs a six-minute 654-player refetch
+to find out what happened. Fetched only for gameweeks whose `data_checked` is
+true, since bonus points are provisional until that flips and stored actuals
+would otherwise disagree with the ones everyone else can see.
+
+`fpl/snapshot.py`'s `load_live(snap, gw)` reads one back, and refuses a
+gameweek that has none rather than returning an empty result — an empty result
+is indistinguishable from a gameweek in which nobody scored, which would make a
+sound model look catastrophically wrong.
 
 Raw snapshots are gitignored — large and fully regenerable.
 

@@ -5,8 +5,12 @@ back to exactly the data it was produced from.
 
 A snapshot is only usable once manifest.json exists. That file is written
 last, so an interrupted fetch leaves a directory that is visibly incomplete
-rather than one that merely looks finished. Re-running resumes: player files
-already on disk are not refetched.
+rather than one that merely looks finished. Re-running resumes: player and
+live files already on disk are not refetched.
+
+Settled gameweeks also get live/<gw>.json, the actual points the scoring
+harness joins predictions against. One request per gameweek, so scoring never
+has to refetch 654 players to find out what happened.
 
 Usage:
     python -m fpl.fetch                 # full snapshot (slow, ~6 min)
@@ -95,6 +99,49 @@ def find_incomplete():
     return max(candidates, key=lambda d: d.name) if candidates else None
 
 
+def fetch_live(outdir: Path, events):
+    """Snapshot actual per-player points for every settled gameweek.
+
+    One request per gameweek, not per player. `event/<gw>/live/` carries every
+    element's actual points for that round in a single response, so the
+    scoring harness never needs a six-minute 654-player refetch to find out
+    what happened — which is the whole reason this is worth storing rather
+    than fetching at scoring time.
+
+    Only `data_checked` gameweeks. That flag flips when bonus points are
+    settled, and before it the numbers on offer are provisional: storing them
+    would produce a snapshot whose "actuals" quietly disagree with the ones
+    everyone else can see, with nothing in the file admitting it.
+
+    Resumes like the per-player fetch — a live file already on disk is left
+    alone, with no --resume flag needed. It cannot have gone stale: a gameweek
+    only becomes data_checked once, and its results do not move afterwards.
+
+    Returns the gameweeks that have live data on disk afterwards, which is
+    what the manifest records: what was actually written, not what was meant
+    to be.
+    """
+    settled = sorted(e["id"] for e in events if e.get("data_checked"))
+    if not settled:
+        print("no settled gameweeks yet — no live results to fetch")
+        return []
+
+    print(f"fetching live results for {len(settled)} settled gameweek(s) ...")
+    fetched = skipped = 0
+    for gw in settled:
+        if (outdir / "live" / f"{gw}.json").exists():
+            skipped += 1
+            continue
+        write(outdir, f"live/{gw}.json", get(f"event/{gw}/live/"))
+        fetched += 1
+        time.sleep(DELAY)
+
+    if skipped:
+        print(f"  resumed: {skipped} already on disk, {fetched} fetched")
+
+    return [gw for gw in settled if (outdir / "live" / f"{gw}.json").exists()]
+
+
 def main(skip_players: bool, resume: bool) -> None:
     if resume:
         outdir = find_incomplete()
@@ -148,6 +195,11 @@ def main(skip_players: bool, resume: bool) -> None:
         print("fetching fixtures ...")
         write(outdir, "fixtures.json", get("fixtures/"))
 
+    # Before the six-minute player loop, not after. These are the cheapest
+    # requests in the fetch and the ones the scoring harness cannot work
+    # without, so an interrupted fetch should have them rather than not.
+    live_gameweeks = fetch_live(outdir, events)
+
     if skip_players:
         print("skipping per-player history")
     else:
@@ -184,6 +236,7 @@ def main(skip_players: bool, resume: bool) -> None:
         "snapshot_id": stamp,
         "element_count": len(players),
         "has_players": not skip_players,
+        "live_gameweeks": live_gameweeks,
         "completed_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     })
 
