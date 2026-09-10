@@ -421,3 +421,120 @@ class TestWriteEntryValidates(unittest.TestCase):
         before = [dict(r) for r in data]
         self.write(data)
         self.assertEqual(data, before)
+
+
+class TestTypesAreEnforcedNotJustNumbers(unittest.TestCase):
+    """SPEC section 5 types three columns as int.
+
+    "Is a number" is not the same check: 1.0 is a number and reaches the CSV
+    as the string "1.0". The scoring harness joins on player_id, and it does
+    so after the entry is immutable.
+    """
+
+    def test_rejects_a_float_player_id(self):
+        with self.assertRaises(ValueError) as cm:
+            validate_rows(stamped(player_id=1.0), 4)
+        self.assertIn("types as int", str(cm.exception))
+
+    def test_rejects_a_float_gameweek(self):
+        with self.assertRaises(ValueError):
+            validate_rows(stamped(gameweek=4.0), 4)
+
+    def test_rejects_a_float_n_fixtures(self):
+        with self.assertRaises(ValueError):
+            validate_rows(stamped(n_fixtures=1.0), 4)
+
+    def test_still_accepts_float_prices_and_points(self):
+        self.assertIsNone(validate_rows(stamped(price=5.5, predicted_points=6.25), 4))
+
+    def test_a_float_id_never_reaches_the_csv(self):
+        out = Path(tempfile.mkdtemp())
+        bad = rows(1)
+        bad[0]["player_id"] = 1.0
+        with self.assertRaises(SystemExit):
+            write_entry(bad, out, 4, "baseline-v1", "snap", "2027-01-01T00:00:00Z")
+        self.assertEqual(list(out.iterdir()), [])
+
+
+class TestPositionEnum(unittest.TestCase):
+    """predict_baseline maps element_type through a dict with a "UNK"
+    fallback, and FPL has added an element_type mid-era before — managers, in
+    2024/25. Without this the new position enters a permanent entry as UNK."""
+
+    def test_rejects_unk(self):
+        with self.assertRaises(ValueError) as cm:
+            validate_rows(stamped(position="UNK"), 4)
+        self.assertIn("position is 'UNK'", str(cm.exception))
+
+    def test_rejects_an_unrecognised_position(self):
+        with self.assertRaises(ValueError):
+            validate_rows(stamped(position="MNG"), 4)
+
+    def test_accepts_all_four_real_positions(self):
+        for position in ("GKP", "DEF", "MID", "FWD"):
+            with self.subTest(position=position):
+                self.assertIsNone(validate_rows(stamped(position=position), 4))
+
+
+class TestOneRowPerPlayer(unittest.TestCase):
+    """A duplicate id is double-counted by every pooled metric, and passes the
+    sort-order check trivially — a repeated id is in ascending order with
+    itself."""
+
+    def test_rejects_a_duplicated_player_id(self):
+        duped = stamped(2)
+        duped[0]["player_id"] = 7
+        duped[1]["player_id"] = 7
+        with self.assertRaises(ValueError) as cm:
+            validate_rows(duped, 4)
+        self.assertIn("more than once", str(cm.exception))
+
+    def test_names_the_duplicated_id(self):
+        duped = stamped(2)
+        duped[0]["player_id"] = 7
+        duped[1]["player_id"] = 7
+        with self.assertRaises(ValueError) as cm:
+            validate_rows(duped, 4)
+        self.assertIn("7", str(cm.exception))
+
+    def test_a_clean_entry_still_passes(self):
+        self.assertIsNone(validate_rows(stamped(5), 4))
+
+
+class TestLogDirectoryIsRecognisedFromAnywhere(TempCwd):
+    """The post-deadline guard is fatal for predictions/ wherever it is.
+
+    It previously resolved "predictions" against the process working
+    directory, so the same directory reached from a different cwd fell through
+    to the advisory branch — a refusal degrading into a warning that scrolls
+    past above twenty lines of table output, on the one check that makes a
+    committed entry evidence rather than a claim.
+    """
+
+    PAST = "2020-01-01T00:00:00Z"
+
+    def test_refuses_a_log_directory_outside_the_working_directory(self):
+        elsewhere = Path(tempfile.mkdtemp()) / "predictions"
+        with self.assertRaises(SystemExit) as cm:
+            write_entry(rows(), elsewhere, 4, "baseline-v1", "snap", self.PAST)
+        self.assertIn("Refusing to write to the prediction log", str(cm.exception))
+        self.assertFalse(elsewhere.exists())
+
+    def test_refuses_a_trailing_slash_spelling(self):
+        with self.assertRaises(SystemExit):
+            write_entry(rows(), "predictions/", 4, "baseline-v1", "snap", self.PAST)
+
+    def test_refuses_a_relative_spelling_from_above(self):
+        (self.tmp / "sub").mkdir()
+        os.chdir(self.tmp / "sub")
+        with self.assertRaises(SystemExit):
+            write_entry(rows(), "../predictions", 4, "baseline-v1", "snap",
+                        self.PAST)
+
+    def test_scratch_is_still_only_advisory(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            path = write_entry(rows(), "scratch", 4, "baseline-v1", "snap",
+                               self.PAST)
+        self.assertIn("WARNING", out.getvalue())
+        self.assertTrue(path.exists())

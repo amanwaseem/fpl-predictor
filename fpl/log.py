@@ -16,6 +16,7 @@ import csv
 import math
 import os
 import re
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,6 +37,19 @@ PROVENANCE = ["model_version", "snapshot_id", "generated_at_utc", "deadline_utc"
 # SPEC section 5: availability flag at prediction time.
 STATUSES = frozenset("adisun")
 
+# SPEC section 5: the four FPL positions. Validated because
+# predict_baseline maps element_type through a dict with a "UNK" fallback, and
+# FPL has added an element_type mid-era before now — managers, in 2024/25. A
+# new one would otherwise write "UNK" into a permanent entry with nothing
+# flagging it until the position breakdown in the scoring harness came out
+# wrong weeks later.
+POSITIONS = frozenset({"GKP", "DEF", "MID", "FWD"})
+
+# Columns SPEC section 5 types as int. Checked separately from NUMERIC because
+# a float that happens to be integral still reaches the CSV as "1.0", and the
+# scoring harness joins on player_id.
+INTEGER = ["gameweek", "player_id", "n_fixtures"]
+
 # Columns that must hold a real number. predicted_points and points_per_90 are
 # absent from NON_NEGATIVE on purpose: a red card or an own goal makes a
 # genuinely negative FPL score, and a model predicting one must be able to say
@@ -47,6 +61,9 @@ NUMERIC = [
 NON_NEGATIVE = ["gameweek", "player_id", "price", "expected_minutes", "n_fixtures"]
 
 TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
+
+# The one directory carrying SPEC section 5 rules 1 and 2.
+LOG_DIR_NAME = "predictions"
 
 # SPEC section 5: gw<NN>_<model_version>.csv, zero-padded, and model_version
 # free of "_" or the name has two readings.
@@ -94,6 +111,9 @@ def _number_fault(row, index, field):
         return f"row {index}: {field} is {value}"
     if field in NON_NEGATIVE and value < 0:
         return f"row {index}: {field} is {value}, which cannot be negative"
+    if field in INTEGER and not isinstance(value, int):
+        return (f"row {index}: {field} is {value!r}, which SPEC section 5 types "
+                "as int — a float reaches the CSV as '1.0'")
     return None
 
 
@@ -139,11 +159,28 @@ def validate_rows(rows, target_gw):
                 f"row {index}: status is {row['status']!r}, "
                 f"not one of {' '.join(sorted(STATUSES))}"
             )
+        if row["position"] not in POSITIONS:
+            faults.append(
+                f"row {index}: position is {row['position']!r}, "
+                f"not one of {' '.join(sorted(POSITIONS))}"
+            )
         for field in NUMERIC:
             fault = _number_fault(row, index, field)
             if fault:
                 faults.append(fault)
                 well_formed = False
+
+    # One row per player. Duplicates pass the sort-order check trivially — a
+    # repeated id is already in ascending order with itself — and would be
+    # double-counted by every metric the scoring harness pools, with nothing in
+    # the committed file revealing it.
+    counts = Counter(row["player_id"] for row in rows if "player_id" in row)
+    duplicated = sorted((pid for pid, n in counts.items() if n > 1), key=str)
+    if duplicated:
+        faults.append(
+            f"player_id appears more than once: {duplicated[:5]}"
+            + (f" and {len(duplicated) - 5} more" if len(duplicated) > 5 else "")
+        )
 
     # SPEC section 5: descending predicted_points, ties by ascending player_id.
     # Skipped when the numbers are already suspect, since sorting NaN or a
@@ -189,8 +226,19 @@ def _is_the_log(out_dir):
     Only `predictions/` carries hard rules 1 and 2. Exploratory runs against a
     past gameweek are legitimate and must stay possible, so the post-deadline
     guard is fatal here and advisory everywhere else.
+
+    Matched on the directory's own name rather than on its path relative to the
+    process working directory. This module has no reliable notion of the
+    repository root — #5 has yet to settle how paths are anchored — and
+    resolving "predictions" against the cwd made a deadline-critical guard fail
+    open for the very same directory reached from anywhere else, degrading a
+    refusal into a warning that scrolls past above twenty lines of table.
+
+    Fails closed by design: scratch space that happens to be named predictions
+    gets the strict treatment, which costs a rename. The other direction costs
+    a committed entry that cannot be told from one written knowing the result.
     """
-    return Path(out_dir).resolve() == Path("predictions").resolve()
+    return Path(out_dir).resolve().name == LOG_DIR_NAME
 
 
 def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
