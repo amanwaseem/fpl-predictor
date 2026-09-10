@@ -136,7 +136,12 @@ def main(requested_gw, out_dir):
             "status": player.get("status", ""),
         })
 
-    rows.sort(key=lambda r: r["predicted_points"], reverse=True)
+    # SPEC section 5: descending predicted_points, ties broken by ascending
+    # player_id. The tie-break is not cosmetic — without it the order of tied
+    # players falls out of the snapshot's element order, so the same snapshot
+    # can produce differently ordered entries and diffs between two model
+    # versions read as a reshuffle rather than a change of opinion.
+    rows.sort(key=lambda r: (-r["predicted_points"], r["player_id"]))
 
     outpath = write_entry(
         rows, out_dir, target_gw, MODEL_VERSION, snap.name, deadline
