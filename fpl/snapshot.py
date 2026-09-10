@@ -10,14 +10,35 @@ import json
 from pathlib import Path
 
 
-def load_snapshot():
-    """Load the most recent raw snapshot written by fpl/fetch.py."""
-    latest_file = Path("data/raw/LATEST")
-    if not latest_file.exists():
-        raise SystemExit("No snapshot found. Run: python -m fpl.fetch")
+def load_snapshot(snapshot_id=None):
+    """Load a raw snapshot written by fpl/fetch.py, most recent by default.
 
-    snap = Path("data/raw") / latest_file.read_text().strip()
+    `snapshot_id` names a particular snapshot directory instead. Verifying a
+    committed entry needs that: an entry has to be checked against the
+    snapshot that produced it, which the entry records in its own snapshot_id
+    column and which is not the latest one for long — the next fetch moves
+    LATEST, and a log entry stays readable for the rest of the season.
+    """
+    if snapshot_id is None:
+        latest_file = Path("data/raw/LATEST")
+        if not latest_file.exists():
+            raise SystemExit("No snapshot found. Run: python -m fpl.fetch")
+        snapshot_id = latest_file.read_text().strip()
+
+    snap = Path("data/raw") / snapshot_id
     players_dir = snap / "players"
+
+    # Checked before the manifest, so that a snapshot that was never fetched
+    # is not reported as an interrupted fetch to resume. data/raw is
+    # gitignored, so an entry committed months ago routinely names a snapshot
+    # that is simply not on this machine.
+    if not snap.is_dir():
+        raise SystemExit(
+            f"No snapshot at {snap}.\n"
+            "data/raw/ is gitignored and snapshots are not shared, so this one "
+            "may never have existed here.\n"
+            "Take a fresh one with: python -m fpl.fetch"
+        )
 
     manifest_path = snap / "manifest.json"
     if not manifest_path.exists():

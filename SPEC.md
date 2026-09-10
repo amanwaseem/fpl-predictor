@@ -175,6 +175,18 @@ making recovery mean deleting a file out of `predictions/` in a hurry. `tools/ch
 enforces rule 2 mechanically, comparing `predictions/` against the committed
 tree and failing if an entry was modified or deleted.
 
+`fpl/verify_entry.py` is the last check before an entry is committed. It reads
+a written entry back and cross-checks it against the snapshot named in its own
+`snapshot_id` column — row coverage against the element list, `n_fixtures`
+against `fixtures.json`, flagged players against their availability, and
+`deadline_utc` against the bootstrap event — then runs `validate_rows` over
+the parsed rows. `fpl/log.py` cannot do this: it validates rows in memory at
+write time with no snapshot open beside them. Run it before opening the PR:
+
+```
+python -m fpl.verify_entry predictions/gw04_baseline-v1.csv
+```
+
 ## 6. Scoring
 
 After a gameweek completes and `data_checked` is true in the API (bonus points
