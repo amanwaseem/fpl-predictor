@@ -106,6 +106,41 @@ def load_snapshot(snapshot_id=None):
     return snap, bootstrap, fixtures, players_dir
 
 
+def load_live(snap, gw):
+    """Actual per-player points for a completed gameweek.
+
+    The other side of the join the scoring harness makes: a prediction log
+    entry says what was expected, this says what happened. Written by
+    fpl.fetch for gameweeks whose results are settled.
+
+    Refuses a gameweek with no live file rather than returning an empty
+    result, which is the same posture as the rest of this module and matters
+    more here than anywhere else. An empty result is indistinguishable from a
+    gameweek in which nobody scored, so a scoring run would report every
+    prediction as catastrophically wrong and the model would look broken when
+    it was the ingestion that was incomplete.
+    """
+    path = Path(snap) / "live" / f"{gw}.json"
+    if not path.exists():
+        raise SystemExit(
+            f"Snapshot {snap} has no live results for GW{gw}.\n"
+            "Live data is only fetched for gameweeks whose data_checked is "
+            "true, so either GW{} was not settled when this snapshot was "
+            "taken, or the snapshot predates live ingestion.\n"
+            "Check manifest.json's live_gameweeks, and take a fresh snapshot "
+            "with: python -m fpl.fetch".format(gw)
+        )
+
+    payload = json.loads(path.read_text())
+    if "elements" not in payload:
+        raise SystemExit(
+            f"{path} has no 'elements' key — the FPL API shape has changed.\n"
+            "This endpoint is undocumented and unversioned; scoring against a "
+            "shape nobody has checked would produce numbers nobody can trust."
+        )
+    return payload
+
+
 def resolve_target_gw(events, requested):
     """Pick the gameweek to predict, and return it with its deadline.
 

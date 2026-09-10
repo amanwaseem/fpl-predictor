@@ -72,10 +72,11 @@ python -m fpl.fetch --skip-players   # bootstrap + fixtures only, a few seconds
 python -m fpl.fetch                  # full snapshot including per-player history
 ```
 
-A full snapshot will also pull `event/<gw>/live/` for every completed gameweek — the scoring
-harness's source of actual points — fetched only once a gameweek's `data_checked` is true,
-because bonus points are provisional until then. **Not built yet**; it lands with the scoring
-harness.
+A snapshot also pulls `event/<gw>/live/` for every settled gameweek — the scoring harness's
+source of actual points — fetched only once a gameweek's `data_checked` is true, because bonus
+points are provisional until then. One request per gameweek rather than per player, so scoring
+never needs a six-minute refetch to find out what happened. `manifest.json` records which
+gameweeks a snapshot has live data for.
 
 Snapshots are written to `data/raw/<timestamp>/` and are gitignored — they are large and fully
 regenerable. `data/raw/LATEST` points at the most recent one.

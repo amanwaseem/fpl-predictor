@@ -40,6 +40,7 @@ Early development, 2026/27 season.
 - `fpl/snapshot.py` — loading a snapshot and bounding what may be read from it.
   Both rule 2 guards live here: `resolve_target_gw` refuses to backtest from a
   later snapshot, `usable_rounds` drops rounds whose results are not final.
+  `load_live` reads back actual points for a settled gameweek.
 - `fpl/features.py` — snapshot rows to model inputs. Owns the form window.
 - `fpl/log.py` — the log schema and the append-only write. Rule 1 lives here.
 - `fpl/verify_entry.py` — checks a written entry against the snapshot that
@@ -76,9 +77,11 @@ Key endpoints: `bootstrap-static/`, `fixtures/`, `element-summary/{id}/`,
 `event/{id}/live/`, `event-status/`.
 
 `event/{id}/live/` is the scoring harness's source of actual points. `fetch.py`
-does not call it yet — when it does, it writes `<snapshot>/live/<gw>.json` for
-gameweeks whose `data_checked` is true. One request per gameweek, so scoring
-will not need a six-minute per-player refetch.
+writes it to `<snapshot>/live/<gw>.json` for gameweeks whose `data_checked` is
+true, records which in `manifest.json` as `live_gameweeks`, and skips any file
+already on disk. One request per gameweek, so scoring does not need a
+six-minute per-player refetch. Read it back with `snapshot.load_live`, which
+refuses a gameweek that has none.
 
 ### Snapshot timing
 
