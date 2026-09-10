@@ -27,6 +27,7 @@ useful moment for this program is before the commit.
 import argparse
 import csv
 import sys
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -148,6 +149,63 @@ def _coverage_faults(rows, bootstrap):
     return faults
 
 
+# Columns the snapshot also knows the answer to. Everything else in an entry is
+# the model's opinion, which the verifier has no standing to second-guess.
+DESCRIPTIVE = ["web_name", "team", "position", "price", "status"]
+
+
+def _description_faults(rows, players, teams, positions):
+    """Descriptive columns say what the snapshot says.
+
+    Without this the entry's own `status` column is unfalsifiable: the
+    availability check reads status out of the snapshot, so a row claiming
+    every player is injured passes while contradicting the file it was built
+    from. SPEC section 5 calls these columns "at time of prediction" values,
+    which is a claim about the snapshot and therefore checkable against it.
+
+    `team` matters most. It is the join key into the fixture counts, so a
+    blanking player relabelled to a club that plays would otherwise carry a
+    full prediction through the blank check untouched.
+
+    Grouped by column rather than by row: one wrong column is wrong 654 times,
+    and the report has to stay readable.
+    """
+    faults = []
+    disagreements = defaultdict(list)
+    for row in rows:
+        player = players.get(row["player_id"])
+        if player is None:
+            continue  # reported as a player the snapshot does not have
+        expected = {
+            "web_name": player["web_name"],
+            "team": teams.get(player["team"]),
+            "position": positions.get(player["element_type"]),
+            "price": player["now_cost"] / 10.0,
+            "status": player.get("status", ""),
+        }
+        for field in DESCRIPTIVE:
+            want, found = expected[field], row[field]
+            if want is None:
+                continue  # unknown team or element_type, reported elsewhere
+            wrong = (abs(found - want) > 1e-9 if field == "price"
+                     else found != want)
+            if wrong:
+                disagreements[field].append((row["player_id"], found, want))
+
+    for field in DESCRIPTIVE:
+        items = disagreements.get(field)
+        if not items:
+            continue
+        shown = ", ".join(f"player {pid} says {found!r} not {want!r}"
+                          for pid, found, want in items[:3])
+        more = f" (and {len(items) - 3} more)" if len(items) > 3 else ""
+        faults.append(
+            f"{len(items)} row(s) disagree with the snapshot on {field}: "
+            f"{shown}{more}"
+        )
+    return faults
+
+
 def _team_faults(rows, bootstrap, ids_by_name):
     faults = []
     unknown = sorted({row["team"] for row in rows} - set(ids_by_name))
@@ -166,7 +224,7 @@ def _team_faults(rows, bootstrap, ids_by_name):
     return faults
 
 
-def _fixture_faults(rows, counts, ids_by_name, target_gw):
+def _fixture_faults(rows, counts, players, teams, target_gw):
     """n_fixtures agrees with fixtures.json — the blank and double check.
 
     Done by comparison against the fixture list rather than by eye. A blank
@@ -174,30 +232,48 @@ def _fixture_faults(rows, counts, ids_by_name, target_gw):
     read as a single halves them, and both look entirely ordinary in the
     table.
 
+    The count is looked up by the player's team *in the snapshot*, never by
+    the team named in the row. The row's team is one of the things being
+    checked, and using it here would let a relabelled player pick up the
+    fixture count of a club they do not play for.
+
     Reported per team rather than per row. A club whose count is wrong is
     wrong for every one of its players, and thirty identical faults would bury
     the rest of the report.
     """
     faults = []
-    disagreeing = {(row["team"], row["n_fixtures"],
-                    counts.get(ids_by_name[row["team"]], 0))
-                   for row in rows if row["team"] in ids_by_name}
-    for team, found, expected in sorted(d for d in disagreeing
-                                        if d[1] != d[2]):
+    disagreeing = set()
+    for row in rows:
+        player = players.get(row["player_id"])
+        if player is None:
+            continue
+        name = teams.get(player["team"])
+        if name is None:
+            continue  # unknown element team, reported by _description_faults
+        expected = counts.get(player["team"], 0)
+        if row["n_fixtures"] != expected:
+            disagreeing.add((name, row["n_fixtures"], expected))
+
+    for team, found, expected in sorted(disagreeing):
         kind = {0: " (a blank)", 2: " (a double)"}.get(expected, "")
         faults.append(
             f"team {team}: n_fixtures is {found} in the entry, but "
             f"fixtures.json has {expected} fixture(s) in GW{target_gw}{kind}"
         )
 
-    # No fixture, no points. Independent of any model, and the failure the
-    # blank check exists to catch: the count can be recorded correctly and the
-    # prediction still not act on it.
+    # No fixture, no points, and no minutes either. Independent of any model,
+    # and the failure the blank check exists to catch: the count can be
+    # recorded correctly and the prediction still not act on it. Minutes are
+    # checked alongside points because expected_minutes is what a scoring
+    # post-mortem reads to decide whether a miss was the minutes model or the
+    # rate model, and a blanking player credited 90 minutes corrupts that.
     playing = [row for row in rows
-               if row["n_fixtures"] == 0 and row["predicted_points"] != 0]
+               if row["n_fixtures"] == 0
+               and (row["predicted_points"] != 0 or row["expected_minutes"] != 0)]
     if playing:
         shown = ", ".join(
-            f"{r['web_name']} ({r['team']}) {r['predicted_points']}"
+            f"{r['web_name']} ({r['team']}) "
+            f"{r['predicted_points']} off {r['expected_minutes']} mins"
             for r in playing[:5]
         )
         more = f" (and {len(playing) - 5} more)" if len(playing) > 5 else ""
@@ -307,6 +383,13 @@ def _provenance_faults(rows, bootstrap, target_gw, model_version, entry_path):
 
 def check_entry(rows, bootstrap, fixtures, target_gw, model_version, entry_path):
     """Every cross-check, as a list of faults. Empty means the entry is sound."""
+    # Returned rather than raised. Everything below either indexes rows[0] or
+    # builds a per-player map, and this function contracts to hand back a list
+    # of faults — a caller reaching it with no rows wants the diagnosis, not an
+    # IndexError. main() cannot get here, but check_entry is a public seam.
+    if not rows:
+        return ["an entry must contain at least one row"]
+
     faults = []
     try:
         validate_rows(rows, target_gw)
@@ -321,10 +404,15 @@ def check_entry(rows, bootstrap, fixtures, target_gw, model_version, entry_path)
         # check compares the wrong counts, so stop rather than report nonsense.
         return faults + ["the snapshot has two teams sharing a short_name"]
 
+    players = {p["id"]: p for p in bootstrap["elements"]}
+    positions = {p["id"]: p["singular_name_short"]
+                 for p in bootstrap["element_types"]}
+
     faults += _coverage_faults(rows, bootstrap)
+    faults += _description_faults(rows, players, team_names, positions)
     faults += _team_faults(rows, bootstrap, ids_by_name)
     faults += _fixture_faults(rows, fixture_counts(fixtures, target_gw),
-                              ids_by_name, target_gw)
+                              players, team_names, target_gw)
     faults += _availability_faults(rows, bootstrap)
     faults += _provenance_faults(rows, bootstrap, target_gw, model_version,
                                  entry_path)

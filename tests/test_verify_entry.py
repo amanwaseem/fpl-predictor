@@ -195,6 +195,112 @@ class TestAvailability(VerifyCase):
         self.assertAccepted(rows)
 
 
+class TestAgreesWithSnapshot(VerifyCase):
+    """Descriptive columns are checkable claims about the snapshot, so check them.
+
+    Every test here passed before review found the gap: the verifier compared
+    player_id sets and then took the rest of each row on trust.
+    """
+
+    def test_wrong_status_refused(self):
+        """The row's own status column was previously unfalsifiable.
+
+        _availability_faults reads status out of the snapshot, so an entry
+        claiming every player is injured contradicted the file it was built
+        from and was accepted.
+        """
+        rows = [dict(row, status="i") for row in self.rows]
+        self.assertRefused(rows, because="disagree with the snapshot on status")
+
+    def test_wrong_price_refused(self):
+        rows = [dict(row) for row in self.rows]
+        rows[0]["price"] = 99.9
+        self.assertRefused(rows, because="disagree with the snapshot on price")
+
+    def test_wrong_web_name_refused(self):
+        rows = [dict(row) for row in self.rows]
+        rows[0]["web_name"] = "WRONG"
+        self.assertRefused(rows, because="disagree with the snapshot on web_name")
+
+    def test_wrong_position_refused(self):
+        rows = [dict(row) for row in self.rows]
+        target = next(r for r in rows if r["position"] != "GKP")
+        target["position"] = "GKP"
+        self.assertRefused(rows, because="disagree with the snapshot on position")
+
+    def test_correct_price_passes_despite_float_division(self):
+        """now_cost/10 must compare equal to the value written to the CSV."""
+        self.assertAccepted()
+
+    def test_blanking_player_relabelled_to_a_playing_team_refused(self):
+        """The hole review found: team was the join key and was never checked.
+
+        Dropping team 1's fixture makes T01 blank. Relabelling one of its
+        players to a club that does play, and giving them a full prediction,
+        previously sailed through the blank check — the fixture count was
+        looked up by the name in the row rather than by the player's actual
+        team in the snapshot.
+        """
+        self.set_fixtures([f for f in self.fixture_list
+                           if 1 not in (f["team_h"], f["team_a"])])
+        rows = fixtures.entry_rows(
+            self.bootstrap,
+            json.loads((self.dir / "fixtures.json").read_text()),
+            TARGET_GW, self.deadline, snapshot_id=SNAPSHOT_ID,
+        )
+        smuggled = next(r for r in rows if r["team"] == "T01")
+        smuggled.update(team="T03", n_fixtures=1, predicted_points=6.0,
+                        expected_minutes=90.0, points_per_90=6.0)
+        rows.sort(key=lambda r: (-r["predicted_points"], r["player_id"]))
+        output = self.assertRefused(rows, because="disagree with the snapshot on team")
+        self.assertIn("n_fixtures is 1 in the entry", output)
+
+    def test_blanking_player_with_minutes_but_no_points_refused(self):
+        """expected_minutes is what a post-mortem reads to attribute a miss."""
+        self.set_fixtures([f for f in self.fixture_list
+                           if 1 not in (f["team_h"], f["team_a"])])
+        rows = fixtures.entry_rows(
+            self.bootstrap,
+            json.loads((self.dir / "fixtures.json").read_text()),
+            TARGET_GW, self.deadline, snapshot_id=SNAPSHOT_ID,
+        )
+        blanking = next(r for r in rows if r["team"] == "T01")
+        blanking["expected_minutes"] = 90.0  # points stay 0.0
+        self.assertRefused(rows, because="carry a non-zero prediction")
+
+
+class TestCheckEntrySeam(VerifyCase):
+    def test_no_rows_returns_faults_rather_than_raising(self):
+        """check_entry contracts to return a list, including for no rows."""
+        faults = verify_entry.check_entry(
+            [], self.bootstrap, self.fixture_list, TARGET_GW, "baseline-v1",
+            Path("predictions") / ENTRY_NAME,
+        )
+        self.assertEqual(faults, ["an entry must contain at least one row"])
+
+
+class TestSnapshotIdIsUntrusted(VerifyCase):
+    """snapshot_id arrives from a CSV and is joined onto data/raw."""
+
+    def test_absolute_path_refused(self):
+        rows = [dict(row, snapshot_id="/etc") for row in self.rows]
+        with self.assertRaises(SystemExit) as cm:
+            self.verify(rows)
+        self.assertIn("is not a snapshot id", str(cm.exception))
+
+    def test_empty_snapshot_id_refused(self):
+        rows = [dict(row, snapshot_id="") for row in self.rows]
+        with self.assertRaises(SystemExit) as cm:
+            self.verify(rows)
+        self.assertIn("is not a snapshot id", str(cm.exception))
+
+    def test_parent_traversal_refused(self):
+        rows = [dict(row, snapshot_id="../../etc") for row in self.rows]
+        with self.assertRaises(SystemExit) as cm:
+            self.verify(rows)
+        self.assertIn("is not a snapshot id", str(cm.exception))
+
+
 class TestProvenance(VerifyCase):
     def test_deadline_not_matching_bootstrap_refused(self):
         rows = [dict(row, deadline_utc="2026-09-19T17:30:00Z")

@@ -150,3 +150,26 @@ class TestLoadSnapshot(TempCwd):
         with self.assertRaises(SystemExit):
             load_snapshot()
 
+    def test_corrupt_latest_pointer_refused(self):
+        """A malformed LATEST must not be joined onto data/raw and followed."""
+        self.point_at("../../etc")
+        with self.assertRaises(SystemExit) as cm:
+            load_snapshot()
+        self.assertIn("is not a snapshot id", str(cm.exception))
+
+    def test_named_snapshot_loads_instead_of_latest(self):
+        """What the verifier relies on: an entry names its own snapshot."""
+        self.snap("20260101T000000Z", players=2,
+                  manifest={"has_players": True, "element_count": 2})
+        self.snap("20260910T000000Z", players=2,
+                  manifest={"has_players": True, "element_count": 2})
+        self.point_at("20260910T000000Z")
+        snap, _, _, _ = load_snapshot("20260101T000000Z")
+        self.assertEqual(snap.name, "20260101T000000Z")
+
+    def test_missing_named_snapshot_reports_it_as_absent(self):
+        """Not as an interrupted fetch to resume — data/raw is gitignored."""
+        with self.assertRaises(SystemExit) as cm:
+            load_snapshot("20260101T000000Z")
+        self.assertIn("No snapshot at", str(cm.exception))
+
