@@ -5,10 +5,17 @@ guards against overwriting one and against writing an empty one are part of
 the contract rather than part of any model. The scoring harness reads these
 same columns back, which is why the schema cannot live inside a model that is
 meant to be replaced.
+
+Validation happens at write time, before the deadline, because every check
+that runs before a deadline is recoverable and every check that runs after one
+is not. A malformed entry discovered at scoring time is discovered after the
+file has become immutable.
 """
 
 import csv
+import math
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,6 +27,170 @@ FIELDS = [
     "predicted_points", "expected_minutes", "points_per_90", "n_fixtures",
     "status", "model_version", "snapshot_id", "generated_at_utc", "deadline_utc",
 ]
+
+# Stamped by write_entry from its own arguments rather than supplied by the
+# model. A caller that sets these itself is either confused or forging
+# provenance, so validate_rows treats them like any other unexpected key.
+PROVENANCE = ["model_version", "snapshot_id", "generated_at_utc", "deadline_utc"]
+
+# SPEC section 5: availability flag at prediction time.
+STATUSES = frozenset("adisun")
+
+# Columns that must hold a real number. predicted_points and points_per_90 are
+# absent from NON_NEGATIVE on purpose: a red card or an own goal makes a
+# genuinely negative FPL score, and a model predicting one must be able to say
+# so rather than have the log silently refuse it.
+NUMERIC = [
+    "gameweek", "player_id", "price", "predicted_points",
+    "expected_minutes", "points_per_90", "n_fixtures",
+]
+NON_NEGATIVE = ["gameweek", "player_id", "price", "expected_minutes", "n_fixtures"]
+
+TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
+
+# SPEC section 5: gw<NN>_<model_version>.csv, zero-padded, and model_version
+# free of "_" or the name has two readings.
+ENTRY_FILENAME = re.compile(r"^gw(\d{2})_([^_]+)\.csv$")
+
+# A systematically broken entry has one fault per row. Reporting all 654 of
+# them buries the diagnosis; reporting one at a time means finding the next
+# only after fixing the last, at a deadline.
+MAX_REPORTED = 10
+
+
+def parse_entry_filename(path):
+    """Split an entry filename back into (gameweek, model_version).
+
+    The inverse of the name write_entry builds. The scoring harness reads
+    `predictions/` as a directory listing, so the filename has to be
+    unambiguously parseable — which is why `model_version` may not contain an
+    underscore, and why the gameweek is zero-padded rather than bare.
+
+    Raises ValueError rather than exiting: callers that walk a directory want
+    to report a bad name alongside the others, not die on the first one.
+    """
+    name = Path(path).name
+    match = ENTRY_FILENAME.match(name)
+    if match is None:
+        raise ValueError(
+            f"{name!r} is not a prediction log entry name.\n"
+            "Expected gw<NN>_<model_version>.csv with a zero-padded gameweek "
+            "and no underscore in the model version — 'gw04_baseline-v1.csv', "
+            "not 'gw4_baseline-v1.csv' and not 'gw04_baseline_v1.csv'."
+        )
+    return int(match.group(1)), match.group(2)
+
+
+def _number_fault(row, index, field):
+    """Why `field` is not a usable number in this row, or None if it is."""
+    value = row[field]
+    # bool is a subclass of int, so True would otherwise pass as a number and
+    # then be written to the CSV as "True".
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return f"row {index}: {field} is {value!r}, which is not a number"
+    if math.isnan(value):
+        return f"row {index}: {field} is NaN"
+    if math.isinf(value):
+        return f"row {index}: {field} is {value}"
+    if field in NON_NEGATIVE and value < 0:
+        return f"row {index}: {field} is {value}, which cannot be negative"
+    return None
+
+
+def validate_rows(rows, target_gw):
+    """Check a complete entry against the SPEC section 5 schema.
+
+    Expects rows with every column present and typed — the shape write_entry
+    holds just before it writes, and the shape the scoring harness will read
+    back. Raises ValueError listing what is wrong; returns None if the entry
+    is sound.
+
+    Collects faults rather than raising on the first, because the caller is
+    usually a person minutes from a deadline who needs to know how much is
+    wrong, not merely that something is.
+    """
+    if not rows:
+        raise ValueError("an entry must contain at least one row")
+
+    faults = []
+    expected = set(FIELDS)
+    well_formed = True
+
+    for index, row in enumerate(rows):
+        missing = expected - set(row)
+        unexpected = set(row) - expected
+        if missing:
+            faults.append(f"row {index}: missing {sorted(missing)}")
+        if unexpected:
+            faults.append(f"row {index}: unexpected {sorted(unexpected)}")
+        if missing or unexpected:
+            # The per-field checks below would raise KeyError, and their
+            # findings would be noise next to a wrong column set anyway.
+            well_formed = False
+            continue
+
+        if row["gameweek"] != target_gw:
+            faults.append(
+                f"row {index}: gameweek is {row['gameweek']!r}, "
+                f"but this entry targets GW{target_gw}"
+            )
+        if row["status"] not in STATUSES:
+            faults.append(
+                f"row {index}: status is {row['status']!r}, "
+                f"not one of {' '.join(sorted(STATUSES))}"
+            )
+        for field in NUMERIC:
+            fault = _number_fault(row, index, field)
+            if fault:
+                faults.append(fault)
+                well_formed = False
+
+    # SPEC section 5: descending predicted_points, ties by ascending player_id.
+    # Skipped when the numbers are already suspect, since sorting NaN or a
+    # string would report a second, derived failure for the same cause.
+    if well_formed:
+        order = [(-row["predicted_points"], row["player_id"]) for row in rows]
+        if order != sorted(order):
+            first = next(i for i in range(len(order) - 1)
+                         if order[i] > order[i + 1])
+            faults.append(
+                f"rows {first} and {first + 1} are out of the contract sort "
+                "order (descending predicted_points, ties by ascending "
+                "player_id): "
+                f"{rows[first]['predicted_points']}/"
+                f"{rows[first]['player_id']} before "
+                f"{rows[first + 1]['predicted_points']}/"
+                f"{rows[first + 1]['player_id']}"
+            )
+
+    if faults:
+        shown = faults[:MAX_REPORTED]
+        more = (f"\n... and {len(faults) - MAX_REPORTED} more"
+                if len(faults) > MAX_REPORTED else "")
+        raise ValueError(
+            f"{len(faults)} schema violation(s) in this entry:\n  "
+            + "\n  ".join(shown) + more
+        )
+
+
+def _parse_timestamp(value, what):
+    try:
+        return datetime.strptime(value, TIMESTAMP).replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        raise SystemExit(
+            f"{what} is {value!r}, which is not a SPEC section 5 timestamp.\n"
+            "Expected YYYY-MM-DDTHH:MM:SSZ."
+        )
+
+
+def _is_the_log(out_dir):
+    """Whether this directory is the append-only log rather than scratch space.
+
+    Only `predictions/` carries hard rules 1 and 2. Exploratory runs against a
+    past gameweek are legitimate and must stay possible, so the post-deadline
+    guard is fatal here and advisory everywhere else.
+    """
+    return Path(out_dir).resolve() == Path("predictions").resolve()
 
 
 def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
@@ -36,7 +207,70 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
             "under hard rule 1 and indistinguishable from a real entry."
         )
 
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if "_" in model_version:
+        raise SystemExit(
+            f"model_version {model_version!r} contains an underscore.\n"
+            f"'gw{target_gw:02d}_{model_version}.csv' would have two readings "
+            "and stop being parseable back into gameweek and model version.\n"
+            "Use '-' instead."
+        )
+
+    deadline_at = _parse_timestamp(deadline, "deadline")
+    now = datetime.now(timezone.utc)
+    generated_at = now.strftime(TIMESTAMP)
+
+    # SPEC section 5 rule 5. A prediction made at or after its own deadline
+    # cannot be distinguished from one made knowing the result, so it is not
+    # evidence of anything — but only predictions/ makes that claim, and
+    # backfilling a past gameweek into scratch/ is ordinary exploratory work.
+    if now >= deadline_at:
+        late = (
+            f"generated_at_utc {generated_at} is at or after the GW{target_gw} "
+            f"deadline {deadline}."
+        )
+        if _is_the_log(out_dir):
+            raise SystemExit(
+                late + "\nRefusing to write to the prediction log: an entry "
+                "made after its deadline is indistinguishable from one made "
+                "knowing the result.\nNothing was written."
+            )
+        print(f"WARNING: {late}\n"
+              f"         Fine for an exploratory run in {out_dir}, but this "
+              "could never go in predictions/.")
+
+    # Provenance is write_entry's to state, from its own arguments. A row that
+    # arrives carrying it is either a model that misunderstands the contract or
+    # one forging where a prediction came from, and quietly overwriting the
+    # value would leave both undiagnosed.
+    forged = sorted({f for row in rows for f in PROVENANCE if f in row})
+    if forged:
+        raise SystemExit(
+            f"Rows arrived carrying provenance columns: {forged}.\n"
+            "write_entry stamps model_version, snapshot_id, generated_at_utc "
+            "and deadline_utc from its own arguments — a model must not set "
+            "them.\nNothing was written."
+        )
+
+    # Build the stamped rows up front rather than mutating the caller's dicts
+    # during the write. validate_rows checks the entry exactly as it will be
+    # written, and a caller that reuses its rows afterwards — writing the same
+    # predictions to scratch/ and predictions/, say — does not find provenance
+    # from the first write already sitting in them.
+    stamped = [
+        dict(row, model_version=model_version, snapshot_id=snapshot_id,
+             generated_at_utc=generated_at, deadline_utc=deadline)
+        for row in rows
+    ]
+
+    try:
+        validate_rows(stamped, target_gw)
+    except ValueError as e:
+        raise SystemExit(
+            f"{e}\nRefusing to write a malformed entry. Nothing was written.\n"
+            "This is caught here, before the deadline, because after it the "
+            "file would be immutable under hard rule 1."
+        )
+
     outdir = Path(out_dir)
     outdir.mkdir(parents=True, exist_ok=True)
     outpath = outdir / f"gw{target_gw:02d}_{model_version}.csv"
@@ -65,14 +299,8 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
         with tmp.open("w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=FIELDS)
             writer.writeheader()
-            for r in rows:
-                r.update({
-                    "model_version": model_version,
-                    "snapshot_id": snapshot_id,
-                    "generated_at_utc": generated_at,
-                    "deadline_utc": deadline,
-                })
-                writer.writerow(r)
+            for row in stamped:
+                writer.writerow(row)
         try:
             os.link(tmp, outpath)
         except FileExistsError:
