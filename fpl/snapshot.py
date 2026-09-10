@@ -7,7 +7,14 @@ inside whichever model happened to need them first.
 """
 
 import json
+import re
 from pathlib import Path
+
+# fetch.py names snapshots by UTC timestamp: datetime.strftime("%Y%m%dT%H%M%SZ").
+# Matched rather than assumed, because a snapshot id reaching load_snapshot may
+# have come out of a CSV column in a committed entry, and "" or "/etc" would
+# otherwise be joined onto data/raw and resolve somewhere unintended.
+SNAPSHOT_ID = re.compile(r"^\d{8}T\d{6}Z$")
 
 
 def load_snapshot(snapshot_id=None):
@@ -23,7 +30,22 @@ def load_snapshot(snapshot_id=None):
         latest_file = Path("data/raw/LATEST")
         if not latest_file.exists():
             raise SystemExit("No snapshot found. Run: python -m fpl.fetch")
+        source = "data/raw/LATEST"
         snapshot_id = latest_file.read_text().strip()
+    else:
+        source = "the requested snapshot id"
+
+    # Checked before the join, not after. An id that is empty, absolute, or
+    # contains a path separator escapes data/raw entirely — "" resolves to the
+    # directory itself and "/etc" ignores the join — and the resulting
+    # directory would be reported below as an interrupted fetch to resume,
+    # which is both wrong and destructive advice.
+    if not SNAPSHOT_ID.match(snapshot_id):
+        raise SystemExit(
+            f"{snapshot_id!r} from {source} is not a snapshot id.\n"
+            "Expected a UTC timestamp as written by fpl.fetch, "
+            "'20260907T141922Z' in the form YYYYMMDDTHHMMSSZ."
+        )
 
     snap = Path("data/raw") / snapshot_id
     players_dir = snap / "players"
