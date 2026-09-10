@@ -42,6 +42,11 @@ Early development, 2026/27 season.
   later snapshot, `usable_rounds` drops rounds whose results are not final.
 - `fpl/features.py` — snapshot rows to model inputs. Owns the form window.
 - `fpl/log.py` — the log schema and the append-only write. Rule 1 lives here.
+- `fpl/verify_entry.py` — checks a written entry against the snapshot that
+  produced it, and exits non-zero on any disagreement. Run it before committing
+  an entry; after the commit nothing can be fixed. Takes the entry path.
+- `tests/fixtures.py` — synthetic snapshots and entries, shared by every suite.
+  Build test data from here rather than hand-rolling snapshot JSON.
 - Everything else — not built. See `SPEC.md`.
 
 New models import from `snapshot`, `features` and `log` — never from

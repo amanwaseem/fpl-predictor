@@ -9,49 +9,31 @@ Run from the repository root: python -m unittest discover tests
 """
 
 import json
-import os
-import shutil
-import tempfile
 import unittest
-from pathlib import Path
 
+import fixtures
 from fpl import fetch
 from fpl.snapshot import load_snapshot, resolve_target_gw
 
 
-class TempCwd(unittest.TestCase):
-    """Each test gets its own data/raw, so nothing touches real snapshots."""
+class TempCwd(fixtures.TempCwd):
+    """A snapshot in the minimal shape these tests were written against.
 
-    def setUp(self):
-        self.prev = Path.cwd()
-        self.tmp = Path(tempfile.mkdtemp())
-        os.chdir(self.tmp)
-        (self.tmp / "data/raw").mkdir(parents=True)
-
-    def tearDown(self):
-        os.chdir(self.prev)
-        shutil.rmtree(self.tmp, ignore_errors=True)
+    The builder itself now lives in tests/fixtures.py, shared with the
+    verifier and end-to-end suites. This wrapper keeps the argument shape
+    these tests use: `players` is how many per-player history files exist,
+    which is separate from how many elements the bootstrap claims — that gap
+    is exactly what the missing-players check is about.
+    """
 
     def snap(self, name, *, players=0, manifest=None, elements=None):
-        d = self.tmp / "data/raw" / name
-        (d / "players").mkdir(parents=True)
-        els = elements if elements is not None else list(range(1, players + 1))
-        for pid in range(1, players + 1):
-            (d / "players" / f"{pid}.json").write_text("{}")
-        (d / "bootstrap.json").write_text(json.dumps({
-            "elements": [{"id": i, "web_name": f"p{i}", "element_type": 3,
-                          "team": 1, "now_cost": 50, "status": "a"} for i in els],
-            "teams": [{"id": 1, "short_name": "AAA"}],
-            "element_types": [{"id": 3, "singular_name_short": "MID"}],
-            "events": [{"id": 1, "data_checked": True, "finished": True,
-                        "is_next": False, "deadline_time": "t"},
-                       {"id": 2, "data_checked": False, "finished": False,
-                        "is_next": True, "deadline_time": "t"}],
-        }))
-        (d / "fixtures.json").write_text("[]")
-        if manifest is not None:
-            (d / "manifest.json").write_text(json.dumps(manifest))
-        return d
+        ids = elements if elements is not None else list(range(1, players + 1))
+        return self.snapshot(
+            name,
+            elements=[fixtures.element(pid) for pid in ids],
+            player_ids=list(range(1, players + 1)),
+            manifest=manifest,
+        )
 
 
 class TestFindIncomplete(TempCwd):
@@ -160,7 +142,7 @@ class TestLoadSnapshot(TempCwd):
         self.snap("20260910T000000Z", players=2,
                   manifest={"has_players": True, "element_count": 2})
         self.point_at("20260910T000000Z")
-        snap, bootstrap, fixtures, players_dir = load_snapshot()
+        snap, bootstrap, fixture_list, players_dir = load_snapshot()
         self.assertEqual(len(bootstrap["elements"]), 2)
         self.assertTrue(players_dir.is_dir())
 
