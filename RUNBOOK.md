@@ -27,10 +27,30 @@ Work out three things and write them down:
 | | |
 |---|---|
 | **N** | the gameweek to predict |
-| **Deadline** | GW N's `deadline_time`, UTC, from `bootstrap.json` |
+| **Deadline** | GW N's `deadline_time`, UTC — see below |
 | **Model version** | `baseline-v1` today; whatever model is being logged |
 
 The entry will be written to `predictions/gwNN_<model-version>.csv`.
+
+The deadline lives in `<snapshot>/bootstrap.json`, and `data/raw/` is
+gitignored — on a clean checkout there is no snapshot to read it from. Get it
+with a cheap bootstrap-only fetch, which takes seconds:
+
+```
+python -m fpl.fetch --skip-players
+python3 -c "import json,sys
+events = json.load(open(sys.argv[1]))['events']
+for e in [e for e in events if not e['finished']][:3]:
+    print(e['id'], e['deadline_time'], 'next' if e['is_next'] else '')
+" data/raw/<timestamp>/bootstrap.json
+```
+
+Write it down **before** the real run, so that §3's deadline check compares the
+run against something independent rather than against itself.
+
+This is safe to run at any point, including with a deadline close. A
+bootstrap-only fetch never moves `LATEST`, so it cannot cost you the last good
+snapshot that §9's fallback depends on.
 
 ### One entry per (gameweek, model)
 
@@ -84,7 +104,8 @@ flags are current.
 **Clear of the deadline.** A full fetch is roughly **six minutes** for ~654
 players at the 0.5s inter-request delay. The FPL API is undocumented and
 unsupported; it can be slow or down. Do not start the run that has to succeed
-with ten minutes left. If it is going to be tight, see §6.
+with ten minutes left. If it is going to be tight, see §9 — the fallback is
+decided in advance precisely so it is not being invented at this moment.
 
 ---
 
@@ -104,9 +125,25 @@ Read the run's own output:
   part-way leaves a manifest-less directory, which is deliberately not picked
   up as a snapshot.
 
-If a full fetch died mid-way, `python -m fpl.fetch --resume` continues the most
-recent manifest-less snapshot rather than restarting the six minutes; files
-already on disk are skipped.
+If a full fetch died **during the player loop**, `python -m fpl.fetch --resume`
+continues it rather than restarting the six minutes; files already on disk are
+skipped.
+
+Two things about `--resume` that matter at a deadline:
+
+- **It is narrower than it sounds.** `find_incomplete` only offers a directory
+  that already holds at least one player file *and* is newer than `LATEST`. A
+  fetch that died during bootstrap, fixtures or the live-results step — all of
+  which run before the player loop — has no `players/` yet, so `--resume`
+  reports `Nothing to resume: every snapshot has a manifest.` even though an
+  incomplete directory is sitting there. That message means "nothing
+  *resumable*". Start a fresh fetch.
+- **It freezes availability at the original fetch's start.** Reusing the
+  bootstrap already on disk is deliberate — refetching it would mix two points
+  in time into one snapshot — but it means a resumed snapshot's injury flags
+  are as old as the attempt that failed, not as old as the resume. If that gap
+  spans a press conference, treat the result as a stale snapshot and disclose
+  it per §9.
 
 `--skip-players` fetches bootstrap and fixtures only, in seconds. It is useful
 for checking deadlines and fixture counts, but a bootstrap-only snapshot cannot
@@ -163,8 +200,18 @@ Writes `predictions/gwNN_<model-version>.csv` — the default `--out` is
 
 This is the point of no return once committed. `fpl/log.py` refuses to write a
 log entry at or after its own deadline, and refuses to overwrite an existing
-file, but neither guard survives an editor or a `sed -i` — those are what step 7
-covers.
+file.
+
+Neither guard survives an editor or a `sed -i`, and **step 7's
+`check_log_immutable.py` will not catch a hand-edit to this entry either** — it
+compares against entries already committed at the reference commit, and a file
+that is new there passes as "new entry" whatever it contains. That is correct
+behaviour: appending is the whole point.
+
+So the entry you just wrote is protected by exactly one thing, the verifier in
+step 5. **If you edit it by hand for any reason, re-run step 5.** After the
+merge, `check_log_immutable.py` protects it permanently, because from then on
+it exists at the reference commit.
 
 ---
 
@@ -280,14 +327,24 @@ A prediction built on slightly stale availability flags is evidence. No entry
 at all is not, and the gap in the log is permanent and unfillable — a later
 entry for that gameweek would be post-deadline and worth nothing.
 
+**You do not have to do anything to select it.** `predict_baseline` always
+reads `data/raw/LATEST`, and a fetch that fails never moves that pointer — it
+is written only after `manifest.json` succeeds. So the last good snapshot is
+already what the predictor sees, and the fallback is simply to run step 3
+onwards as though the failed fetch had not happened.
+
+Check the `snapshot:` line in step 3's output to confirm which one you got.
+
 Two constraints on the stale snapshot:
 
 - Its `is_next` must still be N, or `resolve_target_gw` will refuse it and
   there is no fallback to be had. In practice this means the last snapshot
-  taken after GW N-1's deadline.
-- Say so in the PR body, and say how old the availability flags are. The entry
-  documents itself either way — `snapshot_id` is in every row — but the PR is
-  where the judgement gets recorded.
+  taken after GW N-1's deadline. If the only snapshot you have predates that,
+  there is no valid entry to make from it.
+- Say so in the PR body, and say how old the availability flags are — counting
+  from the original fetch, not from a `--resume`. The entry documents itself
+  either way, since `snapshot_id` is in every row, but the PR is where the
+  judgement gets recorded.
 
 This decision is made here, in advance, precisely so that it is not being made
 under time pressure fifteen minutes before a deadline.
