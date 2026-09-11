@@ -57,6 +57,9 @@ Early development, 2026/27 season.
   Build test data from here rather than hand-rolling snapshot JSON. Test
   modules import it as `from tests import fixtures`, which is what makes all
   three `unittest discover` spellings work.
+- `RUNBOOK.md` — the procedure for producing one log entry, generalised to any
+  gameweek N. Follow it rather than reconstructing the steps; if it is wrong,
+  fix it in the same PR as the entry it misled you on.
 - Everything else — not built. See `SPEC.md`.
 
 New models import from `snapshot`, `features` and `log` — never from
@@ -68,13 +71,20 @@ should depend on it.
 The season is a hard external constraint. The log only accumulates evidence
 while the season runs.
 
-- **GW4 deadline: 2026-09-12T12:30:00Z** — first prediction log entry due
-- GW5 deadline: 2026-09-18T17:30:00Z
+- GW4 deadline: 2026-09-12T12:30:00Z — **done**, `predictions/gw04_baseline-v1.csv`
+- **GW5 deadline: 2026-09-18T17:30:00Z** — next entry due, run from `RUNBOOK.md`
 - International break: no fixtures 26 Sep / 3 Oct
 - GW6: 2026-10-10T10:00:00Z
+- GW7: 2026-10-17T10:00:00Z
 
-Anything not needed for a committed GW4 prediction is post-break work. Do not
-build infrastructure at the expense of the deadline.
+The break falls *after* GW5, not before it. GW5 is a normal week following GW4,
+and the three quiet weeks are the 18 Sep — 10 Oct gap. Anything not needed for a
+committed GW5 prediction is break work. Do not build infrastructure at the
+expense of the deadline.
+
+GW5 is also the first run of `RUNBOOK.md` by someone following it rather than
+remembering it. Fix the runbook where it turns out to be wrong; that is the
+point of running it twice.
 
 ## Data source
 
