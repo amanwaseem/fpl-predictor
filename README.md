@@ -94,6 +94,11 @@ exploratory runs. `verify_entry` checks a written entry against the snapshot nam
 rows and exits non-zero on any disagreement — it is the last check before an entry becomes
 permanent, because after the commit nothing can be corrected.
 
+The commands above are the middle of a longer procedure. **[`RUNBOOK.md`](RUNBOOK.md) is the
+whole of it** — when to take the snapshot and why the window has a hard edge on both sides, what
+to read in the output before trusting it, and what to do when the fetch fails near a deadline.
+Follow it rather than the four commands here.
+
 ## Tests
 
 ```bash
