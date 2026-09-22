@@ -336,6 +336,7 @@
     "predicted": 810.58
   },
   "xi": {
+    "available": true,
     "captured": {
       "actual": 56,
       "expected": 62.55,
