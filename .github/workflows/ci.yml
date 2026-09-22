@@ -1,0 +1,66 @@
+# Runs the test suite and hard rule 1 on every PR and every push to main, so
+# neither depends on someone remembering to run them. See #26.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover tests
+
+  log-immutable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full history: the check reads the committed log at a reference commit,
+      # not just the working tree.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # The reference is what makes the check mean anything. On a PR it is the
+      # branch being merged into. On a push to main it is the commit main
+      # pointed at before the push — comparing main against origin/main would
+      # compare it with itself and always pass. A force-push that rewrote the
+      # log leaves `before` unreachable; it is fetched explicitly, and if that
+      # fails the check fails closed rather than skipping.
+      - name: Check committed predictions are unchanged (rule 1)
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            ref="origin/$BASE_REF"
+          elif [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "Branch created by this push; no earlier log to compare against."
+            exit 0
+          else
+            git fetch --quiet origin "$BEFORE" || true
+            ref="$BEFORE"
+          fi
+          echo "Comparing predictions/ against $ref"
+          python tools/check_log_immutable.py --ref "$ref"
