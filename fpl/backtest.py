@@ -32,7 +32,8 @@ leak-free by construction rather than by a model promising not to look:
 - **Price** is the player's `value` in their last round before N, and **club**
   is read from that round's fixture, so a later transfer or price change is
   invisible. That price can trail the deadline's by a price change or two; no
-  model reads price, and nothing here scores it.
+  model reads price, and nothing here scores it. A row missing the fields
+  these come from stops the run rather than falling back to today's club.
 - **History** is cut to rounds strictly before N. A player with no round before
   N had not joined the game yet and is left out.
 - **Fixtures** before N keep their results, which were public. Fixtures in GW N
@@ -87,12 +88,36 @@ def _pick(record, fields):
     return {k: record[k] for k in fields if k in record}
 
 
-def _club_at(row, fixtures_by_id, fallback):
-    """The player's club in a history row, from its fixture and home flag."""
-    fixture = fixtures_by_id.get(row.get("fixture"))
-    if fixture is None or "was_home" not in row:
-        return fallback
-    return fixture["team_h"] if row["was_home"] else fixture["team_a"]
+# Read off each player's last row before the cut. Without them the only source
+# of club and price is the current bootstrap, which is post-deadline.
+HISTORY_FIELDS = ("fixture", "was_home", "value")
+
+
+def _as_of_row(player_id, row, fixtures_by_id):
+    """(club, price) from a history row. Refuses rather than fall back.
+
+    Falling back to the bootstrap's team and now_cost would hand the replay a
+    later transfer — and that club's fixture count — and a later price, with
+    nothing in the output to show it. The FPL API is unversioned; if these
+    fields ever move, the backtest has to stop, not quietly leak.
+    """
+    missing = [f for f in HISTORY_FIELDS if f not in row]
+    if missing:
+        raise SystemExit(
+            f"Player {player_id}'s round-{row.get('round')} history row has no "
+            f"{', '.join(missing)}. The replay reads club and price from it; the "
+            "only other source is the current bootstrap, which would leak. "
+            "Has the element-summary schema changed?"
+        )
+    fixture = fixtures_by_id.get(row["fixture"])
+    if fixture is None:
+        raise SystemExit(
+            f"Player {player_id}'s round-{row['round']} history row names fixture "
+            f"{row['fixture']}, which is not in fixtures.json, so his club at the "
+            "time cannot be read. Refusing to fall back to his current club."
+        )
+    club = fixture["team_h"] if row["was_home"] else fixture["team_a"]
+    return club, row["value"]
 
 
 def as_of(bootstrap, fixtures, histories, target_gw):
@@ -114,8 +139,7 @@ def as_of(bootstrap, fixtures, histories, target_gw):
             continue  # not in the game yet at this deadline
         last = max(rows, key=lambda r: (r["round"], r.get("kickoff_time") or ""))
         element = _pick(player, PLAYER_FIELDS)
-        element["team"] = _club_at(last, fixtures_by_id, player["team"])
-        element["now_cost"] = last.get("value", player["now_cost"])
+        element["team"], element["now_cost"] = _as_of_row(player["id"], last, fixtures_by_id)
         element["status"] = "a"
         element["chance_of_playing_next_round"] = None
         elements.append(element)
@@ -165,13 +189,18 @@ def _comparator_values(histories):
     values = {}
     for pid, rows in histories.items():
         played = [r for r in rows if (r.get("minutes") or 0) > 0]
-        recent = sorted(rows, key=lambda r: r["round"], reverse=True)[:RECENT_ROUNDS]
+        # Per round, not per row: a double gameweek is two rows and one round,
+        # and averaging its fixtures separately would halve a double's haul and
+        # stretch the window back past the rounds it claims to cover.
+        by_round = {}
+        for r in rows:
+            by_round[r["round"]] = by_round.get(r["round"], 0) + r.get("total_points", 0)
+        recent = [by_round[rnd] for rnd in sorted(by_round, reverse=True)[:RECENT_ROUNDS]]
         values[pid] = {
             "zero": 0.0,
             "history_ppg": (
                 sum(r.get("total_points", 0) for r in played) / len(played) if played else 0.0),
-            f"last_{RECENT_ROUNDS}_mean": (
-                sum(r.get("total_points", 0) for r in recent) / len(recent) if recent else 0.0),
+            f"last_{RECENT_ROUNDS}_mean": sum(recent) / len(recent) if recent else 0.0,
         }
     return values
 
