@@ -199,6 +199,24 @@ class TestView(fixtures.TempCwd):
         self.assertTrue(events[3]["is_next"])
         self.assertFalse(events[3]["finished"] or events[3]["data_checked"])
 
+    def test_missing_club_or_price_fields_stop_the_run(self):
+        """No silent fallback to the current club and price: that would leak."""
+        for field in backtest.HISTORY_FIELDS:
+            with self.subTest(field=field):
+                histories = copy.deepcopy(self.histories)
+                for row in histories[1]:
+                    del row[field]
+                with self.assertRaises(SystemExit) as caught:
+                    backtest.as_of(self.bootstrap, self.fx, histories, 3)
+                self.assertIn(field, str(caught.exception))
+
+    def test_unknown_fixture_stops_the_run(self):
+        histories = copy.deepcopy(self.histories)
+        # GW2 is the last round before the cut at GW3, so it is the row read.
+        next(r for r in histories[1] if r["round"] == 2)["fixture"] = 99999
+        with self.assertRaises(SystemExit):
+            backtest.as_of(self.bootstrap, self.fx, histories, 3)
+
     def test_the_originals_are_not_modified(self):
         before = copy.deepcopy((self.bootstrap, self.fx, self.histories))
         self.view()
@@ -250,6 +268,16 @@ class TestRun(fixtures.TempCwd):
         ]})[1]
         self.assertEqual(values["history_ppg"], 5.0)   # (2+4+9)/3 appearances
         self.assertAlmostEqual(values["last_3_mean"], 13 / 3)  # rounds 4, 3, 2
+
+    def test_last_three_counts_rounds_not_rows(self):
+        """A double is one round: its fixtures sum, and the window stays 3 rounds."""
+        values = backtest._comparator_values({1: [
+            {"round": 1, "minutes": 90, "total_points": 6},
+            {"round": 2, "minutes": 90, "total_points": 2},
+            {"round": 3, "minutes": 90, "total_points": 5},   # double gameweek,
+            {"round": 3, "minutes": 90, "total_points": 7},   # two rows
+        ]})[1]
+        self.assertAlmostEqual(values["last_3_mean"], (12 + 2 + 6) / 3)
 
     def test_refusals(self):
         for model, gameweeks in (("no-such-model", None), ("baseline-v1", [1]),
