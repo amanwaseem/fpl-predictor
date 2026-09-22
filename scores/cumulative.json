@@ -1,0 +1,46 @@
+{
+  "harness_version": "harness-v1",
+  "models": {
+    "baseline-v1": {
+      "gameweeks_missed": [
+        5
+      ],
+      "gameweeks_pending": [],
+      "gameweeks_scored": [
+        4
+      ],
+      "per_gameweek": [
+        {
+          "bias": -0.1688,
+          "gameweek": 4,
+          "mae": 1.1528,
+          "n": 654,
+          "rmse": 2.1885,
+          "spearman": 0.7126
+        }
+      ],
+      "pooled": {
+        "all": {
+          "bias": -0.1688,
+          "mae": 1.1528,
+          "n": 654,
+          "rmse": 2.1885,
+          "spearman": 0.7126
+        },
+        "minutes_mae": 10.9122,
+        "predicted_to_play": {
+          "bias": -0.2135,
+          "mae": 1.9434,
+          "n": 372,
+          "rmse": 2.8517,
+          "spearman": 0.5094
+        }
+      },
+      "xi": {
+        "captured": 56,
+        "captured_share": 0.3836,
+        "optimum": 146
+      }
+    }
+  }
+}
