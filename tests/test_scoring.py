@@ -12,6 +12,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 
 from fpl import score
@@ -164,6 +165,28 @@ class TestComparisons(ScoringCase):
         self.run_harness()
         self.assertFalse(self.metrics()["comparators"]["available"])
 
+    def test_comparators_carried_forward_on_a_fresh_clone(self):
+        """A rerun without the prediction snapshot must not erase what it had."""
+        self.write_entry()
+        self.run_harness()
+        before = Path("scores/gw04_baseline-v1.json").read_bytes()
+        (self.pred_snap / "bootstrap.json").unlink()
+        self.run_harness()
+        self.assertEqual(Path("scores/gw04_baseline-v1.json").read_bytes(), before)
+        self.assertTrue(self.metrics()["comparators"]["available"])
+
+    def test_comparators_not_carried_across_harness_versions(self):
+        """A carried block must mean what a recomputed one would."""
+        self.write_entry()
+        self.run_harness()
+        path = Path("scores/gw04_baseline-v1.json")
+        stale = json.loads(path.read_text())
+        stale["harness_version"] = "harness-v0"
+        path.write_text(json.dumps(stale))
+        (self.pred_snap / "bootstrap.json").unlink()
+        self.run_harness()
+        self.assertFalse(self.metrics()["comparators"]["available"])
+
     def test_baseline_has_no_head_to_head(self):
         self.write_entry()
         self.run_harness()
@@ -232,6 +255,18 @@ class TestLogUntouched(ScoringCase):
             score.main(None, "predictions")
         with self.assertRaises(SystemExit):
             score.main(None, "predictions/scores")
+
+    def test_repo_under_a_folder_named_predictions(self):
+        """~/work/predictions/fpl-predictor must still be able to write scores/."""
+        clone = self.tmp / "work" / "predictions" / "fpl-predictor"
+        (clone / "data").mkdir(parents=True)
+        (self.tmp / "data/raw").rename(clone / "data/raw")
+        os.chdir(clone)
+        self.pred_snap = clone / "data/raw" / PREDICTED_AT
+        self.actual_snap = clone / "data/raw" / ACTUALS_AT
+        self.write_entry()
+        self.assertEqual(self.run_harness(), 0)
+        self.assertTrue(Path("scores/gw04_baseline-v1.json").exists())
 
     def test_idempotent(self):
         self.write_entry()

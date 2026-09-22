@@ -15,7 +15,13 @@ points from the actuals snapshot's `live/<gw>.json` and writes:
 
 Every run rebuilds the score files from the committed entries plus one
 snapshot, and nothing in the output depends on when the run happened, so two
-runs produce byte-identical files. That is what makes `scores/` safe to rewrite
+runs produce byte-identical files.
+
+The one input that is not guaranteed to be present is the prediction snapshot
+the naive comparators read, since data/raw/ is not shared. When it is absent
+the comparators already in the score file are carried forward, provided the
+same harness version computed them from the same prediction snapshot. Rerunning
+on a fresh clone must not quietly erase numbers it cannot recompute. That is what makes `scores/` safe to rewrite
 when a metric definition changes. `HARNESS_VERSION` and both snapshot ids are
 stamped into every metrics file so that such a change is visible in the output
 rather than a silent rewrite of the track record.
@@ -367,9 +373,37 @@ def find_entries(log_dir):
     return entries
 
 
+def _carried_comparators(out, gw, model, result):
+    """Comparators from the existing score file, when they can't be recomputed.
+
+    Only carried when the same harness version computed them from the same
+    prediction snapshot, so a carried block always means exactly what a
+    recomputed one would. Otherwise the gap is reported, not hidden.
+    """
+    stem = f"gw{gw:02d}_{model}"
+    path = out / f"{stem}.json"
+    previous = json.loads(path.read_text()) if path.exists() else None
+    if (previous is not None
+            and previous.get("harness_version") == HARNESS_VERSION
+            and previous.get("prediction_snapshot_id") == result["prediction_snapshot_id"]
+            and previous.get("comparators", {}).get("available")):
+        print(f"carried:   {stem} comparators — prediction snapshot "
+              f"{result['prediction_snapshot_id']} not on this machine")
+        return previous["comparators"]
+    print(f"WARNING:   {stem} has no comparators — prediction snapshot "
+          f"{result['prediction_snapshot_id']} not on this machine and none to carry")
+    return result["comparators"]
+
+
 def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
     out = Path(out_dir)
-    if out.resolve().name == LOG_DIR_NAME or LOG_DIR_NAME in out.resolve().parts:
+    # Compared against the log directory itself, not by name anywhere in the
+    # path: a clone living under ~/work/predictions/ must still be able to
+    # write scores/. The name check catches a second copy of the log reached
+    # some other way.
+    log = Path(log_dir).resolve()
+    if (out.resolve() == log or out.resolve().is_relative_to(log)
+            or out.resolve().name == LOG_DIR_NAME):
         raise SystemExit(
             f"Refusing to write score files into {out}: predictions/ is the "
             "append-only log, and the harness never writes there."
@@ -405,6 +439,8 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
             prediction_bootstrap(rows[0]["snapshot_id"]),
             baseline_matched=baseline, actuals_snapshot_id=snap.name,
         )
+        if not result["comparators"]["available"]:
+            result["comparators"] = _carried_comparators(out, gw, model, result)
         scored[(gw, model)] = (matched, result)
 
     out.mkdir(parents=True, exist_ok=True)
