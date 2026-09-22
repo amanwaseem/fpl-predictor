@@ -148,6 +148,50 @@ class TestProperties(unittest.TestCase):
                          [p["player_id"] for p in second])
 
 
+
+class TestRareCases(unittest.TestCase):
+
+    def test_all_negative_pool(self):
+        """A gameweek of red cards: the XI still exists and loses least."""
+        positions = ["GKP", "GKP"] + ["DEF"] * 5 + ["MID"] * 5 + ["FWD"] * 4
+        pool = [player(i, pos, f"C{i % 6}", -(i % 4) - 1) for i, pos in enumerate(positions)]
+        total, xi, _ = best_xi(pool, points)
+        self.assertTrue(is_legal(xi))
+        self.assertEqual(total, brute_force(pool, points))
+        self.assertLess(total, 0)
+
+    def test_exactly_eleven_legal_players(self):
+        """The pool is the XI. Nothing to choose, nothing dropped."""
+        shape = ["GKP"] + ["DEF"] * 4 + ["MID"] * 4 + ["FWD"] * 2
+        pool = [player(i, pos, f"C{i}", 1) for i, pos in enumerate(shape)]
+        _, xi, formation = best_xi(pool, points)
+        self.assertEqual(sorted(p["player_id"] for p in xi), list(range(11)))
+        self.assertEqual(formation, "4-4-2")
+
+    def test_only_one_formation_feasible(self):
+        """Two midfielders in the whole pool force 5-2-3, whatever it scores."""
+        shape = ["GKP"] + ["DEF"] * 6 + ["MID"] * 2 + ["FWD"] * 4
+        pool = [player(i, pos, f"C{i}", 1) for i, pos in enumerate(shape)]
+        _, _, formation = best_xi(pool, points)
+        self.assertEqual(formation, "5-2-3")
+
+    def test_three_from_one_club_is_allowed(self):
+        """The cap is three, not two: the best XI here needs all three from A."""
+        pool = [player(1, "GKP", "G", 5)]
+        pool += [player(2 + i, "DEF", "A", 10) for i in range(3)]
+        pool += [player(10 + i, "DEF", f"D{i}", 1) for i in range(2)]
+        pool += [player(20 + i, "MID", f"M{i}", 5) for i in range(5)]
+        pool += [player(30 + i, "FWD", f"F{i}", 5) for i in range(3)]
+        _, xi, _ = best_xi(pool, points)
+        self.assertEqual(Counter(p["team"] for p in xi)["A"], 3)
+
+    def test_input_is_not_reordered_or_mutated(self):
+        pool = roster(clubs=8, per_club=5)
+        before = [dict(p) for p in pool]
+        best_xi(pool, points)
+        self.assertEqual(pool, before)
+
+
 class TestRefusals(unittest.TestCase):
 
     def test_no_goalkeeper(self):

@@ -111,5 +111,45 @@ class TestSummary(unittest.TestCase):
         self.assertNotAlmostEqual(pooled["mae"], mean_of_means)
 
 
+
+class TestRareCases(unittest.TestCase):
+    """Shapes real gameweeks produce that the tidy fixtures above do not."""
+
+    def test_negative_points(self):
+        """A red card scores -1 or worse. Errors must not be clipped at zero."""
+        pairs = [(2.0, -1), (0.0, -3)]
+        self.assertAlmostEqual(mae(pairs), 3.0)
+        self.assertAlmostEqual(bias(pairs), 3.0)
+        self.assertAlmostEqual(rmse(pairs), 3.0)
+
+    def test_spearman_with_negative_values(self):
+        self.assertAlmostEqual(spearman([-2, 0, 3], [-5, -1, 7]), 1.0)
+
+    def test_spearman_is_symmetric(self):
+        a, b = [3, 1, 4, 1, 5], [9, 2, 6, 5, 3]
+        self.assertAlmostEqual(spearman(a, b), spearman(b, a))
+
+    def test_single_pair(self):
+        """One player: errors are defined, a rank correlation is not."""
+        s = summary([(2.0, 5)])
+        self.assertEqual((s["n"], s["mae"], s["bias"]), (1, 3.0, -3.0))
+        self.assertIsNone(s["spearman"])
+
+    def test_pooled_skips_an_empty_gameweek(self):
+        pooled = pooled_summary([[], [(1.0, 1)], [(3.0, 1)]])
+        self.assertEqual(pooled["n"], 2)
+        self.assertAlmostEqual(pooled["mae"], 1.0)
+
+    def test_pooled_with_nothing_refused(self):
+        with self.assertRaises(ValueError):
+            pooled_summary([[], []])
+
+    def test_average_ranks_empty(self):
+        self.assertEqual(average_ranks([]), [])
+
+    def test_all_values_tied(self):
+        self.assertEqual(average_ranks([7, 7, 7]), [2, 2, 2])
+
+
 if __name__ == "__main__":
     unittest.main()
