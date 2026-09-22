@@ -282,9 +282,12 @@ git commit
 git push -u origin predict/gwNN
 ```
 
-Hard rule 4 forbids pushing to `main`; opening a PR and merging it is the
-sanctioned path. Branch off `main`, and rebase rather than merging `main` into
-the branch.
+Entries go in through a PR, not a push to `main`. Branch off `main`, and rebase
+rather than merging `main` into the branch.
+
+CI (`.github/workflows/ci.yml`) runs both checks below on the PR, so neither
+depends on being remembered. Run them locally anyway before pushing — a red check
+found at 11:50 on deadline day costs more than one found now.
 
 Before merging:
 

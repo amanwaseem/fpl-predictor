@@ -8,8 +8,8 @@ The rule was previously enforced by nothing but the "file already exists"
 check inside `fpl/log.py`, which stops a second *write* through that function.
 It does nothing about an editor, a `sed -i`, or a rebase — the ways a
 committed prediction actually gets altered. Those are exactly the changes a
-human reviewer misses in a large diff, which is why this becomes a CI job
-under #6.
+human reviewer misses in a large diff, which is why CI runs this on every PR
+and every push to main (`.github/workflows/ci.yml`).
 
 `scores/` is deliberately not covered. It is derived output, recomputable from
 the committed predictions plus a snapshot, and is meant to be rewritten when a
