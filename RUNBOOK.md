@@ -364,6 +364,26 @@ under time pressure fifteen minutes before a deadline.
 
 ---
 
+## 10. Afterwards: score it
+
+Not deadline work. Once GW N has settled — `finished` and `data_checked` both
+true, usually the Monday or Tuesday after — take a snapshot and score:
+
+```
+python -m fpl.fetch
+python -m fpl.score
+```
+
+The harness rescores every entry in `predictions/` against that snapshot and
+rewrites `scores/` in full. That is safe: `scores/` is derived output, and a
+rerun on the same inputs produces byte-identical files. Commit the changes to
+`scores/` on a branch like any other.
+
+Read the last lines of its output. `pending:` means a gameweek has not settled
+yet; `missed:` means a settled gameweek has no entry and never will.
+
+---
+
 ## Quick reference
 
 ```
@@ -375,4 +395,5 @@ python -m fpl.verify_entry predictions/gwNN_<model>.csv      # gate: non-zero me
 python -m fpl.summarise predictions/gwNN_<model>.csv --out reports/
 python tools/check_log_immutable.py --ref origin/main        # rule 1, mechanically
 python -m unittest discover tests
+python -m fpl.score                                          # after GW N settles, not before
 ```

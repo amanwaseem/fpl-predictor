@@ -227,8 +227,16 @@ in the output to reveal it.
   selector, not the reverse
 - MAE of `expected_minutes` against actual minutes, so a bad gameweek can be
   attributed to the minutes estimate or to the scoring rate
-- Breakdown by position, so a failure points at the component responsible
+- Breakdown by position, so a failure points at the component responsible,
+  and by club, since the largest GW4 errors were whole teams (−30 to +58
+  points) that a per-position view hides
+- Calibration: mean actual points per band of predicted points, which is where
+  overconfidence at the top of the table shows
 - Comparison against the rolling-form baseline for the same gameweek
+- Comparison against naive predictors on the same rows — all-zero, and FPL's
+  own `points_per_game` and `form` — read from the prediction snapshot so they
+  use only pre-deadline data. Beating the baseline means little until the
+  baseline is shown to beat these
 
 Reported per gameweek and cumulatively. Cumulative figures are **pooled across
 all player-gameweek rows**, not a mean of per-gameweek means; with unequal
@@ -245,6 +253,12 @@ and the actuals `snapshot_id` so that such a change is visible rather than a
 silent rewrite of the track record.
 
 The harness reads `predictions/` and writes nothing to it, ever.
+
+Implemented in `fpl/score.py` (`python -m fpl.score`), with the metrics in
+`fpl/metrics.py` and the legal XI in `fpl/xi.py`. A settled gameweek with no
+entry for a model — after that model's first entry — is listed as *missed* in
+`scores/cumulative.json`, so a gap in the log stays visible in the record
+rather than reading as an unbroken run.
 
 ## 7. Optimiser
 
