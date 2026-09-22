@@ -71,6 +71,61 @@ def predict_player(player, history, position, n_fixtures, target_gw, usable):
     return round(predicted, 2), round(exp_minutes, 1), round(pp90, 2)
 
 
+def predict_rows(bootstrap, fixtures, histories, target_gw, usable):
+    """Predictions for every player, as log rows without provenance.
+
+    The whole model, separated from where its inputs come from. main() feeds
+    it a snapshot read off disk; the backtest (fpl/backtest.py) feeds it a
+    snapshot cut back to what was knowable at an earlier deadline. Both run
+    this function, so a backtest of baseline-v1 is a backtest of the model
+    that is actually logged, not of a copy that could drift from it.
+
+    `histories` maps player id to that player's element-summary history rows.
+    A player with no entry in it is left out, as a player with no history file
+    always was.
+    """
+    teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
+    positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
+    counts = fixture_counts(fixtures, target_gw)
+
+    rows = []
+    for player in bootstrap["elements"]:
+        pid = player["id"]
+        if pid not in histories:
+            continue
+
+        history = histories[pid]
+        position = positions.get(player["element_type"], "UNK")
+        n_fix = counts.get(player["team"], 0)
+
+        predicted, exp_min, pp90 = predict_player(
+            player, history, position, n_fix, target_gw, usable
+        )
+
+        rows.append({
+            "gameweek": target_gw,
+            "player_id": pid,
+            "web_name": player["web_name"],
+            "team": teams.get(player["team"], "UNK"),
+            "position": position,
+            "price": player["now_cost"] / 10.0,
+            "predicted_points": predicted,
+            "expected_minutes": exp_min,
+            "points_per_90": pp90,
+            "n_fixtures": n_fix,
+            "status": player.get("status", ""),
+        })
+
+    # SPEC section 5: descending predicted_points, ties broken by ascending
+    # player_id. The tie-break is not cosmetic — without it the order of tied
+    # players falls out of the snapshot's element order, so the same snapshot
+    # can produce differently ordered entries and diffs between two model
+    # versions read as a reshuffle rather than a change of opinion.
+    rows.sort(key=lambda r: (-r["predicted_points"], r["player_id"]))
+
+    return rows
+
+
 def main(requested_gw, out_dir):
     snap, bootstrap, fixtures, players_dir = load_snapshot()
     target_gw, deadline = resolve_target_gw(bootstrap["events"], requested_gw)
@@ -122,41 +177,12 @@ def main(requested_gw, out_dir):
     if doubles:
         print(f"doubles:   {', '.join(sorted(doubles))}")
 
-    rows = []
-    for player in bootstrap["elements"]:
-        pid = player["id"]
-        path = players_dir / f"{pid}.json"
-        if not path.exists():
-            continue
-
-        history = json.loads(path.read_text()).get("history", [])
-        position = positions.get(player["element_type"], "UNK")
-        n_fix = counts.get(player["team"], 0)
-
-        predicted, exp_min, pp90 = predict_player(
-            player, history, position, n_fix, target_gw, usable
-        )
-
-        rows.append({
-            "gameweek": target_gw,
-            "player_id": pid,
-            "web_name": player["web_name"],
-            "team": teams.get(player["team"], "UNK"),
-            "position": position,
-            "price": player["now_cost"] / 10.0,
-            "predicted_points": predicted,
-            "expected_minutes": exp_min,
-            "points_per_90": pp90,
-            "n_fixtures": n_fix,
-            "status": player.get("status", ""),
-        })
-
-    # SPEC section 5: descending predicted_points, ties broken by ascending
-    # player_id. The tie-break is not cosmetic — without it the order of tied
-    # players falls out of the snapshot's element order, so the same snapshot
-    # can produce differently ordered entries and diffs between two model
-    # versions read as a reshuffle rather than a change of opinion.
-    rows.sort(key=lambda r: (-r["predicted_points"], r["player_id"]))
+    histories = {
+        p["id"]: json.loads(path.read_text()).get("history", [])
+        for p in bootstrap["elements"]
+        if (path := players_dir / f"{p['id']}.json").exists()
+    }
+    rows = predict_rows(bootstrap, fixtures, histories, target_gw, usable)
 
     outpath = write_entry(
         rows, out_dir, target_gw, MODEL_VERSION, snap.name, deadline
