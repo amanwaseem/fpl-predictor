@@ -280,3 +280,176 @@ class TestLogUntouched(ScoringCase):
         self.write_entry(name="gw4_baseline-v1.csv")
         with self.assertRaises(SystemExit):
             self.run_harness()
+
+
+class TestRareGameweeks(ScoringCase):
+    """Things real gameweeks do that the tidy fixture does not."""
+
+    def test_red_card_scores_negative(self):
+        """-1 is a real score. It is scored as -1, not clipped to zero."""
+        self.results[1] = (-1, 60)
+        self.write_entry()
+        self.run_harness()
+        row = next(r for r in fixtures.read_csv("scores/gw04_baseline-v1.csv")
+                   if r["player_id"] == "1")
+        self.assertEqual((row["actual_points"], row["error"]), ("-1", "2.0"))
+
+    def test_double_gameweek_actuals_taken_whole(self):
+        """The API sums both fixtures into total_points; 180 minutes is legal."""
+        self.results[2] = (15, 180)
+        self.write_entry()
+        self.run_harness()
+        row = next(r for r in fixtures.read_csv("scores/gw04_baseline-v1.csv")
+                   if r["player_id"] == "2")
+        self.assertEqual((row["actual_points"], row["actual_minutes"]), ("15", "180"))
+
+    def test_nobody_scored(self):
+        """An optimum of zero: no share of nothing, and no division by zero."""
+        self.results = {pid: (0, 0) for pid in self.ids}
+        self.write_entry()
+        self.run_harness()
+        xi = self.metrics()["xi"]
+        self.assertTrue(xi["available"])
+        self.assertIsNone(xi["captured_share"])
+
+    def test_nobody_predicted_to_play(self):
+        for row in self.rows:
+            row["expected_minutes"] = 0.0
+        self.write_entry()
+        self.run_harness()
+        m = self.metrics()
+        self.assertIsNone(m["metrics"]["predicted_to_play"])
+        self.assertEqual(m["calibration"], [])
+        self.assertEqual(m["metrics"]["all"]["n"], 80)
+
+    def test_transfer_after_the_deadline_keeps_the_prediction_team(self):
+        """Team is what the entry said at the deadline, not where he plays now."""
+        self.rows[0]["team"] = "OLD"
+        self.write_entry()
+        self.run_harness()
+        self.assertIn("OLD", self.metrics()["by_team"])
+
+
+class TestPartialData(ScoringCase):
+
+    def test_too_few_joined_players_for_an_xi(self):
+        """A truncated actuals file: the XI is unavailable, the rest still scores."""
+        self.results = dict(list(self.results.items())[:8])
+        self.write_entry()
+        self.run_harness()
+        m = self.metrics()
+        self.assertFalse(m["xi"]["available"])
+        self.assertIn("no legal XI", m["xi"]["reason"])
+        self.assertEqual(m["metrics"]["all"]["n"], 8)
+        cumulative = json.loads(Path("scores/cumulative.json").read_text())
+        self.assertEqual(cumulative["models"]["baseline-v1"]["xi"]["gameweeks"], 0)
+
+    def test_one_bad_gameweek_does_not_block_another(self):
+        self.write_entry()
+        self.write_entry([dict(r, gameweek=2) for r in self.rows], "gw02_baseline-v1.csv")
+        fixtures.live(self.actual_snap, 2, dict(list(self.results.items())[:8]))
+        self.run_harness()
+        self.assertTrue(self.metrics()["xi"]["available"])
+        self.assertFalse(self.metrics("gw02_baseline-v1")["xi"]["available"])
+
+    def test_settled_gameweek_without_a_live_file_refused(self):
+        """Settled but never fetched: refuse, rather than score against nothing."""
+        self.write_entry()
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            score.main(None, "scores")
+
+
+class TestBadEntries(ScoringCase):
+
+    def test_two_snapshot_ids_refused(self):
+        self.rows[5]["snapshot_id"] = "20260101T000000Z"
+        self.write_entry()
+        with self.assertRaises(SystemExit) as caught:
+            self.run_harness()
+        self.assertIn("2 snapshots", str(caught.exception))
+
+    def test_non_numeric_prediction_refused(self):
+        rows = [dict(r) for r in self.rows]
+        rows[0]["predicted_points"] = "abc"
+        self.write_entry(rows)
+        with self.assertRaises(SystemExit):
+            self.run_harness()
+        self.assertFalse(Path("scores/gw04_baseline-v1.json").exists())
+
+    def test_temp_files_and_notes_in_the_log_are_ignored(self):
+        """write_entry's .tmp and a README are not entries and not errors."""
+        self.write_entry()
+        Path("predictions/gw05_baseline-v1.csv.tmp").write_text("partial")
+        Path("predictions/README.md").write_text("notes")
+        self.assertEqual(self.run_harness(), 0)
+
+
+class TestManyEntries(ScoringCase):
+
+    def test_explicit_actuals_snapshot_overrides_latest(self):
+        self.write_entry()
+        fixtures.live(self.actual_snap, 4, self.results)
+        newer = self.league("20260925T000000Z", target_gw=5, latest=True)
+        fixtures.live(newer, 4, {pid: (0, 0) for pid in self.ids})
+        with contextlib.redirect_stdout(io.StringIO()):
+            score.main(ACTUALS_AT, "scores")
+        self.assertEqual(self.metrics()["actuals_snapshot_id"], ACTUALS_AT)
+        self.assertAlmostEqual(self.metrics()["metrics"]["all"]["mae"], 0.1)
+
+    def test_pending_and_scored_side_by_side(self):
+        """GW4 settled, GW5 not: one scored, one pending, and GW5 is not missed."""
+        self.write_entry()
+        self.write_entry([dict(r, gameweek=5) for r in self.rows], "gw05_baseline-v1.csv")
+        self.run_harness()
+        block = json.loads(Path("scores/cumulative.json").read_text())["models"]["baseline-v1"]
+        self.assertEqual(block["gameweeks_scored"], [4])
+        self.assertEqual(block["gameweeks_pending"], [5])
+        self.assertEqual(block["gameweeks_missed"], [])
+
+    def test_a_later_model_is_not_charged_for_gameweeks_before_it_existed(self):
+        """A challenger that starts at GW4 did not miss GW2 or GW3."""
+        self.write_entry([dict(r, gameweek=2) for r in self.rows], "gw02_baseline-v1.csv")
+        self.write_entry()
+        self.write_entry(self.rows, "gw04_challenger-v1.csv")
+        fixtures.live(self.actual_snap, 2, self.results)
+        self.run_harness()
+        models = json.loads(Path("scores/cumulative.json").read_text())["models"]
+        self.assertEqual(models["baseline-v1"]["gameweeks_missed"], [3])
+        self.assertEqual(models["challenger-v1"]["gameweeks_missed"], [])
+
+    def test_no_head_to_head_when_the_baseline_skipped_that_gameweek(self):
+        self.write_entry([dict(r, gameweek=2) for r in self.rows], "gw02_baseline-v1.csv")
+        self.write_entry(self.rows, "gw04_challenger-v1.csv")
+        fixtures.live(self.actual_snap, 2, self.results)
+        self.run_harness()
+        h2h = self.metrics("gw04_challenger-v1")["head_to_head"]
+        self.assertFalse(h2h["applicable"])
+        self.assertIn("no baseline-v1 entry", h2h["reason"])
+
+
+class TestCommandLine(ScoringCase):
+    """The module as the runbook invokes it, in a separate process."""
+
+    def run_cli(self, *args):
+        import subprocess
+        import sys
+        repo = Path(__file__).resolve().parent.parent
+        env = dict(os.environ, PYTHONPATH=str(repo))
+        return subprocess.run([sys.executable, "-m", "fpl.score", *args],
+                              capture_output=True, text=True, env=env)
+
+    def test_exit_zero_and_reports_what_it_did(self):
+        self.write_entry()
+        self.write_entry([dict(r, gameweek=2) for r in self.rows], "gw02_baseline-v1.csv")
+        fixtures.live(self.actual_snap, 2, self.results)
+        fixtures.live(self.actual_snap, 4, self.results)
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("gw04_baseline-v1", result.stdout)
+        self.assertIn("missed:    baseline-v1 — GW3", result.stdout)
+
+    def test_non_zero_exit_on_an_empty_log(self):
+        Path("predictions").mkdir()
+        result = self.run_cli()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("nothing to score", result.stderr)

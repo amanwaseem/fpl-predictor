@@ -124,6 +124,29 @@ def _block(pairs):
     return metrics.summary(pairs) if pairs else None
 
 
+def _xi_block(matched):
+    """Captured versus optimum, or why there is no legal XI to compare.
+
+    A pool that cannot field a legal XI — a truncated actuals file, most of the
+    entry unmatched — makes this one metric meaningless, not the whole
+    gameweek. Reported as unavailable so the rest still scores, and so one bad
+    gameweek does not stop every other entry being scored.
+    """
+    try:
+        captured = _xi(matched, lambda p: p["predicted_points"])
+        optimum = _xi(matched, lambda p: p["actual_points"])
+    except ValueError as e:
+        return {"available": False, "reason": str(e).splitlines()[0]}
+    return {
+        "available": True,
+        "captured": captured,
+        "optimum": optimum,
+        # Zero only when no legal XI scored anything at all. There is no share
+        # of nothing to report.
+        "captured_share": captured["actual"] / optimum["actual"] if optimum["actual"] else None,
+    }
+
+
 def _xi(pool, choose_by):
     """Actual points of the XI chosen by `choose_by`, with what it expected."""
     _, xi, formation = best_xi(pool, choose_by)
@@ -202,7 +225,10 @@ def _comparators(matched, bootstrap):
         # A constant predictor picks an XI by tie-break alone; its "captured"
         # number would describe player ids, not the predictor.
         if field is not None:
-            block["xi_actual"] = _xi(matched, value)["actual"]
+            try:
+                block["xi_actual"] = _xi(matched, value)["actual"]
+            except ValueError:
+                block["xi_actual"] = None
         out[name] = block
     return out
 
@@ -268,8 +294,6 @@ def score_entry(rows, gameweek, model_version, events, actual, bootstrap,
     playing = [(p["predicted_points"], p["actual_points"])
                for p in matched if p["expected_minutes"] > 0]
 
-    captured = _xi(matched, lambda p: p["predicted_points"])
-    optimum = _xi(matched, lambda p: p["actual_points"])
 
     result = {
         "harness_version": HARNESS_VERSION,
@@ -287,11 +311,7 @@ def score_entry(rows, gameweek, model_version, events, actual, bootstrap,
         "metrics": {"all": _block(pairs), "predicted_to_play": _block(playing)},
         "totals": {"predicted": sum(p for p, _ in pairs), "actual": sum(a for _, a in pairs)},
         "minutes": _minutes(matched),
-        "xi": {
-            "captured": captured,
-            "optimum": optimum,
-            "captured_share": captured["actual"] / optimum["actual"] if optimum["actual"] else None,
-        },
+        "xi": _xi_block(matched),
         "by_position": _grouped(matched, "position"),
         "by_team": _grouped(matched, "team"),
         "calibration": _calibration(matched),
@@ -322,8 +342,9 @@ def cumulative(scored, events, entries):
                          for _, matched, _ in mine]
         minutes = [(p["expected_minutes"], p["actual_minutes"])
                    for _, matched, _ in mine for p in matched]
-        captured = sum(res["xi"]["captured"]["actual"] for _, _, res in mine)
-        optimum = sum(res["xi"]["optimum"]["actual"] for _, _, res in mine)
+        with_xi = [res["xi"] for _, _, res in mine if res["xi"]["available"]]
+        captured = sum(xi["captured"]["actual"] for xi in with_xi)
+        optimum = sum(xi["optimum"]["actual"] for xi in with_xi)
         last_settled = max(settled) if settled else 0
         out["models"][model] = {
             "gameweeks_scored": [gw for gw, _, _ in mine],
@@ -336,7 +357,7 @@ def cumulative(scored, events, entries):
                                       if any(playing_pairs) else None),
                 "minutes_mae": metrics.mae(minutes) if minutes else None,
             },
-            "xi": {"captured": captured, "optimum": optimum,
+            "xi": {"gameweeks": len(with_xi), "captured": captured, "optimum": optimum,
                    "captured_share": captured / optimum if optimum else None},
             "per_gameweek": [
                 {"gameweek": gw, **{k: res["metrics"]["all"][k]
@@ -431,6 +452,15 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
         rows, faults = read_entry(path)
         if faults:
             raise SystemExit(f"{path} does not read as an entry:\n  " + "\n  ".join(faults))
+        # The comparators and the provenance stamp both take the snapshot from
+        # the rows. verify_entry refuses an entry that names two, but the
+        # harness does not get to assume it was run.
+        snapshot_ids = sorted({row["snapshot_id"] for row in rows})
+        if len(snapshot_ids) != 1:
+            raise SystemExit(
+                f"{path} names {len(snapshot_ids)} snapshots ({', '.join(snapshot_ids[:3])}). "
+                "An entry is predicted from exactly one; run fpl.verify_entry on it."
+            )
         if gw not in live_cache:
             live_cache[gw] = actuals(load_live(snap, gw))
         baseline = scored.get((gw, BASELINE_MODEL), (None,))[0]
@@ -456,7 +486,8 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
     for (gw, model), (_, r) in sorted(scored.items()):
         m = r["metrics"]["all"]
         rho = "-" if m["spearman"] is None else f"{m['spearman']:.3f}"
-        xi = f"{r['xi']['captured']['actual']}/{r['xi']['optimum']['actual']}"
+        xi = (f"{r['xi']['captured']['actual']}/{r['xi']['optimum']['actual']}"
+              if r["xi"]["available"] else "n/a")
         comp = r["comparators"]
         form = f"{comp['form']['mae']:.2f}" if comp["available"] else "n/a"
         print(f"{f'gw{gw:02d}_{model}':<22}{m['n']:>5}{m['mae']:>7.2f}{m['rmse']:>7.2f}"
