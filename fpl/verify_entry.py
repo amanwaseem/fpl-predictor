@@ -25,7 +25,6 @@ useful moment for this program is before the commit.
 """
 
 import argparse
-import csv
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -33,13 +32,11 @@ from pathlib import Path
 
 from fpl.features import availability
 from fpl.log import (
-    FIELDS,
-    INTEGER,
     MAX_REPORTED,
-    NUMERIC,
     PROVENANCE,
     TIMESTAMP,
     parse_entry_filename,
+    read_entry,
     validate_rows,
 )
 from fpl.snapshot import fixture_counts, load_snapshot
@@ -67,59 +64,6 @@ def _timestamp(value, what, faults):
             "(YYYY-MM-DDTHH:MM:SSZ)"
         )
         return None
-
-
-def read_entry(path):
-    """Read a committed entry back into typed rows, as (rows, faults).
-
-    Parsing is itself a check. Every column SPEC section 5 types as a number
-    has to survive being read back as one, and an int column holding "1.0" is a
-    fault rather than a value to coerce quietly — the scoring harness joins on
-    player_id and does arithmetic on predicted_points.
-
-    Faults here are structural, so the caller stops rather than continuing to
-    the cross-checks: a row that could not be parsed would then be reported a
-    second time as a player missing from the entry.
-    """
-    with Path(path).open(newline="") as f:
-        reader = csv.reader(f)
-        try:
-            header = next(reader)
-        except StopIteration:
-            return [], [f"{path} is empty — not even a header row"]
-        lines = list(reader)
-
-    if header != FIELDS:
-        return [], [
-            "the column set does not match the SPEC section 5 contract, in "
-            "which order is part of the contract:\n"
-            f"      file: {header}\n"
-            f"  expected: {FIELDS}"
-        ]
-
-    rows, faults = [], []
-    for index, values in enumerate(lines):
-        if len(values) != len(FIELDS):
-            faults.append(
-                f"row {index}: has {len(values)} fields, expected {len(FIELDS)}"
-            )
-            continue
-        row = dict(zip(FIELDS, values))
-        parsed = True
-        for field in NUMERIC:
-            text = row[field]
-            try:
-                row[field] = int(text) if field in INTEGER else float(text)
-            except (TypeError, ValueError):
-                kind = "an int" if field in INTEGER else "a number"
-                faults.append(f"row {index}: {field} is {text!r}, not {kind}")
-                parsed = False
-        if parsed:
-            rows.append(row)
-
-    if not rows and not faults:
-        faults.append(f"{path} has a header but no rows")
-    return rows, faults
 
 
 def _coverage_faults(rows, bootstrap):
