@@ -75,9 +75,10 @@ class TestExactness(unittest.TestCase):
 
     def test_fractional_values(self):
         """Predictions carry two decimals; hundredths must not be rounded away."""
-        pool = roster(seed=3)
-        for i, p in enumerate(pool):
-            p["points"] = p["points"] + (i % 7) / 100
+        # Sixteen players, as above: brute force over 24 is 2.5 million subsets.
+        positions = ["GKP", "GKP"] + ["DEF"] * 5 + ["MID"] * 5 + ["FWD"] * 4
+        pool = [player(i, pos, f"C{i % 5}", 3 + (i % 7) / 100)
+                for i, pos in enumerate(positions)]
         total, xi, _ = best_xi(pool, points)
         self.assertAlmostEqual(total, brute_force(pool, points))
 
