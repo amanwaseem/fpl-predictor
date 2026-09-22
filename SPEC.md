@@ -260,6 +260,26 @@ entry for a model — after that model's first entry — is listed as *missed* i
 `scores/cumulative.json`, so a gap in the log stays visible in the record
 rather than reading as an unbroken run.
 
+### Backtesting is not scoring
+
+`fpl/backtest.py` (`python -m fpl.backtest`) replays settled gameweeks from one
+snapshot: for each GW N it cuts the snapshot back to what was knowable at N's
+deadline, runs a model, and scores it with the same metrics. It is how a model
+change is judged *before* it is logged, instead of a week after.
+
+It is not evidence. It replays results that are already known, and a model
+tuned on it has seen them. Only committed, pre-deadline entries count toward
+the track record, and the gate in section 4 — beat the baseline — is judged on
+those alone. Backtest output goes to `scratch/`, never to `scores/` or
+`predictions/`.
+
+Leak-freedom is structural rather than a promise: models receive a view with
+whitelisted player fields, history cut before N, and N's fixtures stripped of
+results, and a test poisons everything after the cut and demands identical
+predictions. Availability is not known historically, so every player is
+treated as available — absolute numbers are optimistic, comparisons between
+models stay fair.
+
 ## 7. Optimiser
 
 Given predicted points, select a squad maximising expected return subject to:
