@@ -22,6 +22,16 @@ You need the repository clean, on a branch off `main`, and a working
 `python -m fpl.fetch`. Everything runs from the repository root — paths resolve
 against the working directory, not against the module.
 
+Activate the virtualenv first. Every command below says `python`, which on a
+stock macOS shell does not exist outside `.venv` — and a missing interpreter
+piped into `tail` exits 0, so a fetch can fail without looking like it did:
+
+```
+source .venv/bin/activate
+```
+
+(Or substitute `.venv/bin/python` for `python` throughout.)
+
 Work out three things and write them down:
 
 | | |
@@ -354,6 +364,7 @@ under time pressure fifteen minutes before a deadline.
 ## Quick reference
 
 ```
+source .venv/bin/activate                                    # `python` does not exist outside it
 python -m fpl.fetch                                          # ~6 min, after press conferences
 python -m fpl.predict_baseline --gw N --out scratch/         # exploratory — read included:/excluded:
 python -m fpl.predict_baseline --gw N                        # writes predictions/gwNN_<model>.csv
