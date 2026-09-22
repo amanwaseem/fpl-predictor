@@ -10,9 +10,13 @@ on:
 permissions:
   contents: read
 
+# Superseded PR runs are cancelled; pushes to main never are. Each push's rule 1
+# check compares against the commit before it, so a cancelled run leaves that
+# push's changes to predictions/ unexamined — the next push treats them as the
+# baseline.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
