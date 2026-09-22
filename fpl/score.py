@@ -124,7 +124,7 @@ def _block(pairs):
     return metrics.summary(pairs) if pairs else None
 
 
-def _xi_block(matched):
+def xi_block(matched):
     """Captured versus optimum, or why there is no legal XI to compare.
 
     A pool that cannot field a legal XI — a truncated actuals file, most of the
@@ -311,7 +311,7 @@ def score_entry(rows, gameweek, model_version, events, actual, bootstrap,
         "metrics": {"all": _block(pairs), "predicted_to_play": _block(playing)},
         "totals": {"predicted": sum(p for p, _ in pairs), "actual": sum(a for _, a in pairs)},
         "minutes": _minutes(matched),
-        "xi": _xi_block(matched),
+        "xi": xi_block(matched),
         "by_position": _grouped(matched, "position"),
         "by_team": _grouped(matched, "team"),
         "calibration": _calibration(matched),
@@ -416,19 +416,25 @@ def _carried_comparators(out, gw, model, result):
     return result["comparators"]
 
 
+def refuse_log_output(out, log_dir=LOG_DIR_NAME):
+    """Exit if `out` is the prediction log or inside it.
+
+    Compared against the log directory itself, not by name anywhere in the
+    path: a clone living under ~/work/predictions/ must still be able to write
+    its output. The name check catches a second copy of the log reached some
+    other way. Shared by everything that writes derived output.
+    """
+    out, log = Path(out).resolve(), Path(log_dir).resolve()
+    if out == log or out.is_relative_to(log) or out.name == LOG_DIR_NAME:
+        raise SystemExit(
+            f"Refusing to write into {out}: predictions/ is the append-only "
+            "log, and nothing derived is ever written there."
+        )
+
+
 def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
     out = Path(out_dir)
-    # Compared against the log directory itself, not by name anywhere in the
-    # path: a clone living under ~/work/predictions/ must still be able to
-    # write scores/. The name check catches a second copy of the log reached
-    # some other way.
-    log = Path(log_dir).resolve()
-    if (out.resolve() == log or out.resolve().is_relative_to(log)
-            or out.resolve().name == LOG_DIR_NAME):
-        raise SystemExit(
-            f"Refusing to write score files into {out}: predictions/ is the "
-            "append-only log, and the harness never writes there."
-        )
+    refuse_log_output(out, log_dir)
 
     entries = find_entries(log_dir)
     if not entries:
