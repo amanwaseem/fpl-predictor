@@ -58,7 +58,7 @@ def team(tid, short_name=None):
 
 
 def element(pid, *, team=1, element_type=3, status="a", chance=None,
-            web_name=None, now_cost=50):
+            web_name=None, now_cost=50, points_per_game="0.0", form="0.0"):
     return {
         "id": pid,
         "web_name": web_name or f"p{pid}",
@@ -67,6 +67,10 @@ def element(pid, *, team=1, element_type=3, status="a", chance=None,
         "now_cost": now_cost,
         "status": status,
         "chance_of_playing_next_round": chance,
+        # Strings, as the API sends them. The scoring harness reads both as
+        # naive comparators.
+        "points_per_game": points_per_game,
+        "form": form,
     }
 
 
@@ -105,6 +109,20 @@ def history(rounds, *, minutes=90, points=5):
     """A player's per-round history rows, in the element-summary shape."""
     return [{"round": gw, "minutes": minutes, "total_points": points}
             for gw in rounds]
+
+
+def live(snapshot_dir, gw, results):
+    """Write live/<gw>.json: `results` maps player id to (points, minutes).
+
+    The event/{gw}/live/ shape, trimmed to the fields the harness reads.
+    """
+    path = Path(snapshot_dir) / "live" / f"{gw}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"elements": [
+        {"id": pid, "stats": {"total_points": points, "minutes": minutes}}
+        for pid, (points, minutes) in sorted(results.items())
+    ]}))
+    return path
 
 
 def snapshot(root, name, *, elements=None, teams=None, element_types=None,
