@@ -11,6 +11,7 @@ Run from the repository root: python -m unittest discover tests
 import ast
 import csv
 import io
+import json
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -246,6 +247,15 @@ class TestEndToEnd(fixtures.TempCwd):
                         for r in csv.DictReader(f)]
         self.assertEqual(body("scratch/a/gw04_form-fixture-v1.csv"),
                          body("scratch/b/gw04_form-fixture-v1.csv"))
+
+    def test_prior_count_leaves_out_a_blanking_club(self):
+        """Player 1 has the only usable last season; his club (and its GW4
+        opponent, club 2) sit GW4 out, leaving 72 predicted, none with a prior."""
+        bootstrap_path = Path("data/raw") / SNAPSHOT_ID / "fixtures.json"
+        fx = [f for f in json.loads(bootstrap_path.read_text())
+              if not (f["event"] == 4 and 1 in (f["team_h"], f["team_a"]))]
+        bootstrap_path.write_text(json.dumps(fx))
+        self.assertIn("prior:     0 from 2025/26 / 72 positional", self.predict(out="scratch"))
 
     def test_exploratory_run_does_not_touch_the_log(self):
         self.predict(out="scratch")

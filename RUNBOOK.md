@@ -200,8 +200,9 @@ excluded: none
   step 5, but a surprise here usually means the snapshot is wrong, not that the
   fixture list is.
 - **`deadline:`** — confirm it matches the deadline you wrote down in §0.
-- **`prior:`** (form-fixture-v1) — how many players are shrunk toward last
-  season rather than a positional guess. Around 80 in 2026/27. A number near
+- **`prior:`** (form-fixture-v1) — of the players it predicts (a fixture this
+  gameweek, settled recent minutes), how many are shrunk toward last season
+  rather than a positional guess. Around 80 in 2026/27, fewer if clubs blank. A number near
   zero means the snapshot's `history_past` is missing or its season names
   have changed.
 - **`ratings:`** (form-fixture-v1) — club-matches the team ratings rest on: two
