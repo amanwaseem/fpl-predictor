@@ -30,6 +30,7 @@ from fpl.features import (
     availability,
     expected_minutes,
     player_prior,
+    player_prior_parts,
     previous_season,
     prior,
     recent_history,
@@ -135,6 +136,20 @@ def positional_rates(elements, positions, histories, target_gw, usable):
             for pos, (a, c, m) in totals.items()}
 
 
+def split_rates(observed, minutes, priors, prior_minutes):
+    """(total, attack, clean sheet, rest) points per 90, each shrunk alike.
+
+    `observed` and `priors` are (total, attack, clean sheet) as points and as
+    points per 90. Every part is shrunk toward its own prior at the same
+    weight, so the parts add back to the total and the rest is itself a
+    shrunk rate — last season's or the position's rest, blended with this
+    season's — rather than whatever the other parts leave over.
+    """
+    total, attack, clean_sheet = (shrunk_pp90(o, minutes, p, prior_minutes)
+                                  for o, p in zip(observed, priors))
+    return total, attack, clean_sheet, total - attack - clean_sheet
+
+
 def _chance_of_sixty(rows, player):
     """Decayed share of recent fixtures he played 60+ minutes in, times availability."""
     by_round = {}
@@ -194,22 +209,28 @@ def baseline_fixture_rows(bootstrap, fixtures, histories, target_gw, pasts,
             exp_min = expected_minutes(recent, player)
             window = recent_rows(history, target_gw, usable)
             obs_minutes = sum(r["minutes"] for r in recent)
-            if last_season:
-                prior_pp90, prior_minutes = prior(
-                    position,
-                    player_prior(pasts.get(pid, []), season, position, xg_weight, floor),
-                    season_minutes(history, target_gw, usable), player_prior_minutes)
+            # One prior for every part, at one weight: last season's parts, or
+            # the position's. Shrinking the total toward one prior and its
+            # parts toward another would leave `rest` as whatever is left
+            # over — negative, even — and the fixture would scale the wrong
+            # thing.
+            parts = (player_prior_parts(pasts.get(pid, []), season, position, xg_weight, floor)
+                     if last_season else None)
+            if parts is not None:
+                _, prior_minutes = prior(position, parts["total"],
+                                         season_minutes(history, target_gw, usable),
+                                         player_prior_minutes)
+                prior_pp90 = parts["total"]
+                prior_attack, prior_cs = parts["attack"], parts["clean_sheet"]
             else:
                 prior_pp90 = POSITION_PRIOR_PP90.get(position, 3.5)
                 prior_minutes = POSITION_PRIOR_MINUTES
-            pp90 = shrunk_pp90(sum(r["points"] for r in recent), obs_minutes,
-                               prior_pp90, prior_minutes)
-            league_attack, league_cs = league.get(position, (0.0, 0.0))
-            attack_pp90 = shrunk_pp90(sum(_attack_points(r, position) for r in window),
-                                      obs_minutes, league_attack, POSITION_PRIOR_MINUTES)
-            cs_pp90 = shrunk_pp90(sum(_clean_sheet_points(r, position) for r in window),
-                                  obs_minutes, league_cs, POSITION_PRIOR_MINUTES)
-            rest_pp90 = pp90 - attack_pp90 - cs_pp90
+                prior_attack, prior_cs = league.get(position, (0.0, 0.0))
+            pp90, attack_pp90, cs_pp90, rest_pp90 = split_rates(
+                (sum(r["points"] for r in recent),
+                 sum(_attack_points(r, position) for r in window),
+                 sum(_clean_sheet_points(r, position) for r in window)),
+                obs_minutes, (prior_pp90, prior_attack, prior_cs), prior_minutes)
             sixty = _chance_of_sixty(window, player)
             usual = ratings.usual_goals(player["team"])
 

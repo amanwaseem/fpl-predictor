@@ -7,7 +7,8 @@ import math
 import unittest
 
 from fpl import backtest, teams
-from fpl.candidates import baseline_fixture_rows
+from fpl.candidates import baseline_fixture_rows, split_rates
+from fpl.features import shrunk_pp90
 from tests import fixtures
 
 EVENTS = fixtures.season(4, fixtures.future_deadline())
@@ -177,6 +178,25 @@ class TestCandidate(unittest.TestCase):
         rows = {r["player_id"]: r for r in baseline_fixture_rows(
             self.bootstrap, fx, self.histories, 4, {})}
         self.assertEqual(rows[1]["predicted_points"], 0.0)
+
+
+class TestSplitRates(unittest.TestCase):
+    """The parts of a player's rate have to add back up to it (PR #40 review)."""
+
+    def test_the_rest_is_a_shrunk_rate_not_a_leftover(self):
+        observed, priors = (70, 56, 0), (4.0, 1.2, 0.3)
+        total, attack, cs, rest = split_rates(observed, 450, priors, 1800)
+        self.assertAlmostEqual(total, attack + cs + rest)
+        self.assertAlmostEqual(rest, shrunk_pp90(70 - 56 - 0, 450, 4.0 - 1.2 - 0.3, 1800))
+
+    def test_a_hot_start_on_a_modest_prior_keeps_a_positive_rest(self):
+        """The review's midfielder: 10 goals and 70 points in 450 minutes.
+
+        Shrunk toward last season at 1800 for the total but toward the league
+        at 270 for attack, his rest came out near -0.7.
+        """
+        _, _, _, rest = split_rates((70, 50, 0), 450, (4.0, 1.2, 0.3), 1800)
+        self.assertGreater(rest, 0)
 
 
 class TestClubSpread(unittest.TestCase):

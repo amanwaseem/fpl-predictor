@@ -32,6 +32,8 @@ leak-free by construction.
 
 import math
 
+from fpl.features import CLEAN_SHEET_POINTS  # noqa: F401  (re-exported for models)
+
 # Pseudo-matches of league-average football blended into every rating. Chosen
 # held out (#31): tuned on three of GW2-5 and scored on the fourth, the model
 # with #30's prior picked 4 in three folds of four.
@@ -46,8 +48,6 @@ HOME_ADVANTAGE = 1.0
 # Rounds of the alternating attack/defence fit. It settles well inside this.
 ITERATIONS = 50
 
-# Points for a clean sheet, by position, for 60+ minutes.
-CLEAN_SHEET_POINTS = {"GKP": 4, "DEF": 4, "MID": 1, "FWD": 0}
 
 
 def _club(row, fixture):
