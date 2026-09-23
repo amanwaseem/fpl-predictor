@@ -328,7 +328,16 @@ way, so nothing here has to exist before a gameweek can be scored.
 
 ## 10. Open questions
 
+Settled:
+
+- ~~Whether to model fixture difficulty explicitly or let opponent-conditioned
+  components absorb it.~~ **Explicitly**, in `fpl/teams.py` (#31): club attack
+  and defence ratings from settled rounds' xG, turned into expected goals per
+  fixture and a Poisson clean-sheet probability. Opponent-conditioned
+  components have nothing to condition on without them, and FPL's own
+  difficulty ratings reduced the per-club miss less on the backtest.
+
+Open:
+
 - How to handle players transferred between clubs mid-season — `player_id` is
   stable but team affiliation is not.
-- Whether to model fixture difficulty explicitly or let opponent-conditioned
-  components absorb it.

@@ -54,11 +54,12 @@ being predicted at zero.
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
 from fpl import metrics, score
-from fpl.candidates import baseline_prior_rows
+from fpl.candidates import baseline_fixture_rows, baseline_prior_rows
 from fpl.features import player_prior, previous_season
 from fpl.predict_baseline import predict_rows as baseline_rows
 from fpl.snapshot import load_live, load_snapshot, usable_rounds
@@ -188,6 +189,8 @@ def _baseline(bootstrap, fixtures, histories, target_gw, pasts=None):
 MODELS = {
     "baseline-v1": _baseline,
     "baseline-prior": baseline_prior_rows,
+    "baseline-fixture": baseline_fixture_rows,
+    "baseline-fdr": lambda *view: baseline_fixture_rows(*view, strength="fdr"),
 }
 
 
@@ -218,6 +221,28 @@ def prior_coverage(view, pasts):
     player = sum(1 for e in view["elements"]
                  if player_prior(pasts.get(e["id"], []), season) is not None)
     return {"player": player, "positional": len(view["elements"]) - player}
+
+
+def club_residuals(matched):
+    """Predicted minus actual, summed per club over players predicted to play.
+
+    Hauls are team events: a model blind to the opponent misses whole clubs at
+    once, one way or the other. The spread of these sums across clubs is how
+    much of the week's error came club-shaped.
+    """
+    sums = {}
+    for p in matched:
+        if p["expected_minutes"] > 0:
+            sums[p["team"]] = sums.get(p["team"], 0.0) + p["predicted_points"] - p["actual_points"]
+    return sums
+
+
+def spread(values):
+    """Population standard deviation. Removes the week's overall bias."""
+    if not values:
+        return None
+    mean = sum(values) / len(values)
+    return math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
 
 
 def replay(snap, bootstrap, fixtures, histories, pasts, model, target_gw):
@@ -251,6 +276,8 @@ def replay(snap, bootstrap, fixtures, histories, pasts, model, target_gw):
         "xi": score.xi_block(matched),
         "comparators": comparators,
         "prior_coverage": prior_coverage(view, view_pasts),
+        "club_residuals": club_residuals(matched),
+        "club_spread": spread(list(club_residuals(matched).values())),
     }
 
 
@@ -291,9 +318,14 @@ def run(snapshot_id, model, gameweeks=None):
         per_gw.append(result)
         all_matched.append(matched)
 
+    # Root mean square of each week's spread: every week's clubs centred on
+    # that week, so one week's overall bias does not read as club error.
+    spreads = [r["club_spread"] for r in per_gw if r["club_spread"] is not None]
     pooled = {
         "all": metrics.pooled_summary(
             [[(p["predicted_points"], p["actual_points"]) for p in m] for m in all_matched]),
+        "club_spread": (math.sqrt(sum(x * x for x in spreads) / len(spreads))
+                        if spreads else None),
         "comparators": {
             name: {"mae": sum(r["comparators"][name]["mae"] * r["comparators"][name]["n"]
                               for r in per_gw) / sum(r["comparators"][name]["n"] for r in per_gw)}
@@ -319,7 +351,7 @@ def _print(report):
     print(f"replayed:  {', '.join(f'GW{gw}' for gw in report['gameweeks'])}")
     print("availability: everyone treated as available — optimistic, same for every model\n")
     names = list(report["per_gameweek"][0]["comparators"])
-    header = f"{'GW':<6}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}{'XI':>9}"
+    header = f"{'GW':<6}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}{'XI':>9}{'club sd':>9}"
     header += "".join(f"{name:>14}" for name in names)
     print(header)
     for r in report["per_gameweek"]:
@@ -327,16 +359,22 @@ def _print(report):
         rho = "-" if m["spearman"] is None else f"{m['spearman']:.3f}"
         xi = (f"{r['xi']['captured']['actual']}/{r['xi']['optimum']['actual']}"
               if r["xi"]["available"] else "n/a")
+        club = "-" if r["club_spread"] is None else f"{r['club_spread']:.1f}"
         line = f"GW{r['gameweek']:<4}{m['n']:>5}{m['mae']:>7.2f}{m['rmse']:>7.2f}{rho:>7}{xi:>9}"
+        line += f"{club:>9}"
         line += "".join(f"{r['comparators'][n]['mae']:>14.2f}" for n in names)
         print(line)
     p = report["pooled"]["all"]
     rho = "-" if p["spearman"] is None else f"{p['spearman']:.3f}"
-    line = f"{'pooled':<6}{p['n']:>5}{p['mae']:>7.2f}{p['rmse']:>7.2f}{rho:>7}{'':>9}"
+    club = report["pooled"]["club_spread"]
+    club = "-" if club is None else f"{club:.1f}"
+    line = f"{'pooled':<6}{p['n']:>5}{p['mae']:>7.2f}{p['rmse']:>7.2f}{rho:>7}{'':>9}{club:>9}"
     line += "".join(f"{report['pooled']['comparators'][n]['mae']:>14.2f}" for n in names)
     print(line)
     print("\ncomparator columns are MAE, rebuilt from history — FPL's own form and "
           "points_per_game are current and would leak.")
+    print("club sd:   spread across clubs of predicted minus actual, summed over players "
+          "predicted to play.")
     # Printed for every model, not only those that read it: it is a fact about
     # the snapshot, and it says how much of a prior-based result is the prior.
     print("prior:     " + ", ".join(

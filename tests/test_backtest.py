@@ -69,6 +69,9 @@ def build_season(root, name=LATER, *, played_through=4, target=5, live_gws=(2, 3
                     "round": gw, "fixture": f["id"], "was_home": f["team_h"] == club,
                     "minutes": 90 - slot * 25, "total_points": (pid + gw) % 7,
                     "value": 45 + slot * 5 + gw,
+                    "expected_goals": f"{((pid + gw) % 5) / 10:.2f}",
+                    "goals_scored": (pid + gw) % 5 == 0, "assists": 0,
+                    "clean_sheets": (gw + pair) % 3 == 0,
                 })
             histories[pid] = rows
             # Every third player was a regular last season, so the candidate
@@ -131,7 +134,8 @@ class TestNoLeak(fixtures.TempCwd):
         for rows in histories.values():
             for row in rows:
                 if row["round"] >= target:
-                    row.update(minutes=90, total_points=99, value=999)
+                    row.update(minutes=90, total_points=99, value=999,
+                               expected_goals="9.00", goals_scored=9, clean_sheets=1)
         for player in bootstrap["elements"]:
             # Everything a later snapshot knows about a player "now".
             player.update(status="i", chance_of_playing_next_round=0, form="99.0",
