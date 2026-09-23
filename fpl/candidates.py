@@ -52,7 +52,7 @@ def baseline_prior_rows(bootstrap, fixtures, histories, target_gw, pasts,
             exp_min = expected_minutes(recent, player)
             prior_pp90, prior_minutes = prior(
                 position,
-                player_prior(pasts.get(pid, []), season),
+                player_prior(pasts.get(pid, []), season, position),
                 season_minutes(history, target_gw, usable),
                 player_prior_minutes,
             )

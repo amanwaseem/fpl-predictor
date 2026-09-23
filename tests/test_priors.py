@@ -48,6 +48,41 @@ class TestPlayerPrior(unittest.TestCase):
         self.assertIsNotNone(features.player_prior([past("2025/26", floor, 90)], "2025/26"))
 
 
+class TestExpectedGoals(unittest.TestCase):
+
+    # A midfielder who scored 10 from 5.0 xG and assisted 4 from 6.0 xA.
+    ROW = dict(past("2025/26", 2700, 150), goals_scored=10, assists=4,
+               expected_goals="5.00", expected_assists="6.00")
+
+    def test_goals_and_assists_are_priced_at_expected(self):
+        # 150 - (10*5 + 4*3) + (5*5 + 6*3) = 131
+        self.assertAlmostEqual(features.expected_points(self.ROW, "MID"), 131.0)
+
+    def test_goal_points_depend_on_position(self):
+        # 150 - (10*6 + 12) + (5*6 + 18) = 126
+        self.assertAlmostEqual(features.expected_points(self.ROW, "DEF"), 126.0)
+
+    def test_the_prior_blends_by_xg_weight(self):
+        rows = [self.ROW]
+        self.assertAlmostEqual(features.player_prior(rows, "2025/26", "MID", 0.0), 5.0)
+        self.assertAlmostEqual(features.player_prior(rows, "2025/26", "MID", 1.0), 131 / 30)
+        self.assertAlmostEqual(features.player_prior(rows, "2025/26", "MID", 0.5),
+                               (150 + 131) / 2 / 30)
+
+    def test_missing_xg_falls_back_to_realised_points(self):
+        for row in (past("2025/26", 2700, 150),
+                    dict(self.ROW, expected_goals=None),
+                    dict(self.ROW, expected_assists="n/a")):
+            with self.subTest(row=row):
+                self.assertIsNone(features.expected_points(row, "MID"))
+                self.assertAlmostEqual(
+                    features.player_prior([row], "2025/26", "MID", 1.0), 5.0)
+
+    def test_without_a_position_realised_points(self):
+        self.assertAlmostEqual(features.player_prior([self.ROW], "2025/26", None, 1.0), 5.0)
+        self.assertAlmostEqual(features.player_prior([self.ROW], "2025/26", "UNK", 1.0), 5.0)
+
+
 class TestPrior(unittest.TestCase):
 
     def test_no_last_season_falls_back_to_position(self):
