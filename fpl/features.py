@@ -124,6 +124,9 @@ def previous_season(events):
 GOAL_POINTS = {"GKP": 6, "DEF": 6, "MID": 5, "FWD": 4}
 ASSIST_POINTS = 3
 
+# Points for a clean sheet, by position, for 60+ minutes.
+CLEAN_SHEET_POINTS = {"GKP": 4, "DEF": 4, "MID": 1, "FWD": 0}
+
 # How much of the prior comes from last season's expected rather than realised
 # goals and assists: 0 is points as scored, 1 is fully expected. On the
 # backtest over GW2-5 (#30), xG helped at every floor below 2700 and tied at
@@ -163,6 +166,20 @@ def player_prior(history_past, season, position=None, xg_weight=None, floor=None
     points alone. `xg_weight` and `floor` default to XG_WEIGHT and
     PLAYER_PRIOR_FLOOR_MINUTES, read at call time.
     """
+    parts = player_prior_parts(history_past, season, position, xg_weight, floor)
+    return None if parts is None else parts["total"]
+
+
+def player_prior_parts(history_past, season, position=None, xg_weight=None, floor=None):
+    """player_prior split the way a fixture-aware model splits this season.
+
+    {"total", "attack", "clean_sheet"}, each points per 90: attacking returns
+    (goals and assists, blended with xG and xA by `xg_weight`), clean-sheet
+    points, and everything. The parts come from the same season row as the
+    total, so a model that shrinks each part of this season toward the
+    matching part here, at one weight, gets parts that add back up to its
+    total. None when player_prior would be.
+    """
     row = next((r for r in history_past if r.get("season_name") == season), None)
     if row is None:
         return None
@@ -171,11 +188,21 @@ def player_prior(history_past, season, position=None, xg_weight=None, floor=None
         return None
     if xg_weight is None:
         xg_weight = XG_WEIGHT
-    points = row.get("total_points") or 0
+
+    realised = ((row.get("goals_scored") or 0) * GOAL_POINTS.get(position, 0)
+                + (row.get("assists") or 0) * ASSIST_POINTS)
+    attack = realised
     expected = expected_points(row, position) if xg_weight else None
     if expected is not None:
-        points = (1 - xg_weight) * points + xg_weight * expected
-    return points * 90.0 / minutes
+        # expected_points is the total with attack swapped for xG and xA, so
+        # its attack is what it adds back over the rest of the season.
+        points = row.get("total_points") or 0
+        attack = (1 - xg_weight) * realised + xg_weight * (expected - (points - realised))
+    total = (row.get("total_points") or 0) - realised + attack
+    clean_sheet = (row.get("clean_sheets") or 0) * CLEAN_SHEET_POINTS.get(position, 0)
+    per_90 = 90.0 / minutes
+    return {"total": total * per_90, "attack": attack * per_90,
+            "clean_sheet": clean_sheet * per_90}
 
 
 def season_minutes(history, target_gw, usable):

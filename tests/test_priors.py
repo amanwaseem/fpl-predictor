@@ -83,6 +83,31 @@ class TestExpectedGoals(unittest.TestCase):
         self.assertAlmostEqual(features.player_prior([self.ROW], "2025/26", "UNK", 1.0), 5.0)
 
 
+class TestPriorParts(unittest.TestCase):
+
+    ROW = dict(past("2025/26", 2700, 150), goals_scored=10, assists=4, clean_sheets=9,
+               expected_goals="5.00", expected_assists="6.00")
+
+    def test_the_total_is_player_prior(self):
+        for weight in (0.0, 0.5, 1.0):
+            with self.subTest(xg_weight=weight):
+                self.assertAlmostEqual(
+                    features.player_prior_parts([self.ROW], "2025/26", "MID", weight)["total"],
+                    features.player_prior([self.ROW], "2025/26", "MID", weight))
+
+    def test_attack_is_blended_and_clean_sheets_priced_by_position(self):
+        # Realised attack 10*5 + 4*3 = 62; expected 5*5 + 6*3 = 43. Per 90 over 2700.
+        parts = features.player_prior_parts([self.ROW], "2025/26", "MID", 0.5)
+        self.assertAlmostEqual(parts["attack"], (62 + 43) / 2 / 30)
+        self.assertAlmostEqual(parts["clean_sheet"], 9 * 1 / 30)
+        self.assertAlmostEqual(
+            features.player_prior_parts([self.ROW], "2025/26", "DEF", 0.0)["clean_sheet"],
+            9 * 4 / 30)
+
+    def test_none_when_player_prior_is(self):
+        self.assertIsNone(features.player_prior_parts([past("2025/26", 100, 5)], "2025/26"))
+
+
 class TestPrior(unittest.TestCase):
 
     def test_no_last_season_falls_back_to_position(self):
