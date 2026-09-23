@@ -70,6 +70,7 @@ import sys
 from pathlib import Path
 
 from fpl import metrics, score
+from fpl import predict_fixture
 from fpl.candidates import baseline_fixture_rows, baseline_prior_rows
 from fpl.features import player_prior, previous_season
 from fpl.predict_baseline import predict_rows as baseline_rows
@@ -193,6 +194,12 @@ def _baseline(bootstrap, fixtures, histories, target_gw, pasts=None):
     return baseline_rows(bootstrap, fixtures, histories, target_gw, usable)
 
 
+def _form_fixture(bootstrap, fixtures, histories, target_gw, pasts=None, **settings):
+    usable, _ = usable_rounds(bootstrap["events"], target_gw)
+    return predict_fixture.predict_rows(bootstrap, fixtures, histories, pasts or {},
+                                        target_gw, usable, **settings)
+
+
 # Every model the backtest can replay: name -> f(bootstrap, fixtures,
 # histories, target_gw, pasts) returning log-shaped rows. A logged model added
 # here must be the same function its log entries come from; a candidate from
@@ -203,10 +210,9 @@ MODELS = {
     "baseline-fixture": baseline_fixture_rows,
     "baseline-fdr": lambda *view, **kw: baseline_fixture_rows(*view, strength="fdr", **kw),
     # #30 and #31 together: whether the two ideas add up, ahead of #32.
-    "baseline-prior-fixture": lambda *view, **kw: baseline_fixture_rows(
-        *view, last_season=True, **kw),
-    # The same on FPL's difficulty: whether the ratings earn their place over
-    # the comparator once the prior is in.
+    "form-fixture-v1": _form_fixture,
+    # form-fixture-v1 on FPL's difficulty: whether the ratings earn their
+    # place over the comparator once the prior is in.
     "baseline-prior-fdr": lambda *view, **kw: baseline_fixture_rows(
         *view, strength="fdr", last_season=True, **kw),
 }
@@ -226,7 +232,7 @@ GRIDS = {
     "baseline-fdr": {"prior_matches": (1, 2, 4, 8)},
     # Narrower on the prior than baseline-prior's grid: floors below 1800 and
     # weights below 900 lost there, and 3^3 x 4 settings would take minutes.
-    "baseline-prior-fixture": {
+    "form-fixture-v1": {
         "floor": (1800, 2700),
         "player_prior_minutes": (900, 1800),
         "xg_weight": (0.0, 0.5),

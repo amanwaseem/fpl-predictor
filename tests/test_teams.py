@@ -7,8 +7,8 @@ import math
 import unittest
 
 from fpl import backtest, teams
-from fpl.candidates import baseline_fixture_rows, split_rates
-from fpl.features import shrunk_pp90
+from fpl.candidates import baseline_fixture_rows
+from fpl.features import shrunk_pp90, split_rates
 from tests import fixtures
 
 EVENTS = fixtures.season(4, fixtures.future_deadline())

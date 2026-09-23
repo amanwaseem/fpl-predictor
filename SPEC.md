@@ -93,6 +93,21 @@ The baseline exists so the full pipeline — optimiser, API, frontend — can be
 built and validated end to end without waiting on model accuracy. It is also the
 benchmark: **any component model that does not beat the baseline does not ship.**
 
+### form-fixture-v1
+
+The first model logged beside the baseline, from GW6 (`fpl/predict_fixture.py`,
+#32). It keeps the baseline's minutes and window, shrinks each player toward
+his own last season where it rests on a regular's minutes (#30), and splits his
+rate into attacking returns, clean-sheet points and the rest, so that club
+attack and defence ratings (#31, `fpl/teams.py`) can move the first two with
+the fixture. It is the first slice of the component decomposition above, not
+the `ComponentModel` interface: the rest — bonus, saves, defensive
+contribution — is not modelled yet (#8).
+
+Held out over GW2–5 it beat the baseline on pooled MAE (1.117 vs 1.138) and
+Spearman (0.715 vs 0.712). That is the reason it is logged, not evidence that it
+is better: only its committed entries can show that.
+
 ### Input requirements
 
 Features are built only from gameweeks whose results are final — `data_checked`

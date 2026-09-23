@@ -38,9 +38,19 @@ Work out three things and write them down:
 |---|---|
 | **N** | the gameweek to predict |
 | **Deadline** | GW N's `deadline_time`, UTC — see below |
-| **Model version** | `baseline-v1` today; whatever model is being logged |
+| **Model version** | `baseline-v1` and, from GW6, `form-fixture-v1` — one entry each |
 
 The entry will be written to `predictions/gwNN_<model-version>.csv`.
+
+Each model has its own command, and every step below runs once per model:
+
+| Model | Command |
+|---|---|
+| `baseline-v1` | `python -m fpl.predict_baseline` |
+| `form-fixture-v1` | `python -m fpl.predict_fixture` |
+
+Run both from **the same snapshot**. Head-to-head scoring compares them
+player by player, and two snapshots would make that a comparison of snapshots.
 
 The deadline lives in `<snapshot>/bootstrap.json`, and `data/raw/` is
 gitignored — on a clean checkout there is no snapshot to read it from. Get it
@@ -165,6 +175,7 @@ be predicted from and leaves `LATEST` unchanged.
 
 ```
 python -m fpl.predict_baseline --gw N --out scratch/
+python -m fpl.predict_fixture --gw N --out scratch/
 ```
 
 `scratch/` is gitignored. **Never point an exploratory run at `predictions/`,
@@ -189,6 +200,13 @@ excluded: none
   step 5, but a surprise here usually means the snapshot is wrong, not that the
   fixture list is.
 - **`deadline:`** — confirm it matches the deadline you wrote down in §0.
+- **`prior:`** (form-fixture-v1) — how many players are shrunk toward last
+  season rather than a positional guess. Around 80 in 2026/27. A number near
+  zero means the snapshot's `history_past` is missing or its season names
+  have changed.
+- **`ratings:`** (form-fixture-v1) — club-matches the team ratings rest on: two
+  per settled fixture. Well short of 20 × the included rounds means fixtures
+  are missing from the snapshot.
 
 Then look at the top-20 table for anything absurd, and confirm the row count
 matches the snapshot's player count.
@@ -203,6 +221,7 @@ once GW N-1 has settled, not a retry.
 
 ```
 python -m fpl.predict_baseline --gw N
+python -m fpl.predict_fixture --gw N
 ```
 
 Writes `predictions/gwNN_<model-version>.csv` — the default `--out` is
@@ -391,6 +410,8 @@ source .venv/bin/activate                                    # `python` does not
 python -m fpl.fetch                                          # ~6 min, after press conferences
 python -m fpl.predict_baseline --gw N --out scratch/         # exploratory — read included:/excluded:
 python -m fpl.predict_baseline --gw N                        # writes predictions/gwNN_<model>.csv
+python -m fpl.predict_fixture --gw N --out scratch/          # form-fixture-v1, from GW6: same two steps
+python -m fpl.predict_fixture --gw N
 python -m fpl.verify_entry predictions/gwNN_<model>.csv      # gate: non-zero means do not commit
 python -m fpl.summarise predictions/gwNN_<model>.csv --out reports/
 python tools/check_log_immutable.py --ref origin/main        # rule 1, mechanically

@@ -32,8 +32,6 @@ leak-free by construction.
 
 import math
 
-from fpl.features import CLEAN_SHEET_POINTS  # noqa: F401  (re-exported for models)
-
 # Pseudo-matches of league-average football blended into every rating. Chosen
 # held out (#31): tuned on three of GW2-5 and scored on the fourth, the model
 # with #30's prior picked 4 in three folds of four.
