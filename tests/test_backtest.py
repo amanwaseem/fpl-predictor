@@ -401,6 +401,21 @@ class TestHeldOut(fixtures.TempCwd):
         self.assertEqual(report["pooled"], backtest.run(None, "baseline-v1")["pooled"]["all"])
         self.assertTrue(all(f["chosen"] == {} for f in report["folds"]))
 
+    def test_every_grid_names_a_model_and_arguments_it_takes(self):
+        """A typo in a grid would otherwise fail only when someone runs it."""
+        for model in self.saved[1]:
+            with self.subTest(model=model):
+                self.assertIn(model, backtest.MODELS)
+                report = backtest.held_out(None, model, [2, 3])
+                self.assertEqual(len(report["folds"]), 2)
+
+    def test_club_spread_is_reported_per_fold_and_pooled(self):
+        report = backtest.held_out(None, "scaled")
+        spreads = [f["club_spread"] for f in report["folds"]]
+        self.assertTrue(all(x is not None and x >= 0 for x in spreads))
+        self.assertAlmostEqual(report["pooled_club_spread"],
+                               (sum(x * x for x in spreads) / len(spreads)) ** 0.5)
+
     def test_one_gameweek_is_refused(self):
         with self.assertRaises(SystemExit):
             backtest.held_out(None, "scaled", [3])

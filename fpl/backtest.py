@@ -201,9 +201,14 @@ MODELS = {
     "baseline-v1": _baseline,
     "baseline-prior": baseline_prior_rows,
     "baseline-fixture": baseline_fixture_rows,
-    "baseline-fdr": lambda *view: baseline_fixture_rows(*view, strength="fdr"),
+    "baseline-fdr": lambda *view, **kw: baseline_fixture_rows(*view, strength="fdr", **kw),
     # #30 and #31 together: whether the two ideas add up, ahead of #32.
-    "baseline-prior-fixture": lambda *view: baseline_fixture_rows(*view, last_season=True),
+    "baseline-prior-fixture": lambda *view, **kw: baseline_fixture_rows(
+        *view, last_season=True, **kw),
+    # The same on FPL's difficulty: whether the ratings earn their place over
+    # the comparator once the prior is in.
+    "baseline-prior-fdr": lambda *view, **kw: baseline_fixture_rows(
+        *view, strength="fdr", last_season=True, **kw),
 }
 
 
@@ -216,6 +221,22 @@ GRIDS = {
         "floor": (900, 1800, 2700),
         "player_prior_minutes": (450, 900, 1800),
         "xg_weight": (0.0, 0.5, 1.0),
+    },
+    "baseline-fixture": {"prior_matches": (1, 2, 4, 8)},
+    "baseline-fdr": {"prior_matches": (1, 2, 4, 8)},
+    # Narrower on the prior than baseline-prior's grid: floors below 1800 and
+    # weights below 900 lost there, and 3^3 x 4 settings would take minutes.
+    "baseline-prior-fixture": {
+        "floor": (1800, 2700),
+        "player_prior_minutes": (900, 1800),
+        "xg_weight": (0.0, 0.5),
+        "prior_matches": (2, 4),
+    },
+    "baseline-prior-fdr": {
+        "floor": (1800, 2700),
+        "player_prior_minutes": (900, 1800),
+        "xg_weight": (0.0, 0.5),
+        "prior_matches": (2, 4, 8),
     },
 }
 
@@ -424,7 +445,9 @@ def held_out(snapshot_id, model, gameweeks=None):
             "chosen": grid[best],
             "tuned_on": train,
             "metrics": metrics.summary(_pairs(matched[best, gw])),
+            "club_spread": spread(list(club_residuals(matched[best, gw]).values())),
         })
+    spreads = [f["club_spread"] for f in folds if f["club_spread"] is not None]
 
     return {
         "backtest_version": BACKTEST_VERSION,
@@ -438,6 +461,8 @@ def held_out(snapshot_id, model, gameweeks=None):
         "folds": folds,
         "pooled": metrics.pooled_summary(
             [_pairs(matched[grid.index(f["chosen"]), f["gameweek"]]) for f in folds]),
+        "pooled_club_spread": (math.sqrt(sum(x * x for x in spreads) / len(spreads))
+                               if spreads else None),
     }
 
 
@@ -449,15 +474,21 @@ def _print_held_out(report):
     print("grid:      " + ("; ".join(f"{k} {', '.join(map(str, v))}" for k, v in sorted(grid.items()))
                            if grid else "none — scored as it stands"))
     print(f"method:    {report['method']}\n")
-    print(f"{'GW':<6}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}   chosen on the other weeks")
+    def club(value):
+        return "-" if value is None else f"{value:.1f}"
+
+    print(f"{'GW':<6}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}{'club sd':>9}"
+          "   chosen on the other weeks")
     for f in report["folds"]:
         m = f["metrics"]
         rho = "-" if m["spearman"] is None else f"{m['spearman']:.3f}"
         chosen = ", ".join(f"{k}={v}" for k, v in sorted(f["chosen"].items())) or "-"
-        print(f"GW{f['gameweek']:<4}{m['n']:>5}{m['mae']:>7.3f}{m['rmse']:>7.3f}{rho:>7}   {chosen}")
+        print(f"GW{f['gameweek']:<4}{m['n']:>5}{m['mae']:>7.3f}{m['rmse']:>7.3f}{rho:>7}"
+              f"{club(f['club_spread']):>9}   {chosen}")
     p = report["pooled"]
     rho = "-" if p["spearman"] is None else f"{p['spearman']:.3f}"
-    print(f"{'pooled':<6}{p['n']:>5}{p['mae']:>7.3f}{p['rmse']:>7.3f}{rho:>7}")
+    print(f"{'pooled':<6}{p['n']:>5}{p['mae']:>7.3f}{p['rmse']:>7.3f}{rho:>7}"
+          f"{club(report['pooled_club_spread']):>9}")
 
 
 def _print(report):
