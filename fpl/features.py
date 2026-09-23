@@ -242,3 +242,72 @@ def expected_minutes(recent, player):
     """
     avg_minutes, _ = weighted([r["minutes"] / r["fixtures"] for r in recent])
     return min(avg_minutes, 90.0) * availability(player)
+
+
+# Splitting a player's rate into the parts a fixture moves. Attacking returns
+# scale with the side's expected goals; clean-sheet points are re-priced from
+# the chance of keeping one; the rest is left alone. Shared because a logged
+# model and the comparators it is judged against have to split alike.
+
+def attack_points(row, position):
+    """Points from goals and assists in one history row."""
+    return ((row.get("goals_scored") or 0) * GOAL_POINTS.get(position, 0)
+            + (row.get("assists") or 0) * ASSIST_POINTS)
+
+
+def clean_sheet_points(row, position):
+    """Points from a clean sheet in one history row."""
+    return (row.get("clean_sheets") or 0) * CLEAN_SHEET_POINTS.get(position, 0)
+
+
+def positional_rates(elements, positions, histories, target_gw, usable):
+    """League points-per-90 from attacking returns and clean sheets, by position.
+
+    The positional prior split the same way a player is split, from the same
+    settled rounds, so a player with few minutes and no usable last season is
+    shrunk toward what his position actually earns from each part.
+    """
+    totals = {}
+    for player in elements:
+        position = positions.get(player["element_type"], "UNK")
+        t = totals.setdefault(position, [0.0, 0.0, 0])
+        for row in histories.get(player["id"], []):
+            if row.get("round") is None or row["round"] >= target_gw or row["round"] not in usable:
+                continue
+            t[0] += attack_points(row, position)
+            t[1] += clean_sheet_points(row, position)
+            t[2] += row.get("minutes") or 0
+    return {pos: (a * 90.0 / m, c * 90.0 / m) if m else (0.0, 0.0)
+            for pos, (a, c, m) in totals.items()}
+
+
+def split_rates(observed, minutes, priors, prior_minutes):
+    """(total, attack, clean sheet, rest) points per 90, each shrunk alike.
+
+    `observed` and `priors` are (total, attack, clean sheet) as points and as
+    points per 90. Every part is shrunk toward its own prior at the same
+    weight, so the parts add back to the total and the rest is itself a
+    shrunk rate — last season's or the position's rest, blended with this
+    season's — rather than whatever the other parts leave over.
+    """
+    total, attack, clean_sheet = (shrunk_pp90(o, minutes, p, prior_minutes)
+                                  for o, p in zip(observed, priors))
+    return total, attack, clean_sheet, total - attack - clean_sheet
+
+
+def chance_of_sixty(rows, player):
+    """Decayed share of recent fixtures he played 60+ minutes in, times availability.
+
+    `rows` are the window's raw history rows (recent_rows). Per fixture, so a
+    double counts both of its matches.
+    """
+    by_round = {}
+    for row in rows:
+        played, total = by_round.get(row["round"], (0, 0))
+        by_round[row["round"]] = (played + ((row.get("minutes") or 0) >= 60), total + 1)
+    total = weight_sum = 0.0
+    for i, rnd in enumerate(sorted(by_round, reverse=True)):
+        played, fixtures = by_round[rnd]
+        total += DECAY ** i * played / fixtures
+        weight_sum += DECAY ** i
+    return (total / weight_sum if weight_sum else 0.0) * availability(player)
