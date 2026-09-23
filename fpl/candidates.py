@@ -151,7 +151,8 @@ def _chance_of_sixty(rows, player):
 
 def baseline_fixture_rows(bootstrap, fixtures, histories, target_gw, pasts,
                           strength="xg", last_season=False,
-                          player_prior_minutes=PLAYER_PRIOR_MINUTES, **rating_options):
+                          player_prior_minutes=PLAYER_PRIOR_MINUTES, floor=None,
+                          xg_weight=None, **rating_options):
     """Log-shaped rows, as baseline-v1's, with each fixture's opponent read in.
 
     `strength` is "xg" or "goals" for fpl.teams.Ratings on that source, or
@@ -195,7 +196,8 @@ def baseline_fixture_rows(bootstrap, fixtures, histories, target_gw, pasts,
             obs_minutes = sum(r["minutes"] for r in recent)
             if last_season:
                 prior_pp90, prior_minutes = prior(
-                    position, player_prior(pasts.get(pid, []), season, position),
+                    position,
+                    player_prior(pasts.get(pid, []), season, position, xg_weight, floor),
                     season_minutes(history, target_gw, usable), player_prior_minutes)
             else:
                 prior_pp90 = POSITION_PRIOR_PP90.get(position, 3.5)
