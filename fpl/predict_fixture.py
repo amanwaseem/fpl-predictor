@@ -210,14 +210,19 @@ def main(requested_gw, out_dir):
             pasts[p["id"]] = summary.get("history_past", [])
 
     # Always reported, like included/excluded: how much of the entry rests on
-    # last season rather than on a positional guess (#30).
+    # last season rather than on a positional guess (#30). Counted over the
+    # players the prior is actually applied to — a fixture this gameweek and
+    # settled recent rounds — so a blank does not inflate it.
     season = previous_season(bootstrap["events"])
+    predicted = [p for p in bootstrap["elements"] if p["id"] in histories
+                 and counts.get(p["team"], 0)
+                 and recent_history(histories[p["id"]], target_gw, usable)]
     with_prior = sum(
-        1 for p in bootstrap["elements"] if p["id"] in histories
-        and player_prior_parts(pasts[p["id"]], season,
-                               positions.get(p["element_type"])) is not None)
+        1 for p in predicted
+        if player_prior_parts(pasts[p["id"]], season,
+                              positions.get(p["element_type"])) is not None)
     print(f"prior:     {with_prior} from {season} / "
-          f"{len(histories) - with_prior} positional")
+          f"{len(predicted) - with_prior} positional")
     matches = team_matches(fixtures, histories, target_gw, usable)
     print(f"ratings:   {len(matches)} club-matches from settled rounds")
 

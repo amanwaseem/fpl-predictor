@@ -209,7 +209,7 @@ MODELS = {
     "baseline-prior": baseline_prior_rows,
     "baseline-fixture": baseline_fixture_rows,
     "baseline-fdr": lambda *view, **kw: baseline_fixture_rows(*view, strength="fdr", **kw),
-    # #30 and #31 together: whether the two ideas add up, ahead of #32.
+    # The logged model (#32): the same function its entries come from.
     "form-fixture-v1": _form_fixture,
     # form-fixture-v1 on FPL's difficulty: whether the ratings earn their
     # place over the comparator once the prior is in.
