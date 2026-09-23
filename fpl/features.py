@@ -95,12 +95,12 @@ POSITION_PRIOR_MINUTES = 270.0
 PLAYER_PRIOR_FLOOR_MINUTES = 2700
 
 # Pseudo-minutes last season's rate is worth at the start of this one, and the
-# season minutes by which that has halved (19 full matches — midseason). 900 is
-# where the backtest's gain flattened out; heavier weights moved MAE by at most
-# 0.002. The decay has to run on the whole season rather than the lookback
+# season minutes by which that has halved (19 full matches — midseason). 1800
+# was chosen held out: tuned on three of GW2-5 and scored on the fourth, every
+# fold picked it, alone and alongside fpl.teams. The decay has to run on the whole season rather than the lookback
 # window: the window never holds more than LOOKBACK rounds, so against it a
 # fixed prior would weigh as much in GW30 as in GW3.
-PLAYER_PRIOR_MINUTES = 900.0
+PLAYER_PRIOR_MINUTES = 1800.0
 PLAYER_PRIOR_HALF_LIFE_MINUTES = 1710.0
 
 

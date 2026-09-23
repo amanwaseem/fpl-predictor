@@ -32,10 +32,10 @@ leak-free by construction.
 
 import math
 
-# Pseudo-matches of league-average football blended into every rating. Tuned
-# on the backtest over GW2-5 (#31): 1-4 were within 0.001 MAE of each other,
-# and 2 gave the smallest per-club spread on xG.
-TEAM_PRIOR_MATCHES = 2.0
+# Pseudo-matches of league-average football blended into every rating. Chosen
+# held out (#31): tuned on three of GW2-5 and scored on the fourth, the model
+# with #30's prior picked 4 in three folds of four.
+TEAM_PRIOR_MATCHES = 4.0
 
 # Multiply the home side's expected goals by this and divide the away side's.
 # Home sides out-created away sides 1.65 to 1.41 xG over GW1-5, but a home term
@@ -198,3 +198,4 @@ def _difficulty_faced(fixture, home):
 def clean_sheet_probability(goals_against):
     """P(no goals conceded), treating goals against as Poisson."""
     return math.exp(-goals_against)
+
