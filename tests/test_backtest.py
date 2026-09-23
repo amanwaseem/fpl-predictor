@@ -342,3 +342,76 @@ class TestRun(fixtures.TempCwd):
         self.assertTrue(result.stdout.startswith("BACKTEST — A backtest is not evidence"))
         written = json.loads(Path(f"scratch/backtest_{LATER}_baseline-v1.json").read_text())
         self.assertEqual(written["gameweeks"], [2, 3])
+
+
+def _scaled(bootstrap, fixtures, histories, target_gw, pasts=None, scale=1.0):
+    """baseline-v1 times `scale`: a model whose best setting is easy to reason about."""
+    rows = backtest._baseline(bootstrap, fixtures, histories, target_gw, pasts)
+    return [dict(r, predicted_points=round(r["predicted_points"] * scale, 2)) for r in rows]
+
+
+class TestHeldOut(fixtures.TempCwd):
+    """Leave-one-gameweek-out: a week never chooses its own setting."""
+
+    def setUp(self):
+        super().setUp()
+        self.directory = build_season(self.tmp)
+        self.saved = dict(backtest.MODELS), dict(backtest.GRIDS)
+        backtest.MODELS["scaled"] = _scaled
+        backtest.GRIDS["scaled"] = {"scale": (0.0, 0.5, 1.0, 1.5)}
+
+    def tearDown(self):
+        backtest.MODELS.clear(); backtest.MODELS.update(self.saved[0])
+        backtest.GRIDS.clear(); backtest.GRIDS.update(self.saved[1])
+        super().tearDown()
+
+    def test_settings_are_every_combination_in_a_fixed_order(self):
+        backtest.GRIDS["two"] = {"b": (1, 2), "a": ("x", "y")}
+        self.assertEqual(backtest.settings("two"), [
+            {"a": "x", "b": 1}, {"a": "x", "b": 2}, {"a": "y", "b": 1}, {"a": "y", "b": 2}])
+        self.assertEqual(backtest.settings("baseline-v1"), [{}])
+
+    def test_each_week_is_scored_by_the_best_setting_on_the_others(self):
+        report = backtest.held_out(None, "scaled")
+        for fold in report["folds"]:
+            train = fold["tuned_on"]
+            self.assertNotIn(fold["gameweek"], train)
+            maes = {}
+            for scale in backtest.GRIDS["scaled"]["scale"]:
+                backtest.MODELS["fixed"] = (
+                    lambda *view, scale=scale: _scaled(*view, scale=scale))
+                maes[scale] = backtest.run(None, "fixed", train)["pooled"]["all"]["mae"]
+            self.assertEqual(fold["chosen"], {"scale": min(maes, key=lambda s: (maes[s], s))})
+
+    def test_a_weeks_own_results_do_not_choose_its_setting(self):
+        clean = backtest.held_out(None, "scaled")
+        # Rewrite GW3's actuals so that the smallest scale suits it best.
+        fixtures.live(self.directory, 3, {p: (0, 90) for p in range(1, CLUBS * PER_CLUB + 1)})
+        poisoned = backtest.held_out(None, "scaled")
+        gw3 = [f for f in poisoned["folds"] if f["gameweek"] == 3][0]
+        self.assertEqual(gw3["chosen"], [f for f in clean["folds"] if f["gameweek"] == 3][0]["chosen"])
+        self.assertNotEqual(gw3["metrics"], [f for f in clean["folds"]
+                                             if f["gameweek"] == 3][0]["metrics"])
+        # ...while the weeks that did tune on GW3 now choose differently.
+        self.assertNotEqual([f["chosen"] for f in poisoned["folds"] if f["gameweek"] != 3],
+                            [f["chosen"] for f in clean["folds"] if f["gameweek"] != 3])
+
+    def test_a_model_without_a_grid_scores_as_the_replay_does(self):
+        report = backtest.held_out(None, "baseline-v1")
+        self.assertEqual(report["pooled"], backtest.run(None, "baseline-v1")["pooled"]["all"])
+        self.assertTrue(all(f["chosen"] == {} for f in report["folds"]))
+
+    def test_one_gameweek_is_refused(self):
+        with self.assertRaises(SystemExit):
+            backtest.held_out(None, "scaled", [3])
+
+    def test_command_line(self):
+        repo = Path(__file__).resolve().parent.parent
+        result = subprocess.run(
+            [sys.executable, "-m", "fpl.backtest", "--model", "baseline-prior", "--held-out"],
+            capture_output=True, text=True, env=dict(os.environ, PYTHONPATH=str(repo)))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.startswith("BACKTEST, HELD OUT — A backtest is not evidence"))
+        written = json.loads(
+            Path(f"scratch/backtest_heldout_{LATER}_baseline-prior.json").read_text())
+        self.assertEqual([f["gameweek"] for f in written["folds"]], [2, 3, 4])

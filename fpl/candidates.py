@@ -48,11 +48,14 @@ from fpl.teams import (
 
 
 def baseline_prior_rows(bootstrap, fixtures, histories, target_gw, pasts,
-                        player_prior_minutes=PLAYER_PRIOR_MINUTES):
+                        player_prior_minutes=PLAYER_PRIOR_MINUTES, floor=None,
+                        xg_weight=None):
     """Log-shaped rows, as baseline-v1's predict_rows, with a player prior.
 
-    `pasts` maps player id to history_past rows. `player_prior_minutes` is
-    exposed so the backtest can sweep it; a logged model fixes it.
+    `pasts` maps player id to history_past rows. The prior's weight, floor and
+    xG weight are exposed so the backtest can tune them held out
+    (fpl.backtest.GRIDS); a logged model fixes them. None means features'
+    constant.
     """
     usable, _ = usable_rounds(bootstrap["events"], target_gw)
     season = previous_season(bootstrap["events"])
@@ -75,7 +78,7 @@ def baseline_prior_rows(bootstrap, fixtures, histories, target_gw, pasts,
             exp_min = expected_minutes(recent, player)
             prior_pp90, prior_minutes = prior(
                 position,
-                player_prior(pasts.get(pid, []), season, position),
+                player_prior(pasts.get(pid, []), season, position, xg_weight, floor),
                 season_minutes(history, target_gw, usable),
                 player_prior_minutes,
             )
