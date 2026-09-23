@@ -11,10 +11,12 @@ prior in place of the positional one. Minutes, window, decay and fixture count
 are baseline-v1's, so a difference on the backtest is the prior's doing.
 
 baseline-fixture (#31): baseline-v1 told who each side is playing. Its shrunk
-rate is split into attacking returns, clean-sheet points and the rest. Attacking
-returns scale with the side's expected goals in the fixture relative to its
-usual; clean-sheet points become P(clean sheet) x P(60+ minutes) x the
-position's points; the rest is untouched. Against an average side the split
+rate is split into attacking returns, clean-sheet points and the rest.
+Attacking returns scale with the side's expected goals in the fixture relative
+to its usual; clean-sheet points become P(clean sheet) x P(60+ minutes) x the
+position's points; the rest is untouched. Scaling the goals-conceded deduction
+by the fixture as well was tried and lost on held-out gameweeks in 3 of 4
+folds, so it stays in the rest at the player's own rate. Against an average side the split
 sums back to roughly baseline-v1's number.
 """
 
@@ -145,14 +147,18 @@ def _chance_of_sixty(rows, player):
 
 
 def baseline_fixture_rows(bootstrap, fixtures, histories, target_gw, pasts,
-                          strength="xg", **rating_options):
+                          strength="xg", last_season=False,
+                          player_prior_minutes=PLAYER_PRIOR_MINUTES, **rating_options):
     """Log-shaped rows, as baseline-v1's, with each fixture's opponent read in.
 
     `strength` is "xg" or "goals" for fpl.teams.Ratings on that source, or
-    "fdr" for FPL's own difficulty. `rating_options` pass through to the
-    ratings so the backtest can sweep them; a logged model fixes them.
+    "fdr" for FPL's own difficulty. `last_season` shrinks the total rate
+    toward #30's player prior instead of the positional one, which is how the
+    two ideas are tested together. The rest pass through so the backtest can sweep
+    them; a logged model fixes them.
     """
     usable, _ = usable_rounds(bootstrap["events"], target_gw)
+    season = previous_season(bootstrap["events"]) if last_season else None
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
     positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
     counts = fixture_counts(fixtures, target_gw)
@@ -184,9 +190,15 @@ def baseline_fixture_rows(bootstrap, fixtures, histories, target_gw, pasts,
             exp_min = expected_minutes(recent, player)
             window = recent_rows(history, target_gw, usable)
             obs_minutes = sum(r["minutes"] for r in recent)
-            prior_pp90 = POSITION_PRIOR_PP90.get(position, 3.5)
+            if last_season:
+                prior_pp90, prior_minutes = prior(
+                    position, player_prior(pasts.get(pid, []), season, position),
+                    season_minutes(history, target_gw, usable), player_prior_minutes)
+            else:
+                prior_pp90 = POSITION_PRIOR_PP90.get(position, 3.5)
+                prior_minutes = POSITION_PRIOR_MINUTES
             pp90 = shrunk_pp90(sum(r["points"] for r in recent), obs_minutes,
-                               prior_pp90, POSITION_PRIOR_MINUTES)
+                               prior_pp90, prior_minutes)
             league_attack, league_cs = league.get(position, (0.0, 0.0))
             attack_pp90 = shrunk_pp90(sum(_attack_points(r, position) for r in window),
                                       obs_minutes, league_attack, POSITION_PRIOR_MINUTES)

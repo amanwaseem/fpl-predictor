@@ -191,6 +191,8 @@ MODELS = {
     "baseline-prior": baseline_prior_rows,
     "baseline-fixture": baseline_fixture_rows,
     "baseline-fdr": lambda *view: baseline_fixture_rows(*view, strength="fdr"),
+    # #30 and #31 together: whether the two ideas add up, ahead of #32.
+    "baseline-prior-fixture": lambda *view: baseline_fixture_rows(*view, last_season=True),
 }
 
 
