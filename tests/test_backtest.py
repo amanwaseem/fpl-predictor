@@ -55,7 +55,7 @@ def build_season(root, name=LATER, *, played_through=4, target=5, live_gws=(2, 3
                 "team_h_difficulty": 3, "team_a_difficulty": 3,
             })
 
-    elements, histories, pid = [], {}, 0
+    elements, histories, pasts, pid = [], {}, {}, 0
     for club in range(1, CLUBS + 1):
         for slot in range(PER_CLUB):
             pid += 1
@@ -71,12 +71,17 @@ def build_season(root, name=LATER, *, played_through=4, target=5, live_gws=(2, 3
                     "value": 45 + slot * 5 + gw,
                 })
             histories[pid] = rows
+            # Every third player was a regular last season, so the candidate
+            # that reads history_past has something to read.
+            if pid % 3 == 0:
+                pasts[pid] = [{"season_name": "2025/26", "minutes": 3000,
+                               "total_points": 100 + pid}]
 
     directory = fixtures.snapshot(
         root, name, elements=elements, teams=teams,
         events=fixtures.season(target, fixtures.future_deadline(),
                                checked_through=played_through),
-        fixtures=fx, histories=histories, latest=latest,
+        fixtures=fx, histories=histories, pasts=pasts, latest=latest,
         manifest={"snapshot_id": name, "element_count": len(elements),
                   "has_players": True, "live_gameweeks": list(live_gws)},
     )
@@ -85,15 +90,22 @@ def build_season(root, name=LATER, *, played_through=4, target=5, live_gws=(2, 3
     return directory
 
 
-def read(directory):
+def read(directory, pasts=None):
+    """(bootstrap, fixtures, histories), filling `pasts` with history_past if given."""
     snap, bootstrap, fx, players_dir = load_snapshot(directory.name)
-    histories = {p["id"]: json.loads((players_dir / f"{p['id']}.json").read_text())["history"]
-                 for p in bootstrap["elements"]}
+    histories = {}
+    for p in bootstrap["elements"]:
+        summary = json.loads((players_dir / f"{p['id']}.json").read_text())
+        histories[p["id"]] = summary["history"]
+        if pasts is not None:
+            pasts[p["id"]] = summary.get("history_past", [])
     return bootstrap, fx, histories
 
 
-def replay_rows(bootstrap, fx, histories, gw, model="baseline-v1"):
-    return backtest.MODELS[model](*backtest.as_of(bootstrap, fx, histories, gw), gw)
+def replay_rows(bootstrap, fx, histories, gw, model="baseline-v1", pasts=None):
+    view, view_fx, view_histories = backtest.as_of(bootstrap, fx, histories, gw)
+    view_pasts = {pid: (pasts or {}).get(pid, []) for pid in view_histories}
+    return backtest.MODELS[model](view, view_fx, view_histories, gw, view_pasts)
 
 
 class TestNoLeak(fixtures.TempCwd):
@@ -101,11 +113,17 @@ class TestNoLeak(fixtures.TempCwd):
 
     def setUp(self):
         super().setUp()
-        self.bootstrap, self.fx, self.histories = read(build_season(self.tmp))
+        self.pasts = {}
+        self.bootstrap, self.fx, self.histories = read(build_season(self.tmp), self.pasts)
 
     def test_poisoning_the_future_changes_nothing(self):
+        for model in backtest.MODELS:
+            with self.subTest(model=model):
+                self.assert_poison_ignored(model)
+
+    def assert_poison_ignored(self, model):
         target = 3
-        clean = replay_rows(self.bootstrap, self.fx, self.histories, target)
+        clean = replay_rows(self.bootstrap, self.fx, self.histories, target, model, self.pasts)
 
         bootstrap = copy.deepcopy(self.bootstrap)
         fx = copy.deepcopy(self.fx)
@@ -126,18 +144,23 @@ class TestNoLeak(fixtures.TempCwd):
             if event["id"] >= target:
                 event.update(finished=True, data_checked=True)
 
-        self.assertEqual(replay_rows(bootstrap, fx, histories, target), clean)
+        self.assertEqual(replay_rows(bootstrap, fx, histories, target, model, self.pasts), clean)
 
     def test_the_poison_would_have_been_noticed(self):
         """Guard the guard: the same poison before the cut does change the output."""
         target = 3
-        clean = replay_rows(self.bootstrap, self.fx, self.histories, target)
         histories = copy.deepcopy(self.histories)
         for rows in histories.values():
             for row in rows:
                 if row["round"] == target - 1:
                     row.update(minutes=90, total_points=99)
-        self.assertNotEqual(replay_rows(self.bootstrap, self.fx, histories, target), clean)
+        for model in backtest.MODELS:
+            with self.subTest(model=model):
+                clean = replay_rows(self.bootstrap, self.fx, self.histories, target, model,
+                                    self.pasts)
+                self.assertNotEqual(
+                    replay_rows(self.bootstrap, self.fx, histories, target, model, self.pasts),
+                    clean)
 
 
 class TestView(fixtures.TempCwd):
@@ -253,6 +276,17 @@ class TestRun(fixtures.TempCwd):
         self.assertEqual(report["pooled"]["all"]["n"],
                          sum(r["metrics"]["all"]["n"] for r in report["per_gameweek"]))
         self.assertIn("not evidence", report["note"])
+
+    def test_the_candidate_replays_and_coverage_is_reported(self):
+        report = backtest.run(None, "baseline-prior", [3])
+        # 80 players, every third with a 3000-minute last season.
+        self.assertEqual(report["per_gameweek"][0]["prior_coverage"],
+                         {"player": 26, "positional": 54})
+
+    def test_last_season_reaches_the_candidate(self):
+        with_prior = backtest.run(None, "baseline-prior", [3])["pooled"]["all"]
+        without = backtest.run(None, "baseline-v1", [3])["pooled"]["all"]
+        self.assertNotEqual(with_prior, without)
 
     def test_comparators_are_rebuilt_from_history(self):
         report = backtest.run(None, "baseline-v1", [3])

@@ -126,14 +126,15 @@ def live(snapshot_dir, gw, results):
 
 
 def snapshot(root, name, *, elements=None, teams=None, element_types=None,
-             events=None, fixtures=None, histories=None, player_ids=None,
-             manifest=DERIVE, latest=False):
+             events=None, fixtures=None, histories=None, pasts=None,
+             player_ids=None, manifest=DERIVE, latest=False):
     """Write a snapshot under `root`/data/raw/`name` and return its path.
 
     `player_ids` controls which per-player history files are written, which is
     how a snapshot missing some of them is built; it defaults to every
     element, the complete case. `histories` maps a player id to its history
-    rows, defaulting to an empty history.
+    rows, defaulting to an empty history; `pasts` does the same for
+    history_past, which is left out of the file when not given.
     """
     directory = Path(root) / "data/raw" / name
     (directory / "players").mkdir(parents=True)
@@ -148,9 +149,10 @@ def snapshot(root, name, *, elements=None, teams=None, element_types=None,
         player_ids = [e["id"] for e in elements]
 
     for pid in player_ids:
-        (directory / "players" / f"{pid}.json").write_text(
-            json.dumps({"history": histories.get(pid, [])})
-        )
+        summary = {"history": histories.get(pid, [])}
+        if pasts is not None:
+            summary["history_past"] = pasts.get(pid, [])
+        (directory / "players" / f"{pid}.json").write_text(json.dumps(summary))
 
     (directory / "bootstrap.json").write_text(json.dumps({
         "elements": elements,

@@ -36,6 +36,9 @@ leak-free by construction rather than by a model promising not to look:
   these come from stops the run rather than falling back to today's club.
 - **History** is cut to rounds strictly before N. A player with no round before
   N had not joined the game yet and is left out.
+- **Past seasons** (`history_past`) pass through whole. They are season totals
+  for seasons that ended before this one began, so every row was public at
+  every deadline this season.
 - **Fixtures** before N keep their results, which were public. Fixtures in GW N
   lose scores, stats and finished flags. Later fixtures are dropped.
 - **Events** after N are dropped, and N is marked as the next gameweek.
@@ -55,6 +58,8 @@ import sys
 from pathlib import Path
 
 from fpl import metrics, score
+from fpl.candidates import baseline_prior_rows
+from fpl.features import player_prior, previous_season
 from fpl.predict_baseline import predict_rows as baseline_rows
 from fpl.snapshot import load_live, load_snapshot, usable_rounds
 
@@ -171,16 +176,18 @@ def as_of(bootstrap, fixtures, histories, target_gw):
     return view, view_fixtures, {pid: rows for pid, rows in before.items() if pid in kept}
 
 
-def _baseline(bootstrap, fixtures, histories, target_gw):
+def _baseline(bootstrap, fixtures, histories, target_gw, pasts=None):
     usable, _ = usable_rounds(bootstrap["events"], target_gw)
     return baseline_rows(bootstrap, fixtures, histories, target_gw, usable)
 
 
 # Every model the backtest can replay: name -> f(bootstrap, fixtures,
-# histories, target_gw) returning log-shaped rows. A model added here must be
-# the same function its log entries come from.
+# histories, target_gw, pasts) returning log-shaped rows. A logged model added
+# here must be the same function its log entries come from; a candidate from
+# fpl/candidates.py has no log entries and is never logged.
 MODELS = {
     "baseline-v1": _baseline,
+    "baseline-prior": baseline_prior_rows,
 }
 
 
@@ -205,10 +212,19 @@ def _comparator_values(histories):
     return values
 
 
-def replay(snap, bootstrap, fixtures, histories, model, target_gw):
+def prior_coverage(view, pasts):
+    """How many players in the view have a usable last season, and how many not."""
+    season = previous_season(view["events"])
+    player = sum(1 for e in view["elements"]
+                 if player_prior(pasts.get(e["id"], []), season) is not None)
+    return {"player": player, "positional": len(view["elements"]) - player}
+
+
+def replay(snap, bootstrap, fixtures, histories, pasts, model, target_gw):
     """Predict and score one gameweek. Returns (matched rows, result dict)."""
     view, view_fixtures, view_histories = as_of(bootstrap, fixtures, histories, target_gw)
-    rows = MODELS[model](view, view_fixtures, view_histories, target_gw)
+    view_pasts = {pid: pasts.get(pid, []) for pid in view_histories}
+    rows = MODELS[model](view, view_fixtures, view_histories, target_gw, view_pasts)
     actual = score.actuals(load_live(snap, target_gw))
     matched, missing_actual, missing_prediction = score.join(rows, actual)
     if not matched:
@@ -234,6 +250,7 @@ def replay(snap, bootstrap, fixtures, histories, model, target_gw):
                                     for p in matched]),
         "xi": score.xi_block(matched),
         "comparators": comparators,
+        "prior_coverage": prior_coverage(view, view_pasts),
     }
 
 
@@ -262,14 +279,15 @@ def run(snapshot_id, model, gameweeks=None):
     if not gameweeks:
         raise SystemExit(f"No settled gameweeks with actuals in {snap.name} to replay.")
 
-    histories = {
-        p["id"]: json.loads((players_dir / f"{p['id']}.json").read_text()).get("history", [])
-        for p in bootstrap["elements"]
-    }
+    histories, pasts = {}, {}
+    for p in bootstrap["elements"]:
+        summary = json.loads((players_dir / f"{p['id']}.json").read_text())
+        histories[p["id"]] = summary.get("history", [])
+        pasts[p["id"]] = summary.get("history_past", [])
 
     per_gw, all_matched = [], []
     for gw in gameweeks:
-        matched, result = replay(snap, bootstrap, fixtures, histories, model, gw)
+        matched, result = replay(snap, bootstrap, fixtures, histories, pasts, model, gw)
         per_gw.append(result)
         all_matched.append(matched)
 
@@ -319,6 +337,12 @@ def _print(report):
     print(line)
     print("\ncomparator columns are MAE, rebuilt from history — FPL's own form and "
           "points_per_game are current and would leak.")
+    # Printed for every model, not only those that read it: it is a fact about
+    # the snapshot, and it says how much of a prior-based result is the prior.
+    print("prior:     " + ", ".join(
+        f"GW{r['gameweek']} {r['prior_coverage']['player']} last season / "
+        f"{r['prior_coverage']['positional']} positional"
+        for r in report["per_gameweek"]))
 
 
 def main(snapshot_id, model, first, last, out_dir):
