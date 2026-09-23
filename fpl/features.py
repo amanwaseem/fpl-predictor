@@ -37,6 +37,19 @@ def recent_history(history, target_gw, usable):
     return [v for _, v in ordered[:LOOKBACK]]
 
 
+def recent_rows(history, target_gw, usable):
+    """The raw history rows behind recent_history: same rounds, same rules.
+
+    For a model that needs more than minutes and points from the window —
+    goals, assists, clean sheets — without choosing its rounds differently.
+    """
+    rounds = {h["round"] for h in history
+              if h.get("round") is not None and h["round"] < target_gw
+              and h["round"] in usable}
+    kept = set(sorted(rounds, reverse=True)[:LOOKBACK])
+    return [h for h in history if h.get("round") in kept]
+
+
 def weighted(values):
     """Exponentially decayed mean. Input is most-recent-first."""
     if not values:
