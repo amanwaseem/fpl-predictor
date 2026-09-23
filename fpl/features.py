@@ -106,15 +106,62 @@ def previous_season(events):
     return f"{year - 1}/{str(year)[2:]}"
 
 
-def player_prior(history_past, season):
-    """Points per 90 in `season`, or None if he did not play enough of it."""
+# FPL points for a goal by position, and for an assist. Used to price last
+# season's expected goals and assists in the same units as its points.
+GOAL_POINTS = {"GKP": 6, "DEF": 6, "MID": 5, "FWD": 4}
+ASSIST_POINTS = 3
+
+# How much of the prior comes from last season's expected rather than realised
+# goals and assists: 0 is points as scored, 1 is fully expected. On the
+# backtest over GW2-5 (#30), xG helped at every floor below 2700 and tied at
+# 2700, where a regular's goals have had a season to settle near his xG.
+# Half, rather than none: it is never worse there, and it is the safer bet
+# for a player whose last season ran hot or cold in front of goal.
+XG_WEIGHT = 0.5
+
+
+def expected_points(row, position):
+    """Last season's points with realised goals and assists priced at xG and xA.
+
+    Everything else — appearances, clean sheets, bonus, cards — stays as
+    scored. None if the row or the position lacks what the swap needs, so the
+    caller falls back to realised points rather than to a guess.
+    """
+    goal_points = GOAL_POINTS.get(position)
+    try:
+        xg = float(row["expected_goals"])
+        xa = float(row["expected_assists"])
+        goals, assists = row["goals_scored"], row["assists"]
+    except (KeyError, TypeError, ValueError):
+        return None
+    if goal_points is None:
+        return None
+    realised = goals * goal_points + assists * ASSIST_POINTS
+    expected = xg * goal_points + xa * ASSIST_POINTS
+    return (row.get("total_points") or 0) - realised + expected
+
+
+def player_prior(history_past, season, position=None, xg_weight=None):
+    """Points per 90 in `season`, or None if he did not play enough of it.
+
+    Blends realised points with expected_points by `xg_weight`. Goals and
+    assists are last season's noisiest points, and xG and xA are steadier
+    estimates of the same thing. Without a position or xG fields, realised
+    points alone. `xg_weight` defaults to XG_WEIGHT, read at call time.
+    """
     row = next((r for r in history_past if r.get("season_name") == season), None)
     if row is None:
         return None
     minutes = row.get("minutes") or 0
     if minutes < PLAYER_PRIOR_FLOOR_MINUTES:
         return None
-    return (row.get("total_points") or 0) * 90.0 / minutes
+    if xg_weight is None:
+        xg_weight = XG_WEIGHT
+    points = row.get("total_points") or 0
+    expected = expected_points(row, position) if xg_weight else None
+    if expected is not None:
+        points = (1 - xg_weight) * points + xg_weight * expected
+    return points * 90.0 / minutes
 
 
 def season_minutes(history, target_gw, usable):
