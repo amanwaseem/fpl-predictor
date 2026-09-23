@@ -3,6 +3,7 @@
     python -m fpl.backtest                          # baseline-v1, every settled GW
     python -m fpl.backtest --model baseline-v1 --from 2 --to 5
     python -m fpl.backtest --snapshot 20260922T201540Z
+    python -m fpl.backtest --model baseline-prior --held-out
 
 For each settled gameweek N in one snapshot, cuts the snapshot back to what was
 knowable at GW N's deadline, runs a model on it, and scores the result against
@@ -13,6 +14,15 @@ the snapshot's own `live/<N>.json` with the scoring harness's metrics.
 A backtest is tuned on results that are already known. Only committed,
 pre-deadline log entries count as a track record. This exists to decide *what
 to log*, and every run says so.
+
+## Held out
+
+A table from `run` is tuned and scored on the same weeks, which is how a
+factor can look better while getting worse. `--held-out` re-tunes a model
+over its grid (GRIDS) once per settled gameweek, choosing the setting with the
+lowest pooled MAE on the *other* weeks, and scores the left-out week with it.
+The pooled held-out figures are what tuning on the backtest is actually worth,
+and they are the gate for keeping a factor (SPEC section 6).
 
 ## How the future is kept out
 
@@ -53,6 +63,7 @@ being predicted at zero.
 """
 
 import argparse
+import itertools
 import json
 import math
 import sys
@@ -196,6 +207,27 @@ MODELS = {
 }
 
 
+# Settings the held-out search may tune, per model: name -> values tried.
+# Keyword arguments to the model function. A model without an entry is scored
+# as it stands. Values are listed rather than ranged so a grid reads as the
+# claim it is: these, and only these, were tried.
+GRIDS = {
+    "baseline-prior": {
+        "floor": (900, 1800, 2700),
+        "player_prior_minutes": (450, 900, 1800),
+        "xg_weight": (0.0, 0.5, 1.0),
+    },
+}
+
+
+def settings(model):
+    """Every combination in the model's grid, in a fixed order. [{}] if none."""
+    grid = GRIDS.get(model, {})
+    names = sorted(grid)
+    return [dict(zip(names, values))
+            for values in itertools.product(*(grid[n] for n in names))]
+
+
 def _comparator_values(histories):
     """Pre-deadline naive predictions per player, from history alone."""
     values = {}
@@ -290,8 +322,8 @@ def default_gameweeks(bootstrap, manifest):
     return sorted(gw for gw in settled & live if gw >= 2)
 
 
-def run(snapshot_id, model, gameweeks=None):
-    """Replay `gameweeks` (default: all settled from 2) and pool the results."""
+def _load(snapshot_id, model, gameweeks):
+    """Snapshot, histories and the checked list of gameweeks to replay."""
     if model not in MODELS:
         raise SystemExit(f"Unknown model {model!r}. Known: {', '.join(sorted(MODELS))}.")
 
@@ -313,6 +345,12 @@ def run(snapshot_id, model, gameweeks=None):
         summary = json.loads((players_dir / f"{p['id']}.json").read_text())
         histories[p["id"]] = summary.get("history", [])
         pasts[p["id"]] = summary.get("history_past", [])
+    return snap, bootstrap, fixtures, histories, pasts, gameweeks
+
+
+def run(snapshot_id, model, gameweeks=None):
+    """Replay `gameweeks` (default: all settled from 2) and pool the results."""
+    snap, bootstrap, fixtures, histories, pasts, gameweeks = _load(snapshot_id, model, gameweeks)
 
     per_gw, all_matched = [], []
     for gw in gameweeks:
@@ -344,6 +382,82 @@ def run(snapshot_id, model, gameweeks=None):
         "per_gameweek": per_gw,
         "pooled": pooled,
     }
+
+
+def _pairs(matched):
+    return [(p["predicted_points"], p["actual_points"]) for p in matched]
+
+
+def held_out(snapshot_id, model, gameweeks=None):
+    """Leave-one-gameweek-out: tune on the other weeks, score the one left out.
+
+    Every setting in the model's grid is replayed on every gameweek once, from
+    the same leak-free view `run` uses. Then, for each gameweek, the setting
+    with the lowest pooled MAE on the remaining weeks is chosen — the held-out
+    week's actuals play no part in its own choice — and that week is scored
+    with it. Ties go to the earlier setting in grid order, so a rerun chooses
+    the same.
+    """
+    snap, bootstrap, fixtures, histories, pasts, gameweeks = _load(snapshot_id, model, gameweeks)
+    if len(gameweeks) < 2:
+        raise SystemExit("Held out needs two or more gameweeks: one to score, one to tune on.")
+
+    grid = settings(model)
+    matched = {}  # (setting index, gameweek) -> matched rows
+    for gw in gameweeks:
+        view, view_fixtures, view_histories = as_of(bootstrap, fixtures, histories, gw)
+        view_pasts = {pid: pasts.get(pid, []) for pid in view_histories}
+        actual = score.actuals(load_live(snap, gw))
+        for i, setting in enumerate(grid):
+            rows = MODELS[model](view, view_fixtures, view_histories, gw, view_pasts, **setting)
+            matched[i, gw], _, _ = score.join(rows, actual)
+            if not matched[i, gw]:
+                raise SystemExit(f"GW{gw}: no replayed player joins to actuals.")
+
+    folds = []
+    for gw in gameweeks:
+        train = [g for g in gameweeks if g != gw]
+        best = min(range(len(grid)), key=lambda i: (
+            metrics.pooled_summary([_pairs(matched[i, g]) for g in train])["mae"], i))
+        folds.append({
+            "gameweek": gw,
+            "chosen": grid[best],
+            "tuned_on": train,
+            "metrics": metrics.summary(_pairs(matched[best, gw])),
+        })
+
+    return {
+        "backtest_version": BACKTEST_VERSION,
+        "note": NOT_EVIDENCE,
+        "method": "leave-one-gameweek-out; each week scored by the setting with "
+                  "the lowest pooled MAE on the others",
+        "snapshot_id": snap.name,
+        "model_version": model,
+        "gameweeks": gameweeks,
+        "grid": GRIDS.get(model, {}),
+        "folds": folds,
+        "pooled": metrics.pooled_summary(
+            [_pairs(matched[grid.index(f["chosen"]), f["gameweek"]]) for f in folds]),
+    }
+
+
+def _print_held_out(report):
+    print(f"BACKTEST, HELD OUT — {report['note']}\n")
+    print(f"snapshot:  {report['snapshot_id']}")
+    print(f"model:     {report['model_version']}")
+    grid = report["grid"]
+    print("grid:      " + ("; ".join(f"{k} {', '.join(map(str, v))}" for k, v in sorted(grid.items()))
+                           if grid else "none — scored as it stands"))
+    print(f"method:    {report['method']}\n")
+    print(f"{'GW':<6}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}   chosen on the other weeks")
+    for f in report["folds"]:
+        m = f["metrics"]
+        rho = "-" if m["spearman"] is None else f"{m['spearman']:.3f}"
+        chosen = ", ".join(f"{k}={v}" for k, v in sorted(f["chosen"].items())) or "-"
+        print(f"GW{f['gameweek']:<4}{m['n']:>5}{m['mae']:>7.3f}{m['rmse']:>7.3f}{rho:>7}   {chosen}")
+    p = report["pooled"]
+    rho = "-" if p["spearman"] is None else f"{p['spearman']:.3f}"
+    print(f"{'pooled':<6}{p['n']:>5}{p['mae']:>7.3f}{p['rmse']:>7.3f}{rho:>7}")
 
 
 def _print(report):
@@ -385,7 +499,7 @@ def _print(report):
         for r in report["per_gameweek"]))
 
 
-def main(snapshot_id, model, first, last, out_dir):
+def main(snapshot_id, model, first, last, out_dir, held=False):
     out = Path(out_dir)
     score.refuse_log_output(out)
     gameweeks = None
@@ -394,11 +508,17 @@ def main(snapshot_id, model, first, last, out_dir):
             raise SystemExit("--from and --to go together.")
         gameweeks = list(range(first, last + 1))
 
-    report = run(snapshot_id, model, gameweeks)
-    _print(report)
+    if held:
+        report = held_out(snapshot_id, model, gameweeks)
+        _print_held_out(report)
+        name = f"backtest_heldout_{report['snapshot_id']}_{model}.json"
+    else:
+        report = run(snapshot_id, model, gameweeks)
+        _print(report)
+        name = f"backtest_{report['snapshot_id']}_{model}.json"
 
     out.mkdir(parents=True, exist_ok=True)
-    path = out / f"backtest_{report['snapshot_id']}_{model}.json"
+    path = out / name
     path.write_text(json.dumps(score._round(report), indent=2, sort_keys=True) + "\n")
     print(f"\nwrote {path}")
     return 0
@@ -413,5 +533,8 @@ if __name__ == "__main__":
     ap.add_argument("--to", dest="last", type=int, default=None, metavar="GW")
     ap.add_argument("--out", default="scratch", metavar="DIR",
                     help="output directory (default: scratch/, gitignored)")
+    ap.add_argument("--held-out", action="store_true",
+                    help="tune on all but one gameweek, score that one, for each; "
+                         "the gate for keeping a factor")
     args = ap.parse_args()
-    sys.exit(main(args.snapshot, args.model, args.first, args.last, args.out))
+    sys.exit(main(args.snapshot, args.model, args.first, args.last, args.out, args.held_out))

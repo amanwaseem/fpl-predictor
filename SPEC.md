@@ -285,6 +285,21 @@ predictions. Availability is not known historically, so every player is
 treated as available — absolute numbers are optimistic, comparisons between
 models stay fair.
 
+### Held out is the gate
+
+A table from a plain replay is tuned and scored on the same gameweeks, which is
+how a factor can look better while getting worse. Held out re-tunes a model
+over its declared grid once per settled gameweek, choosing the setting with the
+lowest pooled MAE on the *other* weeks, and scores the week left out with it:
+
+    python -m fpl.backtest --model <model> --held-out
+
+**A factor stays only if it improves held-out results over the model without
+it**, and a model is judged against the baseline on held-out numbers before it
+is logged. In-sample tables may appear alongside, but they are not the gate. A
+setting whose chosen value changes from fold to fold is a setting the data
+cannot pin down, and says so.
+
 ## 7. Optimiser
 
 Given predicted points, select a squad maximising expected return subject to:

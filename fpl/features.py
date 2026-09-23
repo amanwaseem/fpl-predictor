@@ -154,19 +154,20 @@ def expected_points(row, position):
     return (row.get("total_points") or 0) - realised + expected
 
 
-def player_prior(history_past, season, position=None, xg_weight=None):
+def player_prior(history_past, season, position=None, xg_weight=None, floor=None):
     """Points per 90 in `season`, or None if he did not play enough of it.
 
     Blends realised points with expected_points by `xg_weight`. Goals and
     assists are last season's noisiest points, and xG and xA are steadier
     estimates of the same thing. Without a position or xG fields, realised
-    points alone. `xg_weight` defaults to XG_WEIGHT, read at call time.
+    points alone. `xg_weight` and `floor` default to XG_WEIGHT and
+    PLAYER_PRIOR_FLOOR_MINUTES, read at call time.
     """
     row = next((r for r in history_past if r.get("season_name") == season), None)
     if row is None:
         return None
     minutes = row.get("minutes") or 0
-    if minutes < PLAYER_PRIOR_FLOOR_MINUTES:
+    if minutes < (PLAYER_PRIOR_FLOOR_MINUTES if floor is None else floor):
         return None
     if xg_weight is None:
         xg_weight = XG_WEIGHT
