@@ -273,6 +273,11 @@ the track record, and the gate in section 4 — beat the baseline — is judged 
 those alone. Backtest output goes to `scratch/`, never to `scores/` or
 `predictions/`.
 
+An idea can be backtested before any logged model carries it: a *candidate*
+(`fpl/candidates.py`) isolates one change against the baseline and is never
+logged. Once judged, the idea moves into a logged model built from
+`fpl.features`, and the candidate is deleted.
+
 Leak-freedom is structural rather than a promise: models receive a view with
 whitelisted player fields, history cut before N, and N's fixtures stripped of
 results, and a test poisons everything after the cut and demands identical
