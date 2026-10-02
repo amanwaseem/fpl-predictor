@@ -1,0 +1,18 @@
+# Coverage is reported in CI's job summary, not gated on: a threshold invites
+# tests written for the number.
+#
+# `patch = subprocess` measures the processes the tests start too.
+# tools/check_log_immutable.py is only ever exercised that way, and without it
+# reads as untested. Each process writes its own data file, so run
+# `coverage combine` before `coverage report`.
+
+[run]
+branch = True
+source =
+    fpl
+    tools
+patch = subprocess
+parallel = True
+
+[report]
+skip_empty = True
