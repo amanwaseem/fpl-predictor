@@ -309,6 +309,11 @@ CI (`.github/workflows/ci.yml`) runs both checks below on the PR, so neither
 depends on being remembered. Run them locally anyway before pushing — a red check
 found at 11:50 on deadline day costs more than one found now.
 
+The PR needs one green check, `ci`. It passes only when everything else did:
+the two checks below on Linux and macOS, and a lint. An entry PR adds no
+Python, so the lint cannot fail on it — if `ci` is red, the cause is in the
+other jobs, and the job list on the PR names which one.
+
 Before merging:
 
 ```

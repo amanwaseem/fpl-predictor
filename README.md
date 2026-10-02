@@ -108,6 +108,16 @@ python -m unittest discover tests
 No third-party test runner. `python -m unittest discover -s tests -t .` and a bare
 `python -m unittest` from the repository root work too, and all three run the same suite.
 
+CI also lints and measures coverage. Those tools are pinned apart from the runtime, in
+`requirements-dev.txt`, so the environment that produces a log entry stays `requests` alone:
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .                              # lint; ruff.toml says which rules and why
+coverage run -m unittest discover tests   # .coveragerc measures subprocesses too
+coverage combine && coverage report
+```
+
 A snapshot also pulls `event/<gw>/live/` for every settled gameweek — the scoring harness's
 source of actual points — fetched only once a gameweek's `data_checked` is true, because bonus
 points are provisional until then. One request per gameweek rather than per player, so scoring
