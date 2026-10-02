@@ -70,7 +70,7 @@ def spearman(predicted, actual):
         return None
     rp, ra = average_ranks(predicted), average_ranks(actual)
     mp, ma = sum(rp) / len(rp), sum(ra) / len(ra)
-    cov = sum((x - mp) * (y - ma) for x, y in zip(rp, ra))
+    cov = sum((x - mp) * (y - ma) for x, y in zip(rp, ra, strict=True))
     spread = math.sqrt(sum((x - mp) ** 2 for x in rp) * sum((y - ma) ** 2 for y in ra))
     if spread == 0:
         return None

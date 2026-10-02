@@ -16,9 +16,9 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from tests import fixtures
 from fpl import predict_baseline, verify_entry
 from fpl.log import FIELDS
+from tests import fixtures
 
 SNAPSHOT_ID = "20260910T000000Z"
 TARGET_GW = 4

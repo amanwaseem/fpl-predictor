@@ -18,8 +18,8 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-from tests import fixtures
 from fpl import verify_entry
+from tests import fixtures
 
 SNAPSHOT_ID = "20260910T000000Z"
 TARGET_GW = 4

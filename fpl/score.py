@@ -21,10 +21,11 @@ The one input that is not guaranteed to be present is the prediction snapshot
 the naive comparators read, since data/raw/ is not shared. When it is absent
 the comparators already in the score file are carried forward, provided the
 same harness version computed them from the same prediction snapshot. Rerunning
-on a fresh clone must not quietly erase numbers it cannot recompute. That is what makes `scores/` safe to rewrite
-when a metric definition changes. `HARNESS_VERSION` and both snapshot ids are
-stamped into every metrics file so that such a change is visible in the output
-rather than a silent rewrite of the track record.
+on a fresh clone must not quietly erase numbers it cannot recompute. That is
+what makes `scores/` safe to rewrite when a metric definition changes.
+`HARNESS_VERSION` and both snapshot ids are stamped into every metrics file so
+that such a change is visible in the output rather than a silent rewrite of the
+track record.
 
 This program opens entries for reading and never writes under `predictions/`.
 An output directory named `predictions` is refused outright.
