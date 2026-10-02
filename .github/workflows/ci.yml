@@ -1,5 +1,10 @@
-# Runs the test suite and hard rule 1 on every PR and every push to main, so
-# neither depends on someone remembering to run them. See #26.
+# Lints, runs the test suite and checks hard rule 1 on every PR and every push
+# to main, so none of it depends on someone remembering to run it. See #26, #6.
+#
+# Branch protection requires one check, `ci`, which passes only when every
+# other job did. Jobs can be added or renamed here without touching the
+# repository settings — and the matrix's per-OS names never have to be listed
+# there one by one.
 name: CI
 
 on:
@@ -19,18 +24,47 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements.txt
-      - run: pip install -r requirements.txt
-      - run: python -m unittest discover tests
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      # GitHub format annotates the offending lines on the PR diff.
+      - run: ruff check --output-format=github .
+
+  # Every real log entry is produced on macOS, so the suite runs there as well
+  # as on Linux. One Python only: 3.13 is pinned so an entry can be reproduced
+  # from the environment that made it, and a second version would argue
+  # against the pin rather than test it.
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - run: coverage run -m unittest discover tests
+      # Reported, not gated — see .coveragerc.
+      - name: Coverage report
+        run: |
+          coverage combine
+          echo "### Coverage (${{ matrix.os }})" >> "$GITHUB_STEP_SUMMARY"
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
 
   log-immutable:
     runs-on: ubuntu-latest
@@ -38,10 +72,10 @@ jobs:
     steps:
       # Full history: the check reads the committed log at a reference commit,
       # not just the working tree.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
@@ -68,3 +102,21 @@ jobs:
           fi
           echo "Comparing predictions/ against $ref"
           python tools/check_log_immutable.py --ref "$ref"
+
+  # The one required check. `always()` makes it run, and fail, when a job it
+  # needs failed or was cancelled — without it a failed dependency would skip
+  # this job, and a skipped required check counts as passing.
+  ci:
+    if: always()
+    needs: [lint, test, log-immutable]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = "success" ] || { echo "a required job did not succeed"; exit 1; }
+          done

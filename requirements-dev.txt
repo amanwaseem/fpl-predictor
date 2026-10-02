@@ -1,0 +1,15 @@
+# Development tools: the linter and the coverage runner CI uses. Not needed to
+# fetch, predict, verify or score, which is why they are kept out of
+# requirements.txt — the runtime that produces a log entry stays requests and
+# nothing else.
+#
+# Pinned for the same reason as requirements.txt: a linter upgrade that starts
+# flagging new rules should arrive as a deliberate change, not as a red PR
+# nobody touched. Neither has runtime dependencies of its own.
+#
+#   pip install -r requirements-dev.txt
+
+-r requirements.txt
+
+coverage==7.16.2
+ruff==0.16.10

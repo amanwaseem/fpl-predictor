@@ -1,0 +1,12 @@
+# Lint, not format. `ruff format` would rewrite most of the repository for no
+# change in meaning and bury `git blame` under it, so only `ruff check` runs.
+#
+# The rule set is deliberately small: pyflakes and pycodestyle errors, import
+# order, bugbear and pyupgrade. Each finds real mistakes rather than enforcing
+# taste. Line length matches what the code already keeps to.
+
+target-version = "py313"
+line-length = 100
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]
