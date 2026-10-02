@@ -17,11 +17,10 @@ import contextlib
 import csv
 import io
 import os
-import re
 import shutil
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fpl.log import (
@@ -370,7 +369,7 @@ class TestPostDeadlineGuard(TempCwd):
         self.assertTrue(path.exists())
 
     def test_allows_a_write_before_the_deadline(self):
-        ahead = datetime.now(timezone.utc) + timedelta(days=1)
+        ahead = datetime.now(UTC) + timedelta(days=1)
         path = write_entry(rows(), "predictions", 4, "baseline-v1", "snap",
                            ahead.strftime("%Y-%m-%dT%H:%M:%SZ"))
         self.assertTrue(path.exists())

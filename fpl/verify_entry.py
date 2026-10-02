@@ -27,7 +27,7 @@ useful moment for this program is before the commit.
 import argparse
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fpl.features import availability
@@ -57,7 +57,7 @@ ROUNDING = 0.05
 def _timestamp(value, what, faults):
     """Parse a SPEC section 5 timestamp, recording a fault instead of raising."""
     try:
-        return datetime.strptime(value, TIMESTAMP).replace(tzinfo=timezone.utc)
+        return datetime.strptime(value, TIMESTAMP).replace(tzinfo=UTC)
     except (TypeError, ValueError):
         faults.append(
             f"{what} is {value!r}, which is not a SPEC section 5 timestamp "
@@ -381,7 +381,7 @@ def main(path):
     try:
         target_gw, model_version = parse_entry_filename(entry_path)
     except ValueError as e:
-        raise SystemExit(str(e))
+        raise SystemExit(str(e)) from None
 
     rows, faults = read_entry(entry_path)
     if faults:

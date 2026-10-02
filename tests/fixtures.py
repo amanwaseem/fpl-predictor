@@ -16,7 +16,7 @@ import os
 import shutil
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fpl.features import availability
@@ -43,13 +43,13 @@ def future_deadline(hours=24):
     end-to-end test red once it passed, and the failure would read as a bug in
     the predictor rather than as a stale fixture.
     """
-    at = datetime.now(timezone.utc) + timedelta(hours=hours)
+    at = datetime.now(UTC) + timedelta(hours=hours)
     return at.strftime(TIMESTAMP)
 
 
 def past_timestamp(hours=1):
     """A timestamp that far in the past, for entries that must look late."""
-    at = datetime.now(timezone.utc) - timedelta(hours=hours)
+    at = datetime.now(UTC) - timedelta(hours=hours)
     return at.strftime(TIMESTAMP)
 
 

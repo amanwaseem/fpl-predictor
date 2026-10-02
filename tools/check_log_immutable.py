@@ -32,9 +32,7 @@ DEFAULT_REF = "origin/main"
 
 def git(*args, root=None):
     """Run a git command, returning stdout as bytes."""
-    result = subprocess.run(
-        ["git", *args], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
+    result = subprocess.run(["git", *args], cwd=root, capture_output=True)
     if result.returncode != 0:
         raise RuntimeError(result.stderr.decode(errors="replace").strip())
     return result.stdout
@@ -44,7 +42,7 @@ def repo_root():
     try:
         return Path(git("rev-parse", "--show-toplevel").decode().strip())
     except RuntimeError as e:
-        raise SystemExit(f"Not a git repository: {e}")
+        raise SystemExit(f"Not a git repository: {e}") from None
 
 
 def committed_entries(ref, root):
@@ -63,7 +61,7 @@ def check(ref, root):
             "Nothing to compare against, so immutability cannot be verified. "
             "Fetch the reference first, or pass --ref.\n"
             "Failing closed: an unverifiable log is not a verified one."
-        )
+        ) from None
 
     violations = []
     for path in committed_entries(ref, root):

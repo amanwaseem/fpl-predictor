@@ -25,7 +25,7 @@ import argparse
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import requests
@@ -150,7 +150,7 @@ def main(skip_players: bool, resume: bool) -> None:
         stamp = outdir.name
         print(f"resuming -> {outdir}")
     else:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         outdir = Path("data/raw") / stamp
         print(f"snapshot -> {outdir}")
     outdir.mkdir(parents=True, exist_ok=True)
@@ -237,7 +237,7 @@ def main(skip_players: bool, resume: bool) -> None:
         "element_count": len(players),
         "has_players": not skip_players,
         "live_gameweeks": live_gameweeks,
-        "completed_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "completed_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     })
 
     # Stable pointer to the most recent snapshot, so downstream code doesn't

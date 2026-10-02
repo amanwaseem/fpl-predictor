@@ -361,8 +361,10 @@ class TestHeldOut(fixtures.TempCwd):
         backtest.GRIDS["scaled"] = {"scale": (0.0, 0.5, 1.0, 1.5)}
 
     def tearDown(self):
-        backtest.MODELS.clear(); backtest.MODELS.update(self.saved[0])
-        backtest.GRIDS.clear(); backtest.GRIDS.update(self.saved[1])
+        backtest.MODELS.clear()
+        backtest.MODELS.update(self.saved[0])
+        backtest.GRIDS.clear()
+        backtest.GRIDS.update(self.saved[1])
         super().tearDown()
 
     def test_settings_are_every_combination_in_a_fixed_order(self):
@@ -389,9 +391,9 @@ class TestHeldOut(fixtures.TempCwd):
         fixtures.live(self.directory, 3, {p: (0, 90) for p in range(1, CLUBS * PER_CLUB + 1)})
         poisoned = backtest.held_out(None, "scaled")
         gw3 = [f for f in poisoned["folds"] if f["gameweek"] == 3][0]
-        self.assertEqual(gw3["chosen"], [f for f in clean["folds"] if f["gameweek"] == 3][0]["chosen"])
-        self.assertNotEqual(gw3["metrics"], [f for f in clean["folds"]
-                                             if f["gameweek"] == 3][0]["metrics"])
+        clean_gw3 = [f for f in clean["folds"] if f["gameweek"] == 3][0]
+        self.assertEqual(gw3["chosen"], clean_gw3["chosen"])
+        self.assertNotEqual(gw3["metrics"], clean_gw3["metrics"])
         # ...while the weeks that did tune on GW3 now choose differently.
         self.assertNotEqual([f["chosen"] for f in poisoned["folds"] if f["gameweek"] != 3],
                             [f["chosen"] for f in clean["folds"] if f["gameweek"] != 3])

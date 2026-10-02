@@ -11,9 +11,9 @@ Run from the repository root: python -m unittest discover tests
 import json
 import unittest
 
-from tests import fixtures
 from fpl import fetch
 from fpl.snapshot import load_snapshot, resolve_target_gw
+from tests import fixtures
 
 
 class TempCwd(fixtures.TempCwd):

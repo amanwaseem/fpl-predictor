@@ -13,9 +13,9 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
-from tests import fixtures
 from fpl import fetch
 from fpl.snapshot import load_live
+from tests import fixtures
 
 
 def live_payload(gw, points=6):

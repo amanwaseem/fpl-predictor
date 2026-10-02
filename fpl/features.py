@@ -97,9 +97,10 @@ PLAYER_PRIOR_FLOOR_MINUTES = 2700
 # Pseudo-minutes last season's rate is worth at the start of this one, and the
 # season minutes by which that has halved (19 full matches — midseason). 1800
 # was chosen held out: tuned on three of GW2-5 and scored on the fourth, every
-# fold picked it, alone and alongside fpl.teams. The decay has to run on the whole season rather than the lookback
-# window: the window never holds more than LOOKBACK rounds, so against it a
-# fixed prior would weigh as much in GW30 as in GW3.
+# fold picked it, alone and alongside fpl.teams. The decay has to run on the
+# whole season rather than the lookback window: the window never holds more
+# than LOOKBACK rounds, so against it a fixed prior would weigh as much in GW30
+# as in GW3.
 PLAYER_PRIOR_MINUTES = 1800.0
 PLAYER_PRIOR_HALF_LIFE_MINUTES = 1710.0
 
@@ -291,7 +292,7 @@ def split_rates(observed, minutes, priors, prior_minutes):
     season's — rather than whatever the other parts leave over.
     """
     total, attack, clean_sheet = (shrunk_pp90(o, minutes, p, prior_minutes)
-                                  for o, p in zip(observed, priors))
+                                  for o, p in zip(observed, priors, strict=True))
     return total, attack, clean_sheet, total - attack - clean_sheet
 
 

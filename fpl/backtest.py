@@ -69,8 +69,7 @@ import math
 import sys
 from pathlib import Path
 
-from fpl import metrics, score
-from fpl import predict_fixture
+from fpl import metrics, predict_fixture, score
 from fpl.candidates import baseline_fixture_rows, baseline_prior_rows
 from fpl.features import player_prior, previous_season
 from fpl.predict_baseline import predict_rows as baseline_rows
@@ -251,7 +250,7 @@ def settings(model):
     """Every combination in the model's grid, in a fixed order. [{}] if none."""
     grid = GRIDS.get(model, {})
     names = sorted(grid)
-    return [dict(zip(names, values))
+    return [dict(zip(names, values, strict=True))
             for values in itertools.product(*(grid[n] for n in names))]
 
 
@@ -477,8 +476,8 @@ def _print_held_out(report):
     print(f"snapshot:  {report['snapshot_id']}")
     print(f"model:     {report['model_version']}")
     grid = report["grid"]
-    print("grid:      " + ("; ".join(f"{k} {', '.join(map(str, v))}" for k, v in sorted(grid.items()))
-                           if grid else "none — scored as it stands"))
+    listed = "; ".join(f"{k} {', '.join(map(str, v))}" for k, v in sorted(grid.items()))
+    print("grid:      " + (listed if grid else "none — scored as it stands"))
     print(f"method:    {report['method']}\n")
     def club(value):
         return "-" if value is None else f"{value:.1f}"

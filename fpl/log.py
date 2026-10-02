@@ -17,7 +17,7 @@ import math
 import os
 import re
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # The prediction log schema, in SPEC section 5 order. Declared rather than
@@ -138,7 +138,7 @@ def read_entry(path):
                 f"row {index}: has {len(values)} fields, expected {len(FIELDS)}"
             )
             continue
-        row = dict(zip(FIELDS, values))
+        row = dict(zip(FIELDS, values, strict=True))
         parsed = True
         for field in NUMERIC:
             text = row[field]
@@ -270,12 +270,12 @@ def validate_rows(rows, target_gw):
 
 def _parse_timestamp(value, what):
     try:
-        return datetime.strptime(value, TIMESTAMP).replace(tzinfo=timezone.utc)
+        return datetime.strptime(value, TIMESTAMP).replace(tzinfo=UTC)
     except (TypeError, ValueError):
         raise SystemExit(
             f"{what} is {value!r}, which is not a SPEC section 5 timestamp.\n"
             "Expected YYYY-MM-DDTHH:MM:SSZ."
-        )
+        ) from None
 
 
 def _is_the_log(out_dir):
@@ -322,7 +322,7 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
         )
 
     deadline_at = _parse_timestamp(deadline, "deadline")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     generated_at = now.strftime(TIMESTAMP)
 
     # SPEC section 5 rule 5. A prediction made at or after its own deadline
@@ -375,7 +375,7 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
             f"{e}\nRefusing to write a malformed entry. Nothing was written.\n"
             "This is caught here, before the deadline, because after it the "
             "file would be immutable under hard rule 1."
-        )
+        ) from None
 
     outdir = Path(out_dir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -410,7 +410,7 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
         try:
             os.link(tmp, outpath)
         except FileExistsError:
-            raise SystemExit(taken)
+            raise SystemExit(taken) from None
     finally:
         # Runs on both paths: after a successful link the temp name is a second
         # name for the same file, and on failure it is a partial entry that must
