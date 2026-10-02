@@ -57,7 +57,8 @@ rounds and prints which it used — read those lines before trusting a run.
 ## Conventions
 
 - Python 3.13, standard library plus `requests`. Add dependencies when they earn
-  their place and pin them in `requirements.txt`.
+  their place and pin them in `requirements.txt` — or in `requirements-dev.txt`
+  if they are tooling (lint, coverage) rather than something a prediction runs.
 - All timestamps UTC.
 - Gameweek filenames zero-padded: `gw04`, not `gw4`.
 - `scratch/` is gitignored space for exploratory runs. Never put a real
