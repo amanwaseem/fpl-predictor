@@ -5,7 +5,8 @@ Context for agentic work in this repository. Read `SPEC.md` for full requirement
 This file holds the things that stay true all season. It deliberately carries no
 module inventory and no dated timeline — those go stale weekly. For what exists,
 read the code and `SPEC.md`; for what is planned, read the open issues; for how
-to produce a log entry, follow `RUNBOOK.md`.
+to produce a log entry, follow `RUNBOOK.md`; for why something is the way it
+is, read `docs/adr/` before changing it.
 
 ## What this is
 
