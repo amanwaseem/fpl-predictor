@@ -1,0 +1,55 @@
+# The package and its tooling config. What this file does not hold is the lock:
+# exact versions, transitive ones included, live in requirements.txt, because
+# pyproject has no lockfile and every log entry's reproducibility claim needs
+# one. Install with `pip install -r requirements.txt`, which installs those
+# pins and then this package, editable — see the comment there for why
+# editable is the only supported install.
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fpl-predictor"
+version = "0.1.0"
+description = "FPL points predictor with an append-only public prediction log"
+readme = "README.md"
+license = "MIT"
+# One Python, as in CI: 3.13 is pinned so an entry can be reproduced from the
+# environment that made it.
+requires-python = "==3.13.*"
+dependencies = ["requests>=2.34,<3"]
+
+[tool.setuptools]
+# Stated rather than discovered, so tests/, tools/, data/ and scratch/ can
+# never end up inside the installed package.
+packages = ["fpl"]
+
+# Lint, not format. `ruff format` would rewrite most of the repository for no
+# change in meaning and bury `git blame` under it, so only `ruff check` runs.
+#
+# The rule set is deliberately small: pyflakes and pycodestyle errors, import
+# order, bugbear and pyupgrade. Each finds real mistakes rather than enforcing
+# taste. Line length matches what the code already keeps to.
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+# Coverage is reported in CI's job summary, not gated on: a threshold invites
+# tests written for the number.
+#
+# `patch = subprocess` measures the processes the tests start too.
+# tools/check_log_immutable.py is only ever exercised that way, and without it
+# reads as untested. Each process writes its own data file, so run
+# `coverage combine` before `coverage report`.
+[tool.coverage.run]
+branch = true
+source = ["fpl", "tools"]
+patch = ["subprocess"]
+parallel = true
+
+[tool.coverage.report]
+skip_empty = true
