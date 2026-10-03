@@ -1,6 +1,6 @@
 """Check a prediction log entry against the snapshot that produced it.
 
-    python -m fpl.verify_entry predictions/gw04_baseline-v1.csv
+    fpl-verify predictions/gw04_baseline-v1.csv
 
 The original plan for this was a human reading the top of the table before
 committing: are the blanks and doubles right, are flagged players zeroed, is

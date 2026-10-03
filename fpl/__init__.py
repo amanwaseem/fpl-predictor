@@ -1,10 +1,13 @@
 """FPL points prediction.
 
-Entry points are modules in this package, run from the repository root:
+Each command is a module in this package with a console script, declared in
+pyproject.toml and installed by `pip install -r requirements.txt`:
 
-    python -m fpl.fetch              # snapshot the FPL API to data/raw/
-    python -m fpl.predict_baseline   # write a prediction log entry
+    fpl-fetch              # snapshot the FPL API to data/raw/
+    fpl-predict-baseline   # write a prediction log entry
+    fpl-verify             # check an entry against its snapshot
 
-Both resolve data/raw and predictions/ relative to the working directory, so
-they must be run from the repository root.
+`fpl-<name>` and `python -m fpl.<module>` run the same function. Both resolve
+data/raw and predictions/ relative to the working directory, so both refuse
+to run anywhere but the repository root (fpl/paths.py).
 """

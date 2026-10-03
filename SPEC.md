@@ -206,7 +206,7 @@ the parsed rows. `fpl/log.py` cannot do this: it validates rows in memory at
 write time with no snapshot open beside them. Run it before opening the PR:
 
 ```
-python -m fpl.verify_entry predictions/gw04_baseline-v1.csv
+fpl-verify predictions/gw04_baseline-v1.csv
 ```
 
 ## 6. Scoring
@@ -269,7 +269,7 @@ silent rewrite of the track record.
 
 The harness reads `predictions/` and writes nothing to it, ever.
 
-Implemented in `fpl/score.py` (`python -m fpl.score`), with the metrics in
+Implemented in `fpl/score.py` (`fpl-score`), with the metrics in
 `fpl/metrics.py` and the legal XI in `fpl/xi.py`. A settled gameweek with no
 entry for a model — after that model's first entry — is listed as *missed* in
 `scores/cumulative.json`, so a gap in the log stays visible in the record
@@ -277,7 +277,7 @@ rather than reading as an unbroken run.
 
 ### Backtesting is not scoring
 
-`fpl/backtest.py` (`python -m fpl.backtest`) replays settled gameweeks from one
+`fpl/backtest.py` (`fpl-backtest`) replays settled gameweeks from one
 snapshot: for each GW N it cuts the snapshot back to what was knowable at N's
 deadline, runs a model, and scores it with the same metrics. It is how a model
 change is judged *before* it is logged, instead of a week after.
@@ -307,7 +307,7 @@ how a factor can look better while getting worse. Held out re-tunes a model
 over its declared grid once per settled gameweek, choosing the setting with the
 lowest pooled MAE on the *other* weeks, and scores the week left out with it:
 
-    python -m fpl.backtest --model <model> --held-out
+    fpl-backtest --model <model> --held-out
 
 **A factor stays only if it improves held-out results over the model without
 it**, and a model is judged against the baseline on held-out numbers before it

@@ -1,7 +1,7 @@
 """Turn a committed prediction log entry into something a person can read.
 
-    python -m fpl.summarise predictions/gw04_baseline-v1.csv
-    python -m fpl.summarise predictions/gw04_baseline-v1.csv --out reports/
+    fpl-summarise predictions/gw04_baseline-v1.csv
+    fpl-summarise predictions/gw04_baseline-v1.csv --out reports/
 
 The log entry is the evidence and has to carry every player and every
 intermediate output, which makes it 654 rows of fifteen columns — correct, and

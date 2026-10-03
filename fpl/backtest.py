@@ -1,9 +1,9 @@
 """Replay settled gameweeks offline, without leaking the future.
 
-    python -m fpl.backtest                          # baseline-v1, every settled GW
-    python -m fpl.backtest --model baseline-v1 --from 2 --to 5
-    python -m fpl.backtest --snapshot 20260922T201540Z
-    python -m fpl.backtest --model baseline-prior --held-out
+    fpl-backtest                          # baseline-v1, every settled GW
+    fpl-backtest --model baseline-v1 --from 2 --to 5
+    fpl-backtest --snapshot 20260922T201540Z
+    fpl-backtest --model baseline-prior --held-out
 
 For each settled gameweek N in one snapshot, cuts the snapshot back to what was
 knowable at GW N's deadline, runs a model on it, and scores the result against

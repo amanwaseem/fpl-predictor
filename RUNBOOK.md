@@ -19,18 +19,23 @@ that shape every step below:
 ## 0. Before you start
 
 You need the repository clean, on a branch off `main`, and a working
-`python -m fpl.fetch`. Everything runs from the repository root — paths resolve
-against the working directory, not against the module.
+`fpl-fetch`. Everything runs from the repository root — paths resolve against
+the working directory, and every `fpl-*` command refuses to run anywhere else
+rather than reading or writing the wrong place.
 
-Activate the virtualenv first. Every command below says `python`, which on a
-stock macOS shell does not exist outside `.venv` — and a missing interpreter
-piped into `tail` exits 0, so a fetch can fail without looking like it did:
+Activate the virtualenv first. The `fpl-*` commands and `python` live in
+`.venv/bin` and do not exist outside it — and a missing command piped into
+`tail` exits 0, so a fetch can fail without looking like it did:
 
 ```
 source .venv/bin/activate
 ```
 
-(Or substitute `.venv/bin/python` for `python` throughout.)
+(Or prefix every command with `.venv/bin/`.) Each `fpl-<name>` is the same
+function as `python -m fpl.<module>`, so either spelling works.
+
+After pulling a change to `pyproject.toml` — the commands are declared there —
+re-run `pip install -r requirements.txt` once, or a new command will not exist.
 
 Work out three things and write them down:
 
@@ -46,8 +51,8 @@ Each model has its own command, and every step below runs once per model:
 
 | Model | Command |
 |---|---|
-| `baseline-v1` | `python -m fpl.predict_baseline` |
-| `form-fixture-v1` | `python -m fpl.predict_fixture` |
+| `baseline-v1` | `fpl-predict-baseline` |
+| `form-fixture-v1` | `fpl-predict-fixture` |
 
 Run both from **the same snapshot**. Head-to-head scoring compares them
 player by player, and two snapshots would make that a comparison of snapshots.
@@ -57,7 +62,7 @@ gitignored — on a clean checkout there is no snapshot to read it from. Get it
 with a cheap bootstrap-only fetch, which takes seconds:
 
 ```
-python -m fpl.fetch --skip-players
+fpl-fetch --skip-players
 python3 -c "import json,sys
 events = json.load(open(sys.argv[1]))['events']
 for e in [e for e in events if not e['finished']][:3]:
@@ -132,7 +137,7 @@ decided in advance precisely so it is not being invented at this moment.
 ## 2. Fetch
 
 ```
-python -m fpl.fetch
+fpl-fetch
 ```
 
 Writes `data/raw/<timestamp>/` and, on success, moves the `LATEST` pointer.
@@ -145,7 +150,7 @@ Read the run's own output:
   part-way leaves a manifest-less directory, which is deliberately not picked
   up as a snapshot.
 
-If a full fetch died **during the player loop**, `python -m fpl.fetch --resume`
+If a full fetch died **during the player loop**, `fpl-fetch --resume`
 continues it rather than restarting the six minutes; files already on disk are
 skipped.
 
@@ -174,8 +179,8 @@ be predicted from and leaves `LATEST` unchanged.
 ## 3. Exploratory run first
 
 ```
-python -m fpl.predict_baseline --gw N --out scratch/
-python -m fpl.predict_fixture --gw N --out scratch/
+fpl-predict-baseline --gw N --out scratch/
+fpl-predict-fixture --gw N --out scratch/
 ```
 
 `scratch/` is gitignored. **Never point an exploratory run at `predictions/`,
@@ -221,8 +226,8 @@ once GW N-1 has settled, not a retry.
 ## 4. Write the entry
 
 ```
-python -m fpl.predict_baseline --gw N
-python -m fpl.predict_fixture --gw N
+fpl-predict-baseline --gw N
+fpl-predict-fixture --gw N
 ```
 
 Writes `predictions/gwNN_<model-version>.csv` — the default `--out` is
@@ -248,7 +253,7 @@ it exists at the reference commit.
 ## 5. The verifier gate
 
 ```
-python -m fpl.verify_entry predictions/gwNN_<model-version>.csv
+fpl-verify predictions/gwNN_<model-version>.csv
 ```
 
 **Non-zero exit means do not commit.** It counts every fault it found and names
@@ -283,7 +288,7 @@ you have deleted cannot be re-fetched — the API serves only the present.
 ## 6. The digest
 
 ```
-python -m fpl.summarise predictions/gwNN_<model-version>.csv --out reports/
+fpl-summarise predictions/gwNN_<model-version>.csv --out reports/
 ```
 
 Writes `reports/gwNN_<model-version>.md`. Derived output: it reads the entry
@@ -395,8 +400,8 @@ Not deadline work. Once GW N has settled — `finished` and `data_checked` both
 true, usually the Monday or Tuesday after — take a snapshot and score:
 
 ```
-python -m fpl.fetch
-python -m fpl.score
+fpl-fetch
+fpl-score
 ```
 
 The harness rescores every entry in `predictions/` against that snapshot and
@@ -412,15 +417,15 @@ yet; `missed:` means a settled gameweek has no entry and never will.
 ## Quick reference
 
 ```
-source .venv/bin/activate                                    # `python` does not exist outside it
-python -m fpl.fetch                                          # ~6 min, after press conferences
-python -m fpl.predict_baseline --gw N --out scratch/         # exploratory — read included:/excluded:
-python -m fpl.predict_baseline --gw N                        # writes predictions/gwNN_<model>.csv
-python -m fpl.predict_fixture --gw N --out scratch/          # form-fixture-v1, from GW6: same two steps
-python -m fpl.predict_fixture --gw N
-python -m fpl.verify_entry predictions/gwNN_<model>.csv      # gate: non-zero means do not commit
-python -m fpl.summarise predictions/gwNN_<model>.csv --out reports/
-python tools/check_log_immutable.py --ref origin/main        # rule 1, mechanically
+source .venv/bin/activate                                  # the commands do not exist outside it
+fpl-fetch                                                  # ~6 min, after press conferences
+fpl-predict-baseline --gw N --out scratch/                 # exploratory — read included:/excluded:
+fpl-predict-baseline --gw N                                # writes predictions/gwNN_<model>.csv
+fpl-predict-fixture --gw N --out scratch/                  # form-fixture-v1, from GW6: same two steps
+fpl-predict-fixture --gw N
+fpl-verify predictions/gwNN_<model>.csv                    # gate: non-zero means do not commit
+fpl-summarise predictions/gwNN_<model>.csv --out reports/
+python tools/check_log_immutable.py --ref origin/main      # rule 1, mechanically
 python -m unittest discover tests
-python -m fpl.score                                          # after GW N settles, not before
+fpl-score                                                  # after GW N settles, not before
 ```

@@ -41,7 +41,8 @@ Defaults, not rules. Use judgement.
   `predict_baseline` — the baseline is meant to be beaten and deleted.
 - `RUNBOOK.md` is the procedure for an entry. If it is wrong, fix it alongside
   the entry it misled you on.
-- Run things with `.venv/bin/python` (or an activated `.venv`).
+- Run things with an activated `.venv`, from the repository root: the `fpl-*`
+  commands (or `python -m fpl.<module>`) refuse to run anywhere else.
 
 ## Data source
 
