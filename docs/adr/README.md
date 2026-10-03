@@ -12,3 +12,7 @@ answer.
 | [0003](0003-append-only-prediction-log.md) | The prediction log is append-only, and checked before it is written | Accepted |
 | [0004](0004-a-missed-deadline-stays-missed.md) | A missed deadline stays missed | Accepted |
 | [0005](0005-one-entry-per-gameweek-per-model.md) | One entry per gameweek per model, and a model is fixed from its first entry | Accepted |
+| [0006](0006-only-the-log-is-evidence.md) | Only the log is evidence; held-out backtests decide what gets logged | Accepted |
+| [0007](0007-the-baseline-is-the-ship-gate.md) | The baseline is the ship gate, and must itself beat naive predictors | Accepted |
+| [0008](0008-predict-components-not-total-points.md) | Predict components and sum them; the interface waits for real components | Accepted |
+| [0009](0009-model-fixture-difficulty-explicitly.md) | Model fixture difficulty explicitly, with our own xG ratings | Accepted |
