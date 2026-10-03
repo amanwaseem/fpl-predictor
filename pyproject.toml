@@ -20,6 +20,17 @@ license = "MIT"
 requires-python = "==3.13.*"
 dependencies = ["requests>=2.34,<3"]
 
+# One command per module, each the module's cli(). `python -m fpl.<module>`
+# runs exactly the same function, so the two spellings cannot drift apart.
+[project.scripts]
+fpl-fetch = "fpl.fetch:cli"
+fpl-predict-baseline = "fpl.predict_baseline:cli"
+fpl-predict-fixture = "fpl.predict_fixture:cli"
+fpl-verify = "fpl.verify_entry:cli"
+fpl-summarise = "fpl.summarise:cli"
+fpl-score = "fpl.score:cli"
+fpl-backtest = "fpl.backtest:cli"
+
 [tool.setuptools]
 # Stated rather than discovered, so tests/, tools/, data/ and scratch/ can
 # never end up inside the installed package.

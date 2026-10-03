@@ -560,7 +560,8 @@ def main(snapshot_id, model, first, last, out_dir, held=False):
     return 0
 
 
-if __name__ == "__main__":
+def cli(argv=None):
+    """`fpl-backtest`, or `python -m fpl.backtest`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--snapshot", default=None, metavar="SNAPSHOT_ID",
                     help="snapshot to replay (default: LATEST)")
@@ -572,5 +573,9 @@ if __name__ == "__main__":
     ap.add_argument("--held-out", action="store_true",
                     help="tune on all but one gameweek, score that one, for each; "
                          "the gate for keeping a factor")
-    args = ap.parse_args()
-    sys.exit(main(args.snapshot, args.model, args.first, args.last, args.out, args.held_out))
+    args = ap.parse_args(argv)
+    return main(args.snapshot, args.model, args.first, args.last, args.out, args.held_out)
+
+
+if __name__ == "__main__":
+    sys.exit(cli())
