@@ -20,6 +20,7 @@ later, which is exactly when someone auditing the track record wants it.
 
 import argparse
 import csv
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -190,12 +191,17 @@ def main(entry, out_dir=None):
     return 0
 
 
-if __name__ == "__main__":
+def cli(argv=None):
+    """`fpl-summarise`, or `python -m fpl.summarise`."""
     ap = argparse.ArgumentParser(
         description="Write the readable digest of a prediction log entry."
     )
     ap.add_argument("entry", help="path to a predictions/gw<NN>_<model>.csv")
     ap.add_argument("--out", default=None, metavar="DIR",
                     help="write <entry>.md here instead of printing")
-    args = ap.parse_args()
-    raise SystemExit(main(args.entry, args.out))
+    args = ap.parse_args(argv)
+    return main(args.entry, args.out)
+
+
+if __name__ == "__main__":
+    sys.exit(cli())

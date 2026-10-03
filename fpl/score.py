@@ -507,11 +507,16 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
     return 0
 
 
-if __name__ == "__main__":
+def cli(argv=None):
+    """`fpl-score`, or `python -m fpl.score`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--actuals", default=None, metavar="SNAPSHOT_ID",
                     help="snapshot holding the actual results (default: LATEST)")
     ap.add_argument("--out", default="scores", metavar="DIR",
                     help="output directory (default: scores/)")
-    args = ap.parse_args()
-    sys.exit(main(args.actuals, args.out))
+    args = ap.parse_args(argv)
+    return main(args.actuals, args.out)
+
+
+if __name__ == "__main__":
+    sys.exit(cli())

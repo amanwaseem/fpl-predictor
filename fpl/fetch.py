@@ -24,6 +24,7 @@ directory, not this file.
 import argparse
 import json
 import os
+import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -260,10 +261,15 @@ def main(skip_players: bool, resume: bool) -> None:
         print(f"done: {outdir}")
 
 
-if __name__ == "__main__":
+def cli(argv=None):
+    """`fpl-fetch`, or `python -m fpl.fetch`."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-players", action="store_true", help="skip slow per-player fetch")
     ap.add_argument("--resume", action="store_true",
                     help="continue the most recent snapshot that has no manifest")
-    args = ap.parse_args()
-    main(args.skip_players, args.resume)
+    args = ap.parse_args(argv)
+    return main(args.skip_players, args.resume)
+
+
+if __name__ == "__main__":
+    sys.exit(cli())

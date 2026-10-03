@@ -30,6 +30,7 @@ Run from the repository root.
 
 import argparse
 import json
+import sys
 
 from fpl.features import (
     CLEAN_SHEET_POINTS,
@@ -237,7 +238,8 @@ def main(requested_gw, out_dir):
               f"{r['predicted_points']:>6}{r['expected_minutes']:>7}{r['points_per_90']:>7}")
 
 
-if __name__ == "__main__":
+def cli(argv=None):
+    """`fpl-predict-fixture`, or `python -m fpl.predict_fixture`."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--gw", type=int, default=None, help="target gameweek (default: next)")
     ap.add_argument(
@@ -247,5 +249,9 @@ if __name__ == "__main__":
         help="output directory (default: predictions/). Use a scratch directory "
              "for exploratory runs — predictions/ is the append-only log.",
     )
-    args = ap.parse_args()
-    main(args.gw, args.out)
+    args = ap.parse_args(argv)
+    return main(args.gw, args.out)
+
+
+if __name__ == "__main__":
+    sys.exit(cli())

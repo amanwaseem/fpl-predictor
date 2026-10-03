@@ -426,9 +426,14 @@ def main(path):
     return 0
 
 
-if __name__ == "__main__":
+def cli(argv=None):
+    """`fpl-verify`, or `python -m fpl.verify_entry`."""
     ap = argparse.ArgumentParser(
         description="Verify a prediction log entry against its own snapshot."
     )
     ap.add_argument("entry", help="path to a predictions/gw<NN>_<model>.csv")
-    sys.exit(main(ap.parse_args().entry))
+    return main(ap.parse_args(argv).entry)
+
+
+if __name__ == "__main__":
+    sys.exit(cli())
