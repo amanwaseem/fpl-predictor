@@ -118,8 +118,8 @@ CI also lints and measures coverage. Those tools are pinned apart from the runti
 
 ```bash
 pip install -r requirements-dev.txt
-ruff check .                              # lint; ruff.toml says which rules and why
-coverage run -m unittest discover tests   # .coveragerc measures subprocesses too
+ruff check .                              # lint; [tool.ruff] in pyproject.toml says which rules and why
+coverage run -m unittest discover tests   # [tool.coverage] measures subprocesses too
 coverage combine && coverage report
 ```
 
