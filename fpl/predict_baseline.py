@@ -25,6 +25,7 @@ import sys
 
 from fpl.features import availability, recent_history, weighted
 from fpl.log import write_entry
+from fpl.paths import require_project_root
 from fpl.snapshot import (
     fixture_counts,
     load_snapshot,
@@ -209,6 +210,7 @@ def cli(argv=None):
              "for exploratory runs — predictions/ is the append-only log.",
     )
     args = ap.parse_args(argv)
+    require_project_root()
     return main(args.gw, args.out)
 
 

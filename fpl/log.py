@@ -286,11 +286,11 @@ def _is_the_log(out_dir):
     guard is fatal here and advisory everywhere else.
 
     Matched on the directory's own name rather than on its path relative to the
-    process working directory. This module has no reliable notion of the
-    repository root — #5 has yet to settle how paths are anchored — and
-    resolving "predictions" against the cwd made a deadline-critical guard fail
-    open for the very same directory reached from anywhere else, degrading a
-    refusal into a warning that scrolls past above twenty lines of table.
+    process working directory. The commands now refuse to run anywhere but the
+    repository root (fpl/paths.py), but write_entry is also a library function,
+    and resolving "predictions" against the cwd made a deadline-critical guard
+    fail open for the very same directory reached from anywhere else, degrading
+    a refusal into a warning that scrolls past above twenty lines of table.
 
     Fails closed by design: scratch space that happens to be named predictions
     gets the strict treatment, which costs a rename. The other direction costs

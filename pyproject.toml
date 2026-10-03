@@ -10,6 +10,8 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
+# fpl/paths.py recognises the repository root by this name, and
+# tests/test_paths.py fails if the two drift apart.
 name = "fpl-predictor"
 version = "0.1.0"
 description = "FPL points predictor with an append-only public prediction log"

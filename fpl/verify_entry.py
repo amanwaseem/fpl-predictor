@@ -39,6 +39,7 @@ from fpl.log import (
     read_entry,
     validate_rows,
 )
+from fpl.paths import require_project_root
 from fpl.snapshot import fixture_counts, load_snapshot
 
 # The Premier League is twenty clubs. An entry representing fewer has lost a
@@ -432,7 +433,9 @@ def cli(argv=None):
         description="Verify a prediction log entry against its own snapshot."
     )
     ap.add_argument("entry", help="path to a predictions/gw<NN>_<model>.csv")
-    return main(ap.parse_args(argv).entry)
+    args = ap.parse_args(argv)
+    require_project_root()
+    return main(args.entry)
 
 
 if __name__ == "__main__":
