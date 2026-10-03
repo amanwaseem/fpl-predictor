@@ -31,6 +31,8 @@ from pathlib import Path
 
 import requests
 
+from fpl.paths import require_project_root
+
 BASE = "https://fantasy.premierleague.com/api"
 DELAY = 0.5  # be polite; this is an undocumented public API
 TIMEOUT = 20
@@ -268,6 +270,7 @@ def cli(argv=None):
     ap.add_argument("--resume", action="store_true",
                     help="continue the most recent snapshot that has no manifest")
     args = ap.parse_args(argv)
+    require_project_root()
     return main(args.skip_players, args.resume)
 
 

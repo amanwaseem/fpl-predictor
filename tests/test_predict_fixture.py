@@ -183,7 +183,10 @@ class TestImportBoundary(unittest.TestCase):
         tree = ast.parse(Path(predict_fixture.__file__).read_text())
         imported = {node.module for node in ast.walk(tree)
                     if isinstance(node, ast.ImportFrom) and node.module}
-        self.assertLessEqual(imported, {"fpl.features", "fpl.log", "fpl.snapshot", "fpl.teams"})
+        # fpl.paths is the shared repository-root check every command makes.
+        allowed = {"fpl.features", "fpl.log", "fpl.paths", "fpl.snapshot", "fpl.teams"}
+        self.assertLessEqual(imported, allowed)
+        self.assertNotIn("fpl.predict_baseline", imported)
 
 
 class TestEndToEnd(fixtures.TempCwd):

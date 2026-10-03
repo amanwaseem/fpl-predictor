@@ -46,6 +46,7 @@ from pathlib import Path
 
 from fpl import metrics
 from fpl.log import LOG_DIR_NAME, parse_entry_filename, read_entry
+from fpl.paths import require_project_root
 from fpl.snapshot import SNAPSHOT_ID, load_live, load_snapshot
 from fpl.xi import best_xi
 
@@ -515,6 +516,7 @@ def cli(argv=None):
     ap.add_argument("--out", default="scores", metavar="DIR",
                     help="output directory (default: scores/)")
     args = ap.parse_args(argv)
+    require_project_root()
     return main(args.actuals, args.out)
 
 

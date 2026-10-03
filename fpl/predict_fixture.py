@@ -51,6 +51,7 @@ from fpl.features import (
     split_rates,
 )
 from fpl.log import write_entry
+from fpl.paths import require_project_root
 from fpl.snapshot import fixture_counts, load_snapshot, resolve_target_gw, usable_rounds
 from fpl.teams import DifficultyRatings, Ratings, clean_sheet_probability, team_matches
 
@@ -250,6 +251,7 @@ def cli(argv=None):
              "for exploratory runs — predictions/ is the append-only log.",
     )
     args = ap.parse_args(argv)
+    require_project_root()
     return main(args.gw, args.out)
 
 

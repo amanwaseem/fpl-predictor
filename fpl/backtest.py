@@ -72,6 +72,7 @@ from pathlib import Path
 from fpl import metrics, predict_fixture, score
 from fpl.candidates import baseline_fixture_rows, baseline_prior_rows
 from fpl.features import player_prior, previous_season
+from fpl.paths import require_project_root
 from fpl.predict_baseline import predict_rows as baseline_rows
 from fpl.snapshot import load_live, load_snapshot, usable_rounds
 
@@ -574,6 +575,7 @@ def cli(argv=None):
                     help="tune on all but one gameweek, score that one, for each; "
                          "the gate for keeping a factor")
     args = ap.parse_args(argv)
+    require_project_root()
     return main(args.snapshot, args.model, args.first, args.last, args.out, args.held_out)
 
 

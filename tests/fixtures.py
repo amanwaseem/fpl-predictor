@@ -21,6 +21,7 @@ from pathlib import Path
 
 from fpl.features import availability
 from fpl.log import FIELDS, TIMESTAMP
+from fpl.paths import PROJECT_NAME
 from fpl.snapshot import fixture_counts
 
 # Distinguishes "derive a sensible default" from an explicit None, which for
@@ -286,6 +287,8 @@ class TempCwd(unittest.TestCase):
 
     The predictor and the verifier both resolve paths against the working
     directory, so the working directory is what the tests have to control.
+    It carries a pyproject.toml naming the project, because the commands
+    refuse to run anywhere that is not the repository root (fpl/paths.py).
     """
 
     def setUp(self):
@@ -293,6 +296,7 @@ class TempCwd(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         os.chdir(self.tmp)
         (self.tmp / "data/raw").mkdir(parents=True)
+        (self.tmp / "pyproject.toml").write_text(f'[project]\nname = "{PROJECT_NAME}"\n')
 
     def tearDown(self):
         os.chdir(self.prev)
