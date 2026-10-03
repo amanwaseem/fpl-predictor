@@ -6,11 +6,16 @@
 # because an unpinned transitive is exactly as capable of changing behaviour as
 # a direct one.
 #
-# Python 3.13. Superseded by pyproject.toml in #5; this file is the input to
-# that conversion rather than throwaway work.
+# Python 3.13. pyproject.toml declares the package and its direct dependency;
+# this file stays the lock, because pyproject has no lockfile of its own.
 #
 #   python3 -m venv .venv && source .venv/bin/activate
 #   pip install -r requirements.txt
+#
+# The last line installs the package itself, editable. That is the only
+# supported install, not a convenience: a regular install copies the code into
+# site-packages, and after a `git pull` a deadline run would execute stale code
+# that no commit describes. Editable, the commands always run the checkout.
 
 requests==2.34.2
 
@@ -18,3 +23,5 @@ certifi==2026.7.22
 charset-normalizer==3.5.1
 idna==3.19
 urllib3==2.7.0
+
+-e .
