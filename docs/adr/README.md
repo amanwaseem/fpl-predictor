@@ -16,3 +16,6 @@ answer.
 | [0007](0007-the-baseline-is-the-ship-gate.md) | The baseline is the ship gate, and must itself beat naive predictors | Accepted |
 | [0008](0008-predict-components-not-total-points.md) | Predict components and sum them; the interface waits for real components | Accepted |
 | [0009](0009-model-fixture-difficulty-explicitly.md) | Model fixture difficulty explicitly, with our own xG ratings | Accepted |
+| [0010](0010-squad-selection-by-integer-programming.md) | Squad selection by integer programming, reusing the legal-XI selector | Proposed |
+| [0011](0011-paths-relative-to-the-repository-root.md) | Paths are relative to the repository root, and the install is editable only | Accepted |
+| [0012](0012-ci-gates-on-one-required-check.md) | CI gates on one required check | Accepted |
