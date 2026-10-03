@@ -24,6 +24,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from fpl.paths import require_project_root
+
 TOP_N = 20
 VALUE_N = 10
 
@@ -200,6 +202,9 @@ def cli(argv=None):
     ap.add_argument("--out", default=None, metavar="DIR",
                     help="write <entry>.md here instead of printing")
     args = ap.parse_args(argv)
+    # It only reads the entry it is given, but --out reports/ from the wrong
+    # directory would write a reports/ that is not the repository's.
+    require_project_root()
     return main(args.entry, args.out)
 
 

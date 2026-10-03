@@ -8,7 +8,9 @@ command as well as directly, and "refused" includes "wrote nothing".
 Run from the repository root: python -m unittest discover tests
 """
 
+import ast
 import contextlib
+import importlib
 import io
 import os
 import shutil
@@ -69,6 +71,23 @@ class TestRequireProjectRoot(InDirectory):
                 contextlib.redirect_stdout(io.StringIO()):
             predict_baseline.cli(["--help"])
         self.assertEqual(raised.exception.code, 0)
+
+
+class TestEveryCommandChecks(unittest.TestCase):
+
+    def test_every_cli_calls_require_project_root(self):
+        """The docs say every fpl-* command refuses outside the root; hold them to it."""
+        with (ROOT / "pyproject.toml").open("rb") as f:
+            scripts = tomllib.load(f)["project"]["scripts"]
+        for command, target in scripts.items():
+            with self.subTest(command=command):
+                module = importlib.import_module(target.partition(":")[0])
+                tree = ast.parse(Path(module.__file__).read_text())
+                cli = next(node for node in tree.body
+                           if isinstance(node, ast.FunctionDef) and node.name == "cli")
+                called = {node.func.id for node in ast.walk(cli)
+                          if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+                self.assertIn("require_project_root", called)
 
 
 class TestName(unittest.TestCase):
