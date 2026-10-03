@@ -11,9 +11,9 @@ Writes an immutable prediction log entry to predictions/. That file gets
 committed BEFORE the deadline and is never rewritten.
 
 Usage:
-    python -m fpl.predict_baseline            # predict the next gameweek
-    python -m fpl.predict_baseline --gw 4     # predict a specific gameweek
-    python -m fpl.predict_baseline --out scratch/  # exploratory, not the log
+    fpl-predict-baseline            # predict the next gameweek
+    fpl-predict-baseline --gw 4     # predict a specific gameweek
+    fpl-predict-baseline --out scratch/  # exploratory, not the log
 
 Run from the repository root: paths are resolved against the working
 directory, not this file.

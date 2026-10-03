@@ -69,24 +69,29 @@ replaces it; any model that doesn't, doesn't ship.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt      # pinned dependencies, then this package, editable
 
-python -m fpl.fetch --skip-players   # bootstrap + fixtures only, a few seconds
-python -m fpl.fetch                  # full snapshot including per-player history
+fpl-fetch --skip-players   # bootstrap + fixtures only, a few seconds
+fpl-fetch                  # full snapshot including per-player history
 ```
 
 Dependencies are pinned, transitive ones included. Every entry in the prediction log claims
 reproducibility from its `snapshot_id`; that claim covers the data, and the pin covers the code
-around it.
+around it. The package is installed editable, so the commands always run the checkout — never a
+stale copy from before the last `git pull`.
+
+Every `fpl-*` command is also `python -m fpl.<module>`; the two run the same function. Run them
+from the repository root: paths resolve against the working directory, so the commands refuse to
+run anywhere else rather than start a second `data/raw/` or a `predictions/` that is not the log.
 
 Predicting, and committing a prediction:
 
 ```bash
-python -m fpl.predict_baseline --gw 4 --out scratch/   # exploratory, never the log
-python -m fpl.predict_baseline --gw 4                  # writes predictions/gw04_baseline-v1.csv
+fpl-predict-baseline --gw 4 --out scratch/   # exploratory, never the log
+fpl-predict-baseline --gw 4                  # writes predictions/gw04_baseline-v1.csv
 
-python -m fpl.verify_entry predictions/gw04_baseline-v1.csv   # run before committing
-python -m fpl.summarise predictions/gw04_baseline-v1.csv --out reports/
+fpl-verify predictions/gw04_baseline-v1.csv   # run before committing
+fpl-summarise predictions/gw04_baseline-v1.csv --out reports/
 ```
 
 `predictions/` is the append-only log and is never rewritten. `scratch/` is gitignored space for

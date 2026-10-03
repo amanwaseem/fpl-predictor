@@ -21,9 +21,9 @@ constants, frozen for the log on 6 Oct.
 so it keeps baseline-v1's meaning; `predicted_points` is after.
 
 Usage, as fpl.predict_baseline:
-    python -m fpl.predict_fixture                 # predict the next gameweek
-    python -m fpl.predict_fixture --gw 6          # a specific gameweek
-    python -m fpl.predict_fixture --out scratch/  # exploratory, not the log
+    fpl-predict-fixture                 # predict the next gameweek
+    fpl-predict-fixture --gw 6          # a specific gameweek
+    fpl-predict-fixture --out scratch/  # exploratory, not the log
 
 Run from the repository root.
 """

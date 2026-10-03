@@ -13,9 +13,9 @@ harness joins predictions against. One request per gameweek, so scoring never
 has to refetch 654 players to find out what happened.
 
 Usage:
-    python -m fpl.fetch                 # full snapshot (slow, ~6 min)
-    python -m fpl.fetch --skip-players  # bootstrap + fixtures only (fast)
-    python -m fpl.fetch                 # re-run to resume an interrupted fetch
+    fpl-fetch                 # full snapshot (slow, ~6 min)
+    fpl-fetch --skip-players  # bootstrap + fixtures only (fast)
+    fpl-fetch                 # re-run to resume an interrupted fetch
 
 Run from the repository root: paths are resolved against the working
 directory, not this file.

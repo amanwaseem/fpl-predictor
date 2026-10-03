@@ -1,7 +1,7 @@
 """Score every committed prediction against what actually happened.
 
-    python -m fpl.score                         # actuals from data/raw/LATEST
-    python -m fpl.score --actuals 20260922T201540Z
+    fpl-score                         # actuals from data/raw/LATEST
+    fpl-score --actuals 20260922T201540Z
 
 The other half of the credibility mechanism (SPEC section 6). For each entry in
 `predictions/` whose gameweek has settled, joins the prediction to actual
