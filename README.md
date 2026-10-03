@@ -132,6 +132,12 @@ gameweeks a snapshot has live data for.
 Snapshots are written to `data/raw/<timestamp>/` and are gitignored — they are large and fully
 regenerable. `data/raw/LATEST` points at the most recent one.
 
+## Decisions
+
+Why the project is built the way it is — an append-only log, snapshots instead of live calls,
+held-out backtests as the gate — is recorded one decision at a time in
+[`docs/adr/`](docs/adr/README.md), with what would justify revisiting each.
+
 ## Data
 
 Sourced from the official Fantasy Premier League API. This project is unaffiliated with the

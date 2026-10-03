@@ -348,15 +348,17 @@ way, so nothing here has to exist before a gameweek can be scored.
 | Data ingestion working | Done |
 | Rolling-form baseline | Before GW4 |
 | Prediction log schema fixed | Before GW4 |
-| GW4 predictions committed | 2026-09-12 |
-| GW5 predictions committed | 2026-09-18 |
-| Scoring harness | International break |
-| Package structure, CI, ADRs | International break |
+| GW4 predictions committed | Done, 2026-09-12 |
+| GW5 predictions committed | **Missed** — deadline 2026-09-18 passed with no entry ([ADR 0004](docs/adr/0004-a-missed-deadline-stays-missed.md)) |
+| Scoring harness | Done |
+| Package structure, CI, ADRs | Done |
 | Optimiser | International break |
 | Component models | From GW6 |
 | API and frontend | From GW6 |
 
 ## 10. Open questions
+
+Decisions and their reasons are recorded in [`docs/adr/`](docs/adr/README.md).
 
 Settled:
 
@@ -364,10 +366,13 @@ Settled:
   components absorb it.~~ **Explicitly**, in `fpl/teams.py` (#31): club attack
   and defence ratings from settled rounds' xG, turned into expected goals per
   fixture and a Poisson clean-sheet probability. Opponent-conditioned
-  components have nothing to condition on without them, and FPL's own
-  difficulty ratings reduced the per-club miss less on the backtest.
+  components have nothing to condition on without them. The accuracy case is
+  weak: held out (#39), the ratings beat FPL's own difficulty by 0.002 MAE,
+  within what four gameweeks can resolve. The decision rests on other grounds
+  — see [ADR 0009](docs/adr/0009-model-fixture-difficulty-explicitly.md).
 
 Open:
 
 - How to handle players transferred between clubs mid-season — `player_id` is
-  stable but team affiliation is not.
+  stable but team affiliation is not. What each part does today, and the
+  questions to settle: [ADR 0013](docs/adr/0013-players-who-change-club-mid-season.md).
