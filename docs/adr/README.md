@@ -19,3 +19,4 @@ answer.
 | [0010](0010-squad-selection-by-integer-programming.md) | Squad selection by integer programming, reusing the legal-XI selector | Proposed |
 | [0011](0011-paths-relative-to-the-repository-root.md) | Paths are relative to the repository root, and the install is editable only | Accepted |
 | [0012](0012-ci-gates-on-one-required-check.md) | CI gates on one required check | Accepted |
+| [0013](0013-players-who-change-club-mid-season.md) | Players who change club mid-season | Open |
