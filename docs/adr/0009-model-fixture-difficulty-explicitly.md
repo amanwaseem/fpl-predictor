@@ -55,8 +55,9 @@ held out); a home-advantage term (made every setting worse in the backtest).
 
 ## Revisit if
 
-Re-running `fpl-backtest --held-out` for `baseline-prior-fixture` and
-`baseline-prior-fdr` as gameweeks settle shows FPL difficulty matching or
-beating the ratings over a larger sample — then the simpler option wins. Or a
-season of logged entries shows fixture-aware models losing to `baseline-v1`, or
-a new source (bookmaker odds) earns its dependency.
+Re-running `fpl-backtest --held-out` for `form-fixture-v1` (which is prior +
+xG ratings, the row in bold above) and `baseline-prior-fdr` as gameweeks settle
+shows FPL difficulty matching or beating the ratings over a larger sample —
+then the simpler option wins. Or a season of logged entries shows
+fixture-aware models losing to `baseline-v1`, or a new source (bookmaker odds)
+earns its dependency.
