@@ -1,0 +1,58 @@
+# Warns before a gameweek deadline passes with no entry for it (#46). GW5 was
+# missed while nobody was working, and ci.yml only runs on pushes and PRs — so
+# it is silent exactly then. This runs daily on main and fails when the next
+# deadline is under 72 hours away with no predictions/gwNN_*.csv; GitHub's
+# failed-workflow email is the alert. See tools/check_deadline.py.
+#
+# Separate from ci.yml so it never touches the required `ci` check. It only
+# reads: bootstrap-static from the API and the names in predictions/. Nothing
+# is snapshotted, written, or opened.
+#
+# GitHub disables scheduled workflows after 60 days with no commits to the
+# repository. Mid-season that cannot happen; at the start of a season, check
+# the Actions tab that it is still enabled.
+name: Deadline watchdog
+
+on:
+  schedule:
+    # 07:00 UTC daily: deadlines fall from Friday evening to Saturday
+    # midday UK time, so a 72-hour window is warned about on three runs.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      fake_deadline_hours:
+        description: "Test only: pretend the next deadline is this many hours away (blank = read the API)"
+        required: false
+        default: ""
+      fake_gameweek:
+        description: "Test only: the gameweek of the fake deadline"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  deadline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+            pyproject.toml
+      - run: pip install -r requirements.txt
+      - name: Check the next deadline has an entry
+        env:
+          FAKE_HOURS: ${{ inputs.fake_deadline_hours }}
+          FAKE_GW: ${{ inputs.fake_gameweek }}
+        run: |
+          if [ -n "$FAKE_HOURS" ]; then
+            python tools/check_deadline.py --fake-deadline-hours "$FAKE_HOURS" --fake-gameweek "$FAKE_GW"
+          else
+            python tools/check_deadline.py
+          fi
