@@ -92,6 +92,28 @@ parameter change — run it into `scratch/` and diff it against the committed
 entry. Post the diff on the PR. That answers the question without putting a
 phantom model in the log.
 
+### When the deadline watchdog fires
+
+`.github/workflows/deadline.yml` runs every morning at 07:00 UTC. It fails, and
+GitHub emails you, when the next deadline is under 72 hours away and `main`
+has no `predictions/gwNN_*.csv` for it. That email means: start at §1 now. If
+time is short, go straight to §9's fallback. An entry from a stale snapshot is
+still evidence; no entry is not.
+
+It stops failing once an entry for that gameweek is merged. If it says "could
+not check", the API was unreachable. That is not a missed deadline, but look
+up the next one by hand as above.
+
+Check it any time, from the repository root:
+
+```
+python tools/check_deadline.py
+```
+
+To test the alert end to end, run the workflow by hand from the Actions tab
+with a fake deadline: 48 hours and a gameweek with no entry should fail; the
+same with a logged gameweek should pass.
+
 ---
 
 ## 1. Timing the snapshot
