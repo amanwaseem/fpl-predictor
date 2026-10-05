@@ -139,6 +139,51 @@ class TestRest(unittest.TestCase):
         self.assertGreater(soft, 0)
 
 
+class TestDefensiveContribution(unittest.TestCase):
+
+    @staticmethod
+    def with_counts(league, pid, count):
+        league.histories[pid] = [dict(r, defensive_contribution=count)
+                                 for r in league.histories[pid]]
+
+    def test_a_count_near_the_threshold_is_worth_something(self):
+        """Same points, no hits yet: the defender whose count sits just under 10 is
+        the likelier to reach it, and only the split model can tell them apart."""
+        league = League()
+        self.with_counts(league, 2, 9)
+        split = league.predict([(1, 3), (2, 4)])
+        whole = league.predict([(1, 3), (2, 4)], defensive=False)
+        self.assertGreater(split[2]["predicted_points"], split[4]["predicted_points"])
+        self.assertEqual(whole[2]["predicted_points"], whole[4]["predicted_points"])
+
+    def test_a_goalkeeper_earns_none(self):
+        """No threshold, so his count changes nothing."""
+        league = League()
+        league.elements[1] = fixtures.element(2, team=1, element_type=1)
+        before = league.predict([(1, 3), (2, 4)])[2]
+        self.with_counts(league, 2, 30)
+        after = league.predict([(1, 3), (2, 4)])[2]
+        self.assertEqual(before["predicted_points"], after["predicted_points"])
+        self.assertEqual(before["points_per_90"], after["points_per_90"])
+
+    def test_counted_once(self):
+        """His defensive-contribution points move out of the rest, not on top of it.
+
+        Every defender reaches the threshold every match, so the count, his
+        points and the position's prior all say a certain hit: the split model
+        must give back exactly the points it took out of the rest.
+        """
+        league = League()
+        for pid in (2, 4, 6, 8):
+            self.with_counts(league, pid, 40)
+            league.histories[pid] = [dict(r, total_points=r["total_points"] + 2)
+                                     for r in league.histories[pid]]
+        split = league.predict([(1, 3), (2, 4)])[2]
+        whole = league.predict([(1, 3), (2, 4)], defensive=False)[2]
+        self.assertAlmostEqual(split["points_per_90"], whole["points_per_90"], places=2)
+        self.assertAlmostEqual(split["predicted_points"], whole["predicted_points"], places=2)
+
+
 class TestMinutes(unittest.TestCase):
 
     def test_a_blank_predicts_nothing(self):

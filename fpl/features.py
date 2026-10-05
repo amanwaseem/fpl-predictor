@@ -137,6 +137,29 @@ CLEAN_SHEET_POINTS = {"GKP": 4, "DEF": 4, "MID": 1, "FWD": 0}
 DEFENSIVE_CONTRIBUTION_THRESHOLD = {"DEF": 10, "MID": 12, "FWD": 12}
 DEFENSIVE_CONTRIBUTION_POINTS = 2
 
+# Which history fields make up the count, by position: recoveries count
+# outside defence only. On 20260922 these reproduce `defensive_contribution`
+# on every outfield row this season.
+DEFENSIVE_CONTRIBUTION_FIELDS = {
+    "DEF": ("clearances_blocks_interceptions", "tackles"),
+    "MID": ("clearances_blocks_interceptions", "tackles", "recoveries"),
+    "FWD": ("clearances_blocks_interceptions", "tackles", "recoveries"),
+}
+
+
+def defensive_count(row, position):
+    """The defensive-contribution count in a row, as `position` counts it.
+
+    A history_past row is counted as he was classed last season, so a player
+    who has moved between DEF and MID carries a count with or without
+    recoveries that his threshold now does not use. Rebuilt from its fields
+    where the row has them; the row's own count where it does not.
+    """
+    fields = DEFENSIVE_CONTRIBUTION_FIELDS.get(position)
+    if fields and all(f in row for f in fields):
+        return sum(row[f] or 0 for f in fields)
+    return row.get("defensive_contribution") or 0
+
 # How much of the prior comes from last season's expected rather than realised
 # goals and assists: 0 is points as scored, 1 is fully expected. On the
 # backtest over GW2-5 (#30), xG helped at every floor below 2700 and tied at
@@ -186,8 +209,9 @@ def player_prior_parts(history_past, season, position=None, xg_weight=None, floo
     {"total", "attack", "clean_sheet"}, each points per 90: attacking returns
     (goals and assists, blended with xG and xA by `xg_weight`), clean-sheet
     points, and everything. Plus "defensive_count", the defensive-contribution
-    count per 90 — a count, not points: a season row totals the count, and
-    cannot say in how many matches it reached the threshold. The parts come
+    count per 90 as his position now counts it — a count, not points: a
+    season row totals the count, and cannot say in how many matches it
+    reached the threshold. The parts come
     from the same season row as the
     total, so a model that shrinks each part of this season toward the
     matching part here, at one weight, gets parts that add back up to its
@@ -216,7 +240,7 @@ def player_prior_parts(history_past, season, position=None, xg_weight=None, floo
     per_90 = 90.0 / minutes
     return {"total": total * per_90, "attack": attack * per_90,
             "clean_sheet": clean_sheet * per_90,
-            "defensive_count": (row.get("defensive_contribution") or 0) * per_90}
+            "defensive_count": defensive_count(row, position) * per_90}
 
 
 def season_minutes(history, target_gw, usable):

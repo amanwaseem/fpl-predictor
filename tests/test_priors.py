@@ -108,6 +108,45 @@ class TestPriorParts(unittest.TestCase):
         self.assertIsNone(features.player_prior_parts([past("2025/26", 100, 5)], "2025/26"))
 
 
+class TestDefensiveContribution(unittest.TestCase):
+
+    def test_points_only_at_the_position_threshold(self):
+        row = {"defensive_contribution": 10}
+        self.assertEqual(features.defensive_points(row, "DEF"), 2)
+        self.assertEqual(features.defensive_points(row, "MID"), 0)
+        self.assertEqual(features.defensive_points({"defensive_contribution": 12}, "FWD"), 2)
+        self.assertEqual(features.defensive_points({"defensive_contribution": 40}, "GKP"), 0)
+        self.assertEqual(features.defensive_points({}, "DEF"), 0)
+
+    def test_chance_is_poisson_and_none_for_goalkeepers(self):
+        # P(X >= 10) for X ~ Poisson(10), to four places.
+        self.assertAlmostEqual(
+            features.chance_of_defensive_contribution(10.0, "DEF"), 0.5421, places=4)
+        self.assertLess(features.chance_of_defensive_contribution(10.0, "MID"),
+                        features.chance_of_defensive_contribution(10.0, "DEF"))
+        self.assertEqual(features.chance_of_defensive_contribution(30.0, "GKP"), 0.0)
+        self.assertEqual(features.chance_of_defensive_contribution(0.0, "DEF"), 0.0)
+
+    def test_counted_as_his_position_now_counts_it(self):
+        """A midfielder last season, a defender now: his recoveries no longer count."""
+        row = dict(past("2025/26", 2700, 150), defensive_contribution=330,
+                   clearances_blocks_interceptions=90, tackles=60, recoveries=180)
+        self.assertAlmostEqual(
+            features.player_prior_parts([row], "2025/26", "DEF")["defensive_count"], 150 / 30)
+        self.assertAlmostEqual(
+            features.player_prior_parts([row], "2025/26", "MID")["defensive_count"], 330 / 30)
+
+    def test_the_row_count_when_its_fields_are_missing(self):
+        row = dict(past("2025/26", 2700, 150), defensive_contribution=300)
+        self.assertAlmostEqual(
+            features.player_prior_parts([row], "2025/26", "DEF")["defensive_count"], 10.0)
+
+    def test_split_rates_adds_up_with_a_fourth_part(self):
+        total, attack, cs, dc, rest = features.split_rates(
+            (60, 20, 8, 4), 450, (4.0, 1.2, 0.6, 0.4), 900)
+        self.assertAlmostEqual(attack + cs + dc + rest, total)
+
+
 class TestPrior(unittest.TestCase):
 
     def test_no_last_season_falls_back_to_position(self):
