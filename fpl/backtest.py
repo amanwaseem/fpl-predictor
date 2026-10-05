@@ -211,6 +211,9 @@ MODELS = {
     "baseline-fdr": lambda *view, **kw: baseline_fixture_rows(*view, strength="fdr", **kw),
     # The logged model (#32): the same function its entries come from.
     "form-fixture-v1": _form_fixture,
+    # form-fixture-v1 with defensive contribution left in the rest, as it was
+    # before #45: whether splitting it out earns its place.
+    "form-fixture-no-dc": lambda *view, **kw: _form_fixture(*view, defensive=False, **kw),
     # form-fixture-v1 on FPL's difficulty: whether the ratings earn their
     # place over the comparator once the prior is in.
     "baseline-prior-fdr": lambda *view, **kw: baseline_fixture_rows(
@@ -233,6 +236,13 @@ GRIDS = {
     # Narrower on the prior than baseline-prior's grid: floors below 1800 and
     # weights below 900 lost there, and 3^3 x 4 settings would take minutes.
     "form-fixture-v1": {
+        "floor": (1800, 2700),
+        "player_prior_minutes": (900, 1800),
+        "xg_weight": (0.0, 0.5),
+        "prior_matches": (2, 4),
+        "defensive_prior_scale": (0.25, 0.5, 1.0, 2.0),
+    },
+    "form-fixture-no-dc": {
         "floor": (1800, 2700),
         "player_prior_minutes": (900, 1800),
         "xg_weight": (0.0, 0.5),
