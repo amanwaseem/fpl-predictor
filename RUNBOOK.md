@@ -56,6 +56,8 @@ Each model has its own command, and every step below runs once per model:
 
 Run both from **the same snapshot**. Head-to-head scoring compares them
 player by player, and two snapshots would make that a comparison of snapshots.
+By hand, pass `--snapshot <id>` to each command so that a fetch in between
+cannot move `LATEST` under the second one.
 
 The deadline lives in `<snapshot>/bootstrap.json`, and `data/raw/` is
 gitignored — on a clean checkout there is no snapshot to read it from. Get it
@@ -213,11 +215,12 @@ below, so it writes the same files. It differs from them in three ways:
 - Every model's scratch run comes first, so nothing reaches `predictions/`
   until every model has run.
 - Each real entry must match its scratch run apart from `generated_at_utc`.
-- It refuses to start if any of the entries is already in `predictions/`.
+- It refuses to start if any of the entries is already in `predictions/`, or
+  if the deadline has passed. `--dry-run` only warns about either.
 
-It stops at the first failure and names the model and the step. Entries
-already written by then are not committed: fix the cause, delete them, and run
-it again. It prints a digest for the PR body (§8) and saves it to
+It stops at the first failure, names the model and the step, and lists the
+entries and reports that run wrote before it stopped. None of them is
+committed: fix the cause, delete them, and run it again. It prints a digest for the PR body (§8) and saves it to
 `scratch/entry-gwNN-*/digest.md`. It never commits or pushes. §7 is still yours.
 
 Read its output exactly as §3 says to read each command's: `included:`,

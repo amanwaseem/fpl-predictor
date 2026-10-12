@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from fpl import entry, predict_baseline
+from fpl import entry, predict_baseline, predict_fixture
 from tests import fixtures
 from tests.test_predict_fixture import played, row
 
@@ -22,6 +22,11 @@ MODELS = [m for m, _ in entry.LOGGED_MODELS]
 
 def failing(gw, out_dir, snapshot_id):
     raise SystemExit("this model could not run")
+
+
+def crashing(gw, out_dir, snapshot_id):
+    if Path(out_dir).name != "check":
+        raise KeyError("expected_goals")
 
 
 def flaky(gw, out_dir, snapshot_id):
@@ -41,7 +46,7 @@ class TestEntry(fixtures.TempCwd):
         super().setUp()
         self.league_with_results(SNAPSHOT_ID)
 
-    def league_with_results(self, name):
+    def league_with_results(self, name, deadline=None):
         """A league with played fixtures and xG, which form-fixture-v1 needs."""
         clubs = range(1, fixtures.LEAGUE_SIZE + 1)
         fx, histories, elements, pid = [], {}, [], 0
@@ -59,7 +64,8 @@ class TestEntry(fixtures.TempCwd):
                         minutes=90 - slot * 10, points=2 + slot, xg=0.1 * (slot + 1))
                     for f in fx if f["event"] < 4 and club in (f["team_h"], f["team_a"])]
         self.snapshot(name, elements=elements, teams=[fixtures.team(t) for t in clubs],
-                      events=fixtures.season(4, fixtures.future_deadline()), fixtures=fx,
+                      events=fixtures.season(4, deadline or fixtures.future_deadline()),
+                      fixtures=fx,
                       histories=histories, latest=True)
 
     def run_entry(self, *args, **kwargs):
@@ -144,6 +150,46 @@ class TestEntry(fixtures.TempCwd):
             self.run_entry()
         self.assertIn("Already in the log", str(raised.exception))
 
+
+    def test_an_unexpected_error_still_names_what_was_left_behind(self):
+        models = [*entry.LOGGED_MODELS, ("crashing-v1", crashing)]
+        code, _, err = self.run_entry(models=models)
+        self.assertEqual(code, 1)
+        self.assertIn("crashing-v1: write failed", err)
+        self.assertIn("KeyError: 'expected_goals'", err)
+        for model in MODELS:
+            self.assertIn(f"predictions/gw04_{model}.csv", err)
+            self.assertIn(f"reports/gw04_{model}.md", err)
+
+    def test_refuses_a_real_run_past_the_deadline_before_running_anything(self):
+        self.league_with_results("20260911T000000Z", deadline=fixtures.past_timestamp())
+        with self.assertRaises(SystemExit) as raised:
+            self.run_entry()
+        self.assertIn("deadline", str(raised.exception))
+        self.assertFalse(Path("scratch").exists(), "no scratch run was started")
+
+    def test_dry_run_says_when_the_real_run_would_be_refused(self):
+        self.run_entry()
+        code, out, err = self.run_entry(dry_run=True)
+        self.assertEqual(code, 0, err)
+        self.assertIn("the real run would refuse", out)
+
+    def test_a_refused_run_leaves_no_scratch_directory(self):
+        self.run_entry()
+        runs = set(Path("scratch").iterdir())
+        with self.assertRaises(SystemExit):
+            self.run_entry()
+        self.assertEqual(set(Path("scratch").iterdir()), runs)
+
+    def test_each_predictor_can_be_pointed_at_one_snapshot_by_hand(self):
+        """The manual fallback can pin a snapshot as fpl-entry does."""
+        self.league_with_results("20260911T000000Z")
+        for cli in (predict_baseline.cli, predict_fixture.cli):
+            with contextlib.redirect_stdout(io.StringIO()):
+                cli(["--out", "scratch/manual", "--snapshot", SNAPSHOT_ID])
+        for model in MODELS:
+            rows = fixtures.read_csv(f"scratch/manual/gw04_{model}.csv")
+            self.assertEqual({r["snapshot_id"] for r in rows}, {SNAPSHOT_ID})
 
 if __name__ == "__main__":
     unittest.main()
