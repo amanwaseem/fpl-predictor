@@ -32,6 +32,7 @@ fpl-verify = "fpl.verify_entry:cli"
 fpl-summarise = "fpl.summarise:cli"
 fpl-score = "fpl.score:cli"
 fpl-backtest = "fpl.backtest:cli"
+fpl-entry = "fpl.entry:cli"
 
 [tool.setuptools]
 # Stated rather than discovered, so tests/, tools/, data/ and scratch/ can

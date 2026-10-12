@@ -94,6 +94,9 @@ fpl-verify predictions/gw04_baseline-v1.csv   # run before committing
 fpl-summarise predictions/gw04_baseline-v1.csv --out reports/
 ```
 
+Or all four, for every logged model from one snapshot: `fpl-entry` (`--dry-run` to write under
+`scratch/` instead).
+
 `predictions/` is the append-only log and is never rewritten. `scratch/` is gitignored space for
 exploratory runs. `verify_entry` checks a written entry against the snapshot named in its own
 rows and exits non-zero on any disagreement — it is the last check before an entry becomes

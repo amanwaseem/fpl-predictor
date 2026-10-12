@@ -128,8 +128,11 @@ def predict_rows(bootstrap, fixtures, histories, target_gw, usable):
     return rows
 
 
-def main(requested_gw, out_dir):
-    snap, bootstrap, fixtures, players_dir = load_snapshot()
+def main(requested_gw, out_dir, snapshot_id=None):
+    # snapshot_id names one snapshot in place of data/raw/LATEST. fpl.entry
+    # passes it so that every model in an entry reads the same snapshot, even
+    # if a fetch moves LATEST partway through the run.
+    snap, bootstrap, fixtures, players_dir = load_snapshot(snapshot_id)
     target_gw, deadline = resolve_target_gw(bootstrap["events"], requested_gw)
 
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}

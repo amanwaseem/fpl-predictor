@@ -198,6 +198,35 @@ be predicted from and leaves `LATEST` unchanged.
 
 ---
 
+## Fast path: steps 3–6 in one command
+
+```
+fpl-entry --dry-run      # everything under scratch/, to read first
+fpl-entry                # the real entries, into predictions/ and reports/
+```
+
+`fpl-entry` runs steps 3–6 for every logged model, from one snapshot
+(`LATEST`, or `--snapshot <id>`). The list of logged models is
+`LOGGED_MODELS` in `fpl/entry.py`. It calls the same commands as the steps
+below, so it writes the same files. It differs from them in three ways:
+
+- Every model's scratch run comes first, so nothing reaches `predictions/`
+  until every model has run.
+- Each real entry must match its scratch run apart from `generated_at_utc`.
+- It refuses to start if any of the entries is already in `predictions/`.
+
+It stops at the first failure and names the model and the step. Entries
+already written by then are not committed: fix the cause, delete them, and run
+it again. It prints a digest for the PR body (§8) and saves it to
+`scratch/entry-gwNN-*/digest.md`. It never commits or pushes. §7 is still yours.
+
+Read its output exactly as §3 says to read each command's: `included:`,
+`excluded:`, `prior:`, `ratings:` and the verifier's verdict. Steps 3–6 below
+remain the explanation of each check, and the fallback if `fpl-entry` itself is
+what fails.
+
+---
+
 ## 3. Exploratory run first
 
 ```
@@ -442,6 +471,7 @@ yet; `missed:` means a settled gameweek has no entry and never will.
 ```
 source .venv/bin/activate                                  # the commands do not exist outside it
 fpl-fetch                                                  # ~6 min, after press conferences
+fpl-entry                                                  # steps 3-6, every logged model — or by hand:
 fpl-predict-baseline --gw N --out scratch/                 # exploratory — read included:/excluded:
 fpl-predict-baseline --gw N                                # writes predictions/gwNN_<model>.csv
 fpl-predict-fixture --gw N --out scratch/                  # form-fixture-v1, from GW6: same two steps
