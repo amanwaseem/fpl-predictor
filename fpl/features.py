@@ -6,6 +6,8 @@ what "recent form" means would make their predictions incomparable, and the
 log's whole value is that entries can be compared.
 """
 
+import math
+
 # Exponential decay over recent gameweeks, most recent first.
 # Roughly a half-life of two gameweeks.
 DECAY = 0.7
@@ -128,6 +130,36 @@ ASSIST_POINTS = 3
 # Points for a clean sheet, by position, for 60+ minutes.
 CLEAN_SHEET_POINTS = {"GKP": 4, "DEF": 4, "MID": 1, "FWD": 0}
 
+# Defensive contribution: DEFENSIVE_CONTRIBUTION_POINTS for reaching the
+# position's threshold of clearances, blocks, interceptions and tackles (plus
+# recoveries, outside defence) in one match. History rows carry the count, not
+# the points. Goalkeepers have no threshold and never earn them.
+DEFENSIVE_CONTRIBUTION_THRESHOLD = {"DEF": 10, "MID": 12, "FWD": 12}
+DEFENSIVE_CONTRIBUTION_POINTS = 2
+
+# Which history fields make up the count, by position: recoveries count
+# outside defence only. On 20260922 these reproduce `defensive_contribution`
+# on every outfield row this season.
+DEFENSIVE_CONTRIBUTION_FIELDS = {
+    "DEF": ("clearances_blocks_interceptions", "tackles"),
+    "MID": ("clearances_blocks_interceptions", "tackles", "recoveries"),
+    "FWD": ("clearances_blocks_interceptions", "tackles", "recoveries"),
+}
+
+
+def defensive_count(row, position):
+    """The defensive-contribution count in a row, as `position` counts it.
+
+    A history_past row is counted as he was classed last season, so a player
+    who has moved between DEF and MID carries a count with or without
+    recoveries that his threshold now does not use. Rebuilt from its fields
+    where the row has them; the row's own count where it does not.
+    """
+    fields = DEFENSIVE_CONTRIBUTION_FIELDS.get(position)
+    if fields and all(f in row for f in fields):
+        return sum(row[f] or 0 for f in fields)
+    return row.get("defensive_contribution") or 0
+
 # How much of the prior comes from last season's expected rather than realised
 # goals and assists: 0 is points as scored, 1 is fully expected. On the
 # backtest over GW2-5 (#30), xG helped at every floor below 2700 and tied at
@@ -176,7 +208,10 @@ def player_prior_parts(history_past, season, position=None, xg_weight=None, floo
 
     {"total", "attack", "clean_sheet"}, each points per 90: attacking returns
     (goals and assists, blended with xG and xA by `xg_weight`), clean-sheet
-    points, and everything. The parts come from the same season row as the
+    points, and everything. Plus "defensive_count", the defensive-contribution
+    count per 90 as his position now counts it: a count, not points, because
+    a season row cannot say in how many matches it reached the threshold
+    (#45, #48). The parts come from the same season row as the
     total, so a model that shrinks each part of this season toward the
     matching part here, at one weight, gets parts that add back up to its
     total. None when player_prior would be.
@@ -203,7 +238,8 @@ def player_prior_parts(history_past, season, position=None, xg_weight=None, floo
     clean_sheet = (row.get("clean_sheets") or 0) * CLEAN_SHEET_POINTS.get(position, 0)
     per_90 = 90.0 / minutes
     return {"total": total * per_90, "attack": attack * per_90,
-            "clean_sheet": clean_sheet * per_90}
+            "clean_sheet": clean_sheet * per_90,
+            "defensive_count": defensive_count(row, position) * per_90}
 
 
 def season_minutes(history, target_gw, usable):
@@ -261,6 +297,49 @@ def clean_sheet_points(row, position):
     return (row.get("clean_sheets") or 0) * CLEAN_SHEET_POINTS.get(position, 0)
 
 
+def defensive_points(row, position):
+    """Points from defensive contribution in one history row."""
+    threshold = DEFENSIVE_CONTRIBUTION_THRESHOLD.get(position)
+    if threshold is None or (row.get("defensive_contribution") or 0) < threshold:
+        return 0
+    return DEFENSIVE_CONTRIBUTION_POINTS
+
+
+def chance_of_defensive_contribution(count_per_90, position):
+    """P(reaching the position's threshold in a full match), from his rate per 90.
+
+    The count in a match is read as Poisson around his rate. On 20260922's
+    full matches a player's counts vary about as much as Poisson says
+    (variance over mean 1.02 for DEF, 0.81 for MID), and the chances it gives
+    summed to 46.8 DEF hits against 45, and 20.7 MID against 18. 0 for a
+    position with no threshold.
+    """
+    threshold = DEFENSIVE_CONTRIBUTION_THRESHOLD.get(position)
+    if threshold is None or count_per_90 <= 0:
+        return 0.0
+    term = below = math.exp(-count_per_90)
+    for k in range(1, threshold):
+        term *= count_per_90 / k
+        below += term
+    return max(0.0, 1.0 - below)
+
+
+def positional_defensive_rates(elements, positions, histories, target_gw, usable):
+    """League defensive contribution per 90, by position: (count, points)."""
+    totals = {}
+    for player in elements:
+        position = positions.get(player["element_type"], "UNK")
+        t = totals.setdefault(position, [0.0, 0.0, 0])
+        for row in histories.get(player["id"], []):
+            if row.get("round") is None or row["round"] >= target_gw or row["round"] not in usable:
+                continue
+            t[0] += row.get("defensive_contribution") or 0
+            t[1] += defensive_points(row, position)
+            t[2] += row.get("minutes") or 0
+    return {pos: (c * 90.0 / m, p * 90.0 / m) if m else (0.0, 0.0)
+            for pos, (c, p, m) in totals.items()}
+
+
 def positional_rates(elements, positions, histories, target_gw, usable):
     """League points-per-90 from attacking returns and clean sheets, by position.
 
@@ -312,3 +391,112 @@ def chance_of_sixty(rows, player):
         total += DECAY ** i * played / fixtures
         weight_sum += DECAY ** i
     return (total / weight_sum if weight_sum else 0.0) * availability(player)
+
+
+# Goals conceded and saves: the goalkeeping parts of the rest (#48). Rebuilt
+# from their fields, these rules reproduce total_points on every played row of
+# 20261010T041511Z: -1 per 2 conceded for GKP and DEF at any minutes, and 1 per
+# 3 saves for GKP. Both floor per match, so their expectation is taken over
+# the count's distribution, not read off its mean.
+CONCEDED_POINTS = {"GKP": -1, "DEF": -1}
+CONCEDED_PER_POINT = 2
+SAVE_POINTS = {"GKP": 1}
+SAVES_PER_POINT = 3
+
+
+
+def poisson_floor_mean(mean, per):
+    """E[floor(X / per)] for X ~ Poisson(mean).
+
+    The sum over j >= 1 of P(X >= j * per), from the pmf, out to where the
+    tail no longer moves the result.
+    """
+    if mean <= 0:
+        return 0.0
+    limit = int(mean + 12 * mean ** 0.5 + 20)
+    pmf = math.exp(-mean)
+    tail = 1.0  # P(X >= k), starting at k = 0
+    total = 0.0
+    for k in range(limit + 1):
+        if k and k % per == 0:
+            total += tail
+        tail -= pmf
+        pmf *= mean / (k + 1)
+    return total
+
+
+def conceded_points(row, position):
+    """Points lost to goals conceded in one history row."""
+    return CONCEDED_POINTS.get(position, 0) * ((row.get("goals_conceded") or 0)
+                                                // CONCEDED_PER_POINT)
+
+
+def save_points(row, position):
+    """Points from saves in one history row."""
+    return SAVE_POINTS.get(position, 0) * ((row.get("saves") or 0) // SAVES_PER_POINT)
+
+
+def season_goalkeeping_parts(row, position):
+    """(conceded, saves) points per 90 from a season-total history_past row.
+
+    A season row holds totals, not matches, and both parts floor per match.
+    So each is priced as a match at his per-90 average, through the same
+    Poisson floor the prediction uses, rather than as total / 2 or / 3.
+    """
+    minutes = row.get("minutes") or 0
+    if not minutes:
+        return 0.0, 0.0
+    per_90 = 90.0 / minutes
+    conceded = CONCEDED_POINTS.get(position, 0) * poisson_floor_mean(
+        (row.get("goals_conceded") or 0) * per_90, CONCEDED_PER_POINT)
+    saves = SAVE_POINTS.get(position, 0) * poisson_floor_mean(
+        (row.get("saves") or 0) * per_90, SAVES_PER_POINT)
+    return conceded, saves
+
+
+def league_save_rate(elements, positions, histories, target_gw, usable):
+    """Saves per expected goal conceded, over every keeper's settled rows.
+
+    One rate for every keeper. His own season, shrunk toward this, was tried
+    held out over GW2-5 (#48): every fold chose to shrink it all the way. Over
+    2700+ minutes keepers' 2025/26 rates ran only 1.78 to 2.21, so a few
+    matches of his own say little the league's does not.
+    """
+    saves = xgc = 0.0
+    for player in elements:
+        if positions.get(player["element_type"]) != "GKP":
+            continue
+        for row in histories.get(player["id"], []):
+            if row.get("round") is None or row["round"] >= target_gw or row["round"] not in usable:
+                continue
+            saves += row.get("saves") or 0
+            xgc += float(row.get("expected_goals_conceded") or 0)
+    return saves / xgc if xgc else 0.0
+
+
+def positional_goalkeeping_rates(elements, positions, histories, target_gw, usable):
+    """League (conceded, saves) points per 90 by position, as positional_rates."""
+    totals = {}
+    for player in elements:
+        position = positions.get(player["element_type"], "UNK")
+        t = totals.setdefault(position, [0.0, 0.0, 0])
+        for row in histories.get(player["id"], []):
+            if row.get("round") is None or row["round"] >= target_gw or row["round"] not in usable:
+                continue
+            t[0] += conceded_points(row, position)
+            t[1] += save_points(row, position)
+            t[2] += row.get("minutes") or 0
+    return {pos: (c * 90.0 / m, s * 90.0 / m) if m else (0.0, 0.0)
+            for pos, (c, s, m) in totals.items()}
+
+
+def split_parts(observed, minutes, priors, prior_minutes):
+    """split_rates for any number of parts: (total, [parts], rest), per 90.
+
+    `observed` and `priors` are (total, part, part, ...). Each is shrunk
+    toward its own prior at one weight, so the parts and the rest add back up
+    to the total.
+    """
+    total, *parts = (shrunk_pp90(o, minutes, p, prior_minutes)
+                     for o, p in zip(observed, priors, strict=True))
+    return total, parts, total - sum(parts)

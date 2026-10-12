@@ -211,6 +211,13 @@ MODELS = {
     "baseline-fdr": lambda *view, **kw: baseline_fixture_rows(*view, strength="fdr", **kw),
     # The logged model (#32): the same function its entries come from.
     "form-fixture-v1": _form_fixture,
+    # The candidate for form-fixture-v2 (#48): v1 with goals conceded and
+    # saves priced from the fixture. Not logged until it passes its gates.
+    "form-fixture-v2": lambda *view, **kw: _form_fixture(*view, goalkeeping=True, **kw),
+    # The same with #45's defensive contribution: whether it earns its place
+    # in v2, now that it has another gameweek to be judged on.
+    "form-fixture-v2-dc": lambda *view, **kw: _form_fixture(
+        *view, goalkeeping=True, defensive=True, **kw),
     # form-fixture-v1 on FPL's difficulty: whether the ratings earn their
     # place over the comparator once the prior is in.
     "baseline-prior-fdr": lambda *view, **kw: baseline_fixture_rows(
@@ -223,6 +230,8 @@ MODELS = {
 # as it stands. Values are listed rather than ranged so a grid reads as the
 # claim it is: these, and only these, were tried.
 GRIDS = {
+    # v1's settings stay at their logged values; only DC's own weight is tuned.
+    "form-fixture-v2-dc": {"defensive_prior_scale": (0.25, 0.5, 1.0, 2.0)},
     "baseline-prior": {
         "floor": (900, 1800, 2700),
         "player_prior_minutes": (450, 900, 1800),
