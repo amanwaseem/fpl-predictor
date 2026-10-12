@@ -14,7 +14,9 @@ leaves as little as possible in predictions/:
   each model has run cleanly from the snapshot.
 - Each real write is compared with its scratch run, and must match it apart
   from generated_at_utc. Two runs from one snapshot that disagree mean the
-  model is not deterministic, and its entry could not be reproduced.
+  model is not deterministic. Both runs share one process, so agreeing does
+  not prove the reverse: a model that depended on hash order, say, would agree
+  with itself here and still differ in a fresh process.
 
 It stops at the first failure and says which model and which step. It never
 fetches, commits, pushes or opens a PR: a human reads the output first.
@@ -32,11 +34,13 @@ import csv
 import io
 import sys
 import tempfile
+import traceback
 from contextlib import redirect_stdout
 from datetime import UTC, datetime
 from pathlib import Path
 
 from fpl import predict_baseline, predict_fixture, summarise, verify_entry
+from fpl.log import TIMESTAMP
 from fpl.paths import require_project_root
 from fpl.snapshot import load_snapshot, resolve_target_gw
 
@@ -73,6 +77,8 @@ def _run(model, step, fn, *args):
 
     A step fails by raising SystemExit (the predictors, load_snapshot) or by
     returning non-zero (fpl-verify, which reports every fault before it does).
+    Anything else it raises is a failure too, with its traceback: main() still
+    has to say which entries were left behind.
     """
     print(f"\n=== {model}: {step} ===")
     tee = _Tee(sys.stdout)
@@ -83,6 +89,8 @@ def _run(model, step, fn, *args):
         if e.code not in (None, 0):
             raise StepFailed(model, step, e.code) from None
         code = 0
+    except Exception:
+        raise StepFailed(model, step, traceback.format_exc()) from None
     if code:
         raise StepFailed(model, step, f"exited {code}; its output is above.")
     return tee.copy.getvalue()
@@ -130,6 +138,28 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS):
     snapshot_id = snap.name
     target_gw, deadline = resolve_target_gw(bootstrap["events"], None)
 
+    # Both checked before anything runs, so a real run that cannot finish
+    # stops here, not after every scratch run. A dry run only warns: it is how
+    # a past gameweek gets replayed, and it should still say whether the real
+    # run would be refused.
+    names = [f"gw{target_gw:02d}_{m}.csv" for m, _ in models]
+    taken = [str(Path("predictions") / n) for n in names
+             if (Path("predictions") / n).exists()]
+    if taken:
+        refusal = (f"Already in the log: {', '.join(taken)}.\n"
+                   "fpl-entry writes every model or none. If a file there was "
+                   "never committed, it is from an earlier run that stopped: "
+                   "delete it and run again.")
+        if not dry_run:
+            raise SystemExit(refusal + "\nNothing was run.")
+        print(f"WARNING: the real run would refuse. {refusal}\n")
+    if datetime.now(UTC) >= datetime.strptime(deadline, TIMESTAMP).replace(tzinfo=UTC):
+        late = f"The GW{target_gw} deadline {deadline} has passed."
+        if not dry_run:
+            raise SystemExit(late + " Nothing was run: an entry made now is not "
+                             "evidence of anything.")
+        print(f"WARNING: {late} fpl-verify will refuse these entries.\n")
+
     # Its own directory per run, so the scratch runs never meet an earlier
     # run's files, which write_entry would refuse to overwrite.
     Path("scratch").mkdir(exist_ok=True)
@@ -141,16 +171,7 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS):
     # deadline.
     log_dir, reports_dir = ((run_dir / "entry", run_dir / "reports") if dry_run
                             else (Path("predictions"), Path("reports")))
-
-    entries = {m: log_dir / f"gw{target_gw:02d}_{m}.csv" for m, _ in models}
-    taken = [str(p) for p in entries.values() if p.exists()]
-    if taken:
-        raise SystemExit(
-            f"Already in the log: {', '.join(taken)}.\n"
-            "fpl-entry writes every model or none. Nothing was run.\n"
-            "If a file there was never committed, it is from an earlier run "
-            "that stopped: delete it and run again."
-        )
+    entries = {m: log_dir / n for (m, _), n in zip(models, names, strict=True)}
 
     print(f"snapshot:  {snapshot_id}")
     print(f"target:    GW{target_gw}")
@@ -158,7 +179,7 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS):
     print(f"models:    {', '.join(m for m, _ in models)}")
     print(f"writing:   {log_dir}/, {reports_dir}/" + ("  (dry run)" if dry_run else ""))
 
-    outputs = {}
+    outputs, reports = {}, []
     try:
         for model, predict in models:
             _run(model, "scratch run", predict, None, check_dir, snapshot_id)
@@ -170,12 +191,15 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS):
                  entry, check_dir / entry.name)
             verified = _run(model, "verify", verify_entry.main, entry)
             _run(model, "summarise", summarise.main, entry, reports_dir)
+            reports.append(reports_dir / f"{entry.stem}.md")
             outputs[model] = (predicted, verified)
     except StepFailed as e:
         print(f"\nSTOPPED — {e}", file=sys.stderr)
-        written = [str(p) for p in entries.values() if p.exists()]
+        # None of the entries existed when the run started, so any that exist
+        # now are this run's.
+        written = [str(p) for p in [*entries.values(), *reports] if p.exists()]
         if written and not dry_run:
-            print("Written to the log but not committed: " + ", ".join(written)
+            print("Written by this run but not committed: " + ", ".join(written)
                   + "\nDo not commit a partial set. Fix the cause, delete these, "
                   "and run again.", file=sys.stderr)
         return 1

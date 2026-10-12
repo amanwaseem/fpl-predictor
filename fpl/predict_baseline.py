@@ -212,9 +212,12 @@ def cli(argv=None):
         help="output directory (default: predictions/). Use a scratch directory "
              "for exploratory runs — predictions/ is the append-only log.",
     )
+    ap.add_argument("--snapshot", default=None, metavar="ID",
+                    help="snapshot id under data/raw/ (default: LATEST). Pass the same "
+                         "one to every model logged for a gameweek.")
     args = ap.parse_args(argv)
     require_project_root()
-    return main(args.gw, args.out)
+    return main(args.gw, args.out, args.snapshot)
 
 
 if __name__ == "__main__":
