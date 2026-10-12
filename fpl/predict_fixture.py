@@ -104,8 +104,8 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
 
     `positional_prior`, if given, replaces the positional prior for a player
     without a usable last season: called as (player, position, priors,
-    prior_minutes) with the positional (total, attack, clean sheet) and its
-    weight, it returns the pair to use instead. fpl.candidates' price prior
+    prior_minutes, minutes this season) with the positional (total, attack,
+    clean sheet) and its weight, it returns the pair to use instead. fpl.candidates' price prior
     (#49) is one.
     """
     season = previous_season(bootstrap["events"]) if last_season else None
@@ -165,8 +165,9 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
                 priors = (POSITION_PRIOR_PP90.get(position, 3.5),
                           *league.get(position, (0.0, 0.0)))
                 if positional_prior is not None:
-                    priors, prior_minutes = positional_prior(player, position, priors,
-                                                             prior_minutes)
+                    priors, prior_minutes = positional_prior(
+                        player, position, priors, prior_minutes,
+                        season_minutes(history, target_gw, usable))
 
             minutes = sum(r["minutes"] for r in recent)
             observed = (sum(r["points"] for r in recent),
