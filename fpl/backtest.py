@@ -239,10 +239,13 @@ MODELS = {
 # as it stands. Values are listed rather than ranged so a grid reads as the
 # claim it is: these, and only these, were tried.
 GRIDS = {
-    # The prior's weight for players without a usable last season: the flat
-    # prior's 270, and more. Over GW2-5 no value is chosen in every fold.
-    "price-prior": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400)},
-    "flat-prior-weight": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400)},
+    # The prior's weight for players without a usable last season, before it
+    # fades: the flat prior's 270, and more, out past where form stops
+    # mattering.
+    "price-prior": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400, 28800,
+                                            57600)},
+    "flat-prior-weight": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400, 28800,
+                                                  57600)},
     # v1's settings stay at their logged values; only DC's own weight is tuned.
     "form-fixture-v2-dc": {"defensive_prior_scale": (0.25, 0.5, 1.0, 2.0)},
     "baseline-prior": {
