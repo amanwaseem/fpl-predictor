@@ -47,6 +47,7 @@ from fpl.features import (
     chance_of_sixty,
     clean_sheet_points,
     conceded_points,
+    defensive_contribution_points,
     defensive_points,
     expected_minutes,
     league_save_rate,
@@ -60,7 +61,6 @@ from fpl.features import (
     recent_history,
     recent_rows,
     save_points,
-    season_goalkeeping_parts,
     season_minutes,
     shrunk_pp90,
     split_parts,
@@ -167,17 +167,15 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
                 # More parts out of the rest, each shrunk at the same weight
                 # toward the same prior's matching part, so they are counted
                 # once and still add up to the total.
-                past = (next(r for r in pasts[pid] if r.get("season_name") == season)
-                        if parts is not None else None)
                 if goalkeeping:
-                    priors += (season_goalkeeping_parts(past, position) if past
+                    priors += ((parts["conceded"], parts["saves"]) if parts is not None
                                else league_gk.get(position, (0.0, 0.0)))
                     observed += (sum(conceded_points(r, position) for r in window),
                                  sum(save_points(r, position) for r in window))
                 if defensive:
                     # Last season's points are not in its row, only its count,
                     # so they are read off the count as this season's are.
-                    if past:
+                    if parts is not None:
                         prior_count = parts["defensive_count"]
                         prior_defensive = (DEFENSIVE_CONTRIBUTION_POINTS
                                            * chance_of_defensive_contribution(prior_count,
@@ -190,15 +188,19 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
                 pp90, split, rest_pp90 = split_parts(observed, minutes, priors, prior_minutes)
                 attack_pp90 = split[0]
                 if defensive:
-                    # Back in from the shrunk count, at its own weight.
+                    # Back in from the shrunk count, at its own weight, per
+                    # fixture below. The logged rate carries it as a full match.
                     count = shrunk_pp90(
                         sum(r.get("defensive_contribution") or 0 for r in window),
                         minutes, prior_count, prior_minutes * defensive_prior_scale)
-                    estimate = (DEFENSIVE_CONTRIBUTION_POINTS
-                                * chance_of_defensive_contribution(count, position))
-                    rest_pp90 += estimate
-                    pp90 += estimate - split[-1]
+                    pp90 += (DEFENSIVE_CONTRIBUTION_POINTS
+                             * chance_of_defensive_contribution(count, position) - split[-1])
+                    dc_per_fixture = defensive_contribution_points(count, position, window,
+                                                                   exp_min)
             else:
+                # v1 as logged, through its own helper: split_parts would
+                # subtract the parts' sum, which is not bit-identical to
+                # subtracting them in turn, and v1 must not move.
                 pp90, attack_pp90, _, rest_pp90 = split_rates(
                     observed, minutes, priors, prior_minutes)
             sixty = chance_of_sixty(window, player)
@@ -210,6 +212,8 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
                 predicted += (rest_pp90 + attack_pp90 * scale) * exp_min / 90.0
                 predicted += (CLEAN_SHEET_POINTS.get(position, 0) * sixty
                               * clean_sheet_probability(goals_against))
+                if defensive:
+                    predicted += dc_per_fixture
                 if goalkeeping:
                     # Conceded and saved while he is on the pitch: a keeper or
                     # defender plays 90 or nothing often enough for minutes/90

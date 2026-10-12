@@ -200,5 +200,52 @@ class TestDefensiveContribution(unittest.TestCase):
         self.assertGreater(with_dc, without)
 
 
+class TestDefensiveMinutes(unittest.TestCase):
+    """The chance is convex in minutes, so it is taken at the minutes he plays."""
+
+    def chance(self, count):
+        return 2 * features.chance_of_defensive_contribution(count, "DEF")
+
+    def test_ninety_or_nothing_keeps_the_full_match_chance_scaled(self):
+        window = [{"minutes": 90}, {"minutes": 0}, {"minutes": 90}]
+        self.assertAlmostEqual(
+            features.defensive_contribution_points(9.0, "DEF", window, 60.0),
+            self.chance(9.0) * 60 / 90)
+
+    def test_sixty_every_match_is_judged_on_sixty_minutes(self):
+        window = [{"minutes": 60}] * 3
+        points = features.defensive_contribution_points(9.0, "DEF", window, 60.0)
+        self.assertAlmostEqual(points, self.chance(6.0))
+        self.assertLess(points, self.chance(9.0) * 60 / 90)
+
+    def test_nothing_without_minutes(self):
+        self.assertEqual(features.defensive_contribution_points(9.0, "DEF", [], 90.0), 0.0)
+        self.assertEqual(
+            features.defensive_contribution_points(9.0, "DEF", [{"minutes": 90}], 0.0), 0.0)
+
+
+class TestLeagueRates(unittest.TestCase):
+
+    def test_settled_rounds_before_the_target_only(self):
+        """The rule 2 filter every league rate shares."""
+        elements = [{"id": 1, "element_type": 2}]
+        histories = {1: [{"round": 1, "minutes": 90, "goals_conceded": 2},
+                         {"round": 2, "minutes": 90, "goals_conceded": 4},
+                         {"round": 3, "minutes": 90, "goals_conceded": 6}]}
+        rates = features.league_rates(elements, {2: "DEF"}, histories, 3, {1},
+                                      (features.conceded_points,))
+        self.assertEqual(rates, {"DEF": (-1.0,)})
+
+
+class TestPriorParts(unittest.TestCase):
+
+    def test_carry_goalkeeping_parts_from_the_same_row(self):
+        past = [{"season_name": "2025/26", "minutes": 3420, "total_points": 140,
+                 "goals_conceded": 38, "saves": 114, "clean_sheets": 12}]
+        parts = features.player_prior_parts(past, "2025/26", "GKP", xg_weight=0)
+        self.assertEqual((parts["conceded"], parts["saves"]),
+                         features.season_goalkeeping_parts(past[0], "GKP"))
+
+
 if __name__ == "__main__":
     unittest.main()

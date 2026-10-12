@@ -160,6 +160,7 @@ def defensive_count(row, position):
         return sum(row[f] or 0 for f in fields)
     return row.get("defensive_contribution") or 0
 
+
 # How much of the prior comes from last season's expected rather than realised
 # goals and assists: 0 is points as scored, 1 is fully expected. On the
 # backtest over GW2-5 (#30), xG helped at every floor below 2700 and tied at
@@ -211,7 +212,8 @@ def player_prior_parts(history_past, season, position=None, xg_weight=None, floo
     points, and everything. Plus "defensive_count", the defensive-contribution
     count per 90 as his position now counts it: a count, not points, because
     a season row cannot say in how many matches it reached the threshold
-    (#45, #48). The parts come from the same season row as the
+    (#45, #48). And "conceded" and "saves", from season_goalkeeping_parts. The
+    parts come from the same season row as the
     total, so a model that shrinks each part of this season toward the
     matching part here, at one weight, gets parts that add back up to its
     total. None when player_prior would be.
@@ -239,7 +241,9 @@ def player_prior_parts(history_past, season, position=None, xg_weight=None, floo
     per_90 = 90.0 / minutes
     return {"total": total * per_90, "attack": attack * per_90,
             "clean_sheet": clean_sheet * per_90,
-            "defensive_count": defensive_count(row, position) * per_90}
+            "defensive_count": defensive_count(row, position) * per_90,
+            **dict(zip(("conceded", "saves"), season_goalkeeping_parts(row, position),
+                       strict=True))}
 
 
 def season_minutes(history, target_gw, usable):
@@ -324,20 +328,31 @@ def chance_of_defensive_contribution(count_per_90, position):
     return max(0.0, 1.0 - below)
 
 
-def positional_defensive_rates(elements, positions, histories, target_gw, usable):
-    """League defensive contribution per 90, by position: (count, points)."""
+def settled_before(row, target_gw, usable):
+    """Whether a history row is from a settled round before the target (rule 2)."""
+    return row.get("round") is not None and row["round"] < target_gw and row["round"] in usable
+
+
+def league_rates(elements, positions, histories, target_gw, usable, parts):
+    """League per-90 rates by position, one per function in `parts`.
+
+    Each of `parts` maps (history row, position) to that row's amount. Summed
+    over every player's settled rows before the target and divided by their
+    minutes, so a position's prior for each part comes from what it actually
+    earned, from the same rounds a player is judged on.
+    """
     totals = {}
     for player in elements:
         position = positions.get(player["element_type"], "UNK")
-        t = totals.setdefault(position, [0.0, 0.0, 0])
+        t = totals.setdefault(position, [0.0] * len(parts) + [0])
         for row in histories.get(player["id"], []):
-            if row.get("round") is None or row["round"] >= target_gw or row["round"] not in usable:
+            if not settled_before(row, target_gw, usable):
                 continue
-            t[0] += row.get("defensive_contribution") or 0
-            t[1] += defensive_points(row, position)
-            t[2] += row.get("minutes") or 0
-    return {pos: (c * 90.0 / m, p * 90.0 / m) if m else (0.0, 0.0)
-            for pos, (c, p, m) in totals.items()}
+            for i, part in enumerate(parts):
+                t[i] += part(row, position)
+            t[-1] += row.get("minutes") or 0
+    return {pos: tuple(x * 90.0 / t[-1] if t[-1] else 0.0 for x in t[:-1])
+            for pos, t in totals.items()}
 
 
 def positional_rates(elements, positions, histories, target_gw, usable):
@@ -347,18 +362,31 @@ def positional_rates(elements, positions, histories, target_gw, usable):
     settled rounds, so a player with few minutes and no usable last season is
     shrunk toward what his position actually earns from each part.
     """
-    totals = {}
-    for player in elements:
-        position = positions.get(player["element_type"], "UNK")
-        t = totals.setdefault(position, [0.0, 0.0, 0])
-        for row in histories.get(player["id"], []):
-            if row.get("round") is None or row["round"] >= target_gw or row["round"] not in usable:
-                continue
-            t[0] += attack_points(row, position)
-            t[1] += clean_sheet_points(row, position)
-            t[2] += row.get("minutes") or 0
-    return {pos: (a * 90.0 / m, c * 90.0 / m) if m else (0.0, 0.0)
-            for pos, (a, c, m) in totals.items()}
+    return league_rates(elements, positions, histories, target_gw, usable,
+                        (attack_points, clean_sheet_points))
+
+
+def defensive_contribution_points(count_per_90, position, window, expected):
+    """Expected DC points in one fixture: his count per 90, his minutes expected.
+
+    The chance of reaching the threshold is steeply convex in minutes, so it
+    is taken at his usual minutes when he plays, times the chance he plays:
+    a defender who plays 90 or nothing keeps his full-match chance, scaled
+    down; one who always plays 60 is judged on a 60-minute count.
+    """
+    played = [r["minutes"] for r in window if (r.get("minutes") or 0) > 0]
+    if not played or expected <= 0:
+        return 0.0
+    usual = sum(played) / len(played)
+    return (DEFENSIVE_CONTRIBUTION_POINTS * min(1.0, expected / usual)
+            * chance_of_defensive_contribution(count_per_90 * usual / 90.0, position))
+
+
+def positional_defensive_rates(elements, positions, histories, target_gw, usable):
+    """League defensive contribution per 90, by position: (count, points)."""
+    return league_rates(elements, positions, histories, target_gw, usable,
+                        (lambda row, _: row.get("defensive_contribution") or 0,
+                         defensive_points))
 
 
 def split_rates(observed, minutes, priors, prior_minutes):
@@ -402,7 +430,6 @@ CONCEDED_POINTS = {"GKP": -1, "DEF": -1}
 CONCEDED_PER_POINT = 2
 SAVE_POINTS = {"GKP": 1}
 SAVES_PER_POINT = 3
-
 
 
 def poisson_floor_mean(mean, per):
@@ -467,7 +494,7 @@ def league_save_rate(elements, positions, histories, target_gw, usable):
         if positions.get(player["element_type"]) != "GKP":
             continue
         for row in histories.get(player["id"], []):
-            if row.get("round") is None or row["round"] >= target_gw or row["round"] not in usable:
+            if not settled_before(row, target_gw, usable):
                 continue
             saves += row.get("saves") or 0
             xgc += float(row.get("expected_goals_conceded") or 0)
@@ -475,19 +502,9 @@ def league_save_rate(elements, positions, histories, target_gw, usable):
 
 
 def positional_goalkeeping_rates(elements, positions, histories, target_gw, usable):
-    """League (conceded, saves) points per 90 by position, as positional_rates."""
-    totals = {}
-    for player in elements:
-        position = positions.get(player["element_type"], "UNK")
-        t = totals.setdefault(position, [0.0, 0.0, 0])
-        for row in histories.get(player["id"], []):
-            if row.get("round") is None or row["round"] >= target_gw or row["round"] not in usable:
-                continue
-            t[0] += conceded_points(row, position)
-            t[1] += save_points(row, position)
-            t[2] += row.get("minutes") or 0
-    return {pos: (c * 90.0 / m, s * 90.0 / m) if m else (0.0, 0.0)
-            for pos, (c, s, m) in totals.items()}
+    """League (conceded, saves) points per 90 by position."""
+    return league_rates(elements, positions, histories, target_gw, usable,
+                        (conceded_points, save_points))
 
 
 def split_parts(observed, minutes, priors, prior_minutes):
