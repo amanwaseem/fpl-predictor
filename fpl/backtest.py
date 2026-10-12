@@ -70,7 +70,12 @@ import sys
 from pathlib import Path
 
 from fpl import metrics, predict_fixture, score
-from fpl.candidates import baseline_fixture_rows, baseline_prior_rows
+from fpl.candidates import (
+    baseline_fixture_rows,
+    baseline_prior_rows,
+    flat_prior_rows,
+    price_prior_rows,
+)
 from fpl.features import player_prior, previous_season
 from fpl.paths import require_project_root
 from fpl.predict_baseline import predict_rows as baseline_rows
@@ -218,6 +223,10 @@ MODELS = {
     # in v2, now that it has another gameweek to be judged on.
     "form-fixture-v2-dc": lambda *view, **kw: _form_fixture(
         *view, goalkeeping=True, defensive=True, **kw),
+    # The v2 candidate with the flat prior moved by price for players without
+    # a usable last season (#49), and its control: the same weight, no price.
+    "price-prior": price_prior_rows,
+    "flat-prior-weight": flat_prior_rows,
     # form-fixture-v1 on FPL's difficulty: whether the ratings earn their
     # place over the comparator once the prior is in.
     "baseline-prior-fdr": lambda *view, **kw: baseline_fixture_rows(
@@ -230,6 +239,10 @@ MODELS = {
 # as it stands. Values are listed rather than ranged so a grid reads as the
 # claim it is: these, and only these, were tried.
 GRIDS = {
+    # The prior's weight for players without a usable last season: the flat
+    # prior's 270, and more. Over GW2-5 no value is chosen in every fold.
+    "price-prior": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400)},
+    "flat-prior-weight": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400)},
     # v1's settings stay at their logged values; only DC's own weight is tuned.
     "form-fixture-v2-dc": {"defensive_prior_scale": (0.25, 0.5, 1.0, 2.0)},
     "baseline-prior": {

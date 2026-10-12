@@ -83,7 +83,7 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
                  player_prior_minutes=PLAYER_PRIOR_MINUTES,
                  floor=None, xg_weight=None, prior_matches=None,
                  goalkeeping=False, defensive=False,
-                 defensive_prior_scale=DEFENSIVE_PRIOR_SCALE):
+                 defensive_prior_scale=DEFENSIVE_PRIOR_SCALE, positional_prior=None):
     """Predictions for every player, as log rows without provenance.
 
     The whole model, separated from where its inputs come from, as in
@@ -101,6 +101,12 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
     goals against, as clean sheets are. `defensive=True` adds #45's defensive
     contribution on top, from a shrunk count. Both False is form-fixture-v1 as
     logged, through the same arithmetic it was logged with.
+
+    `positional_prior`, if given, replaces the positional prior for a player
+    without a usable last season: called as (player, position, priors,
+    prior_minutes) with the positional (total, attack, clean sheet) and its
+    weight, it returns the pair to use instead. fpl.candidates' price prior
+    (#49) is one.
     """
     season = previous_season(bootstrap["events"]) if last_season else None
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
@@ -158,6 +164,9 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
                 prior_minutes = POSITION_PRIOR_MINUTES
                 priors = (POSITION_PRIOR_PP90.get(position, 3.5),
                           *league.get(position, (0.0, 0.0)))
+                if positional_prior is not None:
+                    priors, prior_minutes = positional_prior(player, position, priors,
+                                                             prior_minutes)
 
             minutes = sum(r["minutes"] for r in recent)
             observed = (sum(r["points"] for r in recent),
