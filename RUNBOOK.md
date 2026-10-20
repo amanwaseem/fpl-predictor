@@ -116,6 +116,60 @@ To test the alert end to end, run the workflow by hand from the Actions tab
 with a fake deadline: 48 hours and a gameweek with no entry should fail; the
 same with a logged gameweek should pass.
 
+### The automated entry
+
+`.github/workflows/entry.yml` runs hourly. Once the next deadline is 12 hours
+away or less, with no entry on `main`, no open PR adding one and no leftover
+`predict/gwNN` branch, it takes a snapshot, runs `fpl-entry`, uploads the
+snapshot as a release asset and opens a PR on `predict/gwNN`. It never
+merges. The decision is `tools/plan_entry.py`; each run's summary page says
+what it decided and why.
+
+When its PR appears, read it as you would your own run, then merge it before
+the deadline:
+
+- `included:` and `excluded:` are what you expect: no unsettled round
+  included (§3);
+- the deadline is right, and `generated` is before it;
+- `ci` is green.
+
+It does not replace the watchdog, which still fails at 72 hours with no entry
+on `main`. If the workflow fails, its run is red and GitHub emails you; the
+next hourly run tries again. A run that fails with "branch predict/gwNN exists
+on the remote with no open PR" needs you: open the PR from that branch, or
+make the entry by hand from §1. It skips while any open PR adds an entry for
+the gameweek, so a hand-made entry and an automated one never both happen.
+
+**Setting it up.** The PR is opened with `ENTRY_BOT_TOKEN`, so that `ci` runs
+on it (a PR opened with the default token triggers no workflows). Create a
+fine-grained personal access token: this repository only; Contents and Pull
+requests, read and write. Add it under Settings > Secrets and variables >
+Actions as `ENTRY_BOT_TOKEN`. Without it a real run stops before fetching and
+says so. A dry run does not need it.
+
+**Testing it.** Run the workflow by hand from the Actions tab. `dry_run` is on
+by default: it ignores the window, makes the entry under `scratch/`, and puts
+the digest on the run's summary page. Nothing is committed, released or
+opened. A fake deadline (dry runs only) keeps the window, to test the
+decision: 6 hours and a gameweek with no entry acts, 48 hours skips, and a
+gameweek with an entry on `main` skips.
+
+### Re-verifying an automated entry
+
+`data/raw/` is never committed (rule 3). Each automated entry's snapshot is
+the release asset `snapshot-<snapshot_id>`, named in the PR and the commit
+message with its SHA-256. To re-run `fpl-verify` on such an entry:
+
+```
+gh release download snapshot-<id> --dir /tmp/snap
+shasum -a 256 /tmp/snap/snapshot-<id>.tar.gz     # compare with the PR
+tar -xzf /tmp/snap/snapshot-<id>.tar.gz -C data/raw/
+fpl-verify predictions/gwNN_<model>.csv
+```
+
+Extracting never touches `LATEST`, and `fpl-verify` picks the snapshot by the
+entry's own `snapshot_id`.
+
 ---
 
 ## 1. Timing the snapshot
@@ -484,4 +538,5 @@ fpl-summarise predictions/gwNN_<model>.csv --out reports/
 python tools/check_log_immutable.py --ref origin/main      # rule 1, mechanically
 python -m unittest discover tests
 fpl-score                                                  # after GW N settles, not before
+python tools/plan_entry.py --open-prs F --remote-branches F  # what the entry workflow would decide
 ```
