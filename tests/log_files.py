@@ -4,7 +4,7 @@ import csv
 import json
 from pathlib import Path
 
-from fpl.score import SCORE_FIELDS
+from fpl.evaluation.score import SCORE_FIELDS
 from tests.fixtures import ELEMENT_TYPES, element, entry_rows, fixture, team, write_csv
 
 DEADLINE = "2026-10-23T17:30:00Z"

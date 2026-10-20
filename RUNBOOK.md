@@ -32,7 +32,7 @@ source .venv/bin/activate
 ```
 
 (Or prefix every command with `.venv/bin/`.) Each `fpl-<name>` is the same
-function as `python -m fpl.<module>`, so either spelling works.
+function as `python -m fpl.<package>.<module>`, so either spelling works.
 
 After pulling a change to `pyproject.toml` — the commands are declared there —
 re-run `pip install -r requirements.txt` once, or a new command will not exist.
@@ -209,7 +209,7 @@ fpl-entry                # the real entries, into predictions/ and reports/
 
 `fpl-entry` runs steps 3–6 for every logged model, from one snapshot
 (`LATEST`, or `--snapshot <id>`). The list of logged models is
-`LOGGED_MODELS` in `fpl/entry.py`. It calls the same commands as the steps
+`LOGGED_MODELS` in `fpl/log/entry.py`. It calls the same commands as the steps
 below, so it writes the same files. It differs from them in three ways:
 
 - Every model's scratch run comes first, so nothing reaches `predictions/`
@@ -287,7 +287,7 @@ fpl-predict-fixture --gw N
 Writes `predictions/gwNN_<model-version>.csv` — the default `--out` is
 `predictions/`, so omitting the flag is what makes it a real entry.
 
-This is the point of no return once committed. `fpl/log.py` refuses to write a
+This is the point of no return once committed. `fpl/log/contract.py` refuses to write a
 log entry at or after its own deadline, and refuses to overwrite an existing
 file.
 
@@ -316,7 +316,7 @@ time.
 
 The verifier re-opens the snapshot named in the entry's own `snapshot_id`
 column and cross-checks the entry against it. Six families of check, plus the
-schema validator from `fpl/log.py`:
+schema validator from `fpl/log/contract.py`:
 
 | | |
 |---|---|

@@ -174,7 +174,7 @@ class TestConstraints(unittest.TestCase):
         self.insert(Prediction, **row, model_version="baseline-v1")
 
     def test_the_log_copy_keeps_every_digit_it_was_written_with(self):
-        """fpl.log does not limit decimal places, so neither may its copy (#80)."""
+        """fpl.log.contract does not limit decimal places, so neither may its copy (#80)."""
         self.insert(Prediction, season=SEASON, gameweek=8, model_version="baseline-v1",
                     player_id=16, web_name="Saka", team="ARS", position="MID",
                     price=Decimal("10.1"), predicted_points=Decimal("5.125"),

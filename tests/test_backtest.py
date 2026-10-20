@@ -1,4 +1,4 @@
-"""Tests for fpl/backtest.py, the offline replay of settled gameweeks.
+"""Tests for fpl/evaluation/backtest.py, the offline replay of settled gameweeks.
 
 The first class is the one that matters. A backtest that leaks tunes models
 toward information they will never have at a real deadline, so the leak test
@@ -17,8 +17,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from fpl import backtest, predict_baseline
-from fpl.snapshot import load_snapshot, usable_rounds
+from fpl.evaluation import backtest
+from fpl.ingest.snapshot import load_snapshot, usable_rounds
+from fpl.models import predict_baseline
 from tests import fixtures
 
 LATER = "20260922T000000Z"
@@ -336,7 +337,7 @@ class TestRun(fixtures.TempCwd):
     def test_command_line(self):
         repo = Path(__file__).resolve().parent.parent
         result = subprocess.run(
-            [sys.executable, "-m", "fpl.backtest", "--from", "2", "--to", "3"],
+            [sys.executable, "-m", "fpl.evaluation.backtest", "--from", "2", "--to", "3"],
             capture_output=True, text=True, env=dict(os.environ, PYTHONPATH=str(repo)))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(result.stdout.startswith("BACKTEST — A backtest is not evidence"))
@@ -425,7 +426,8 @@ class TestHeldOut(fixtures.TempCwd):
     def test_command_line(self):
         repo = Path(__file__).resolve().parent.parent
         result = subprocess.run(
-            [sys.executable, "-m", "fpl.backtest", "--model", "baseline-prior", "--held-out"],
+            [sys.executable, "-m", "fpl.evaluation.backtest",
+             "--model", "baseline-prior", "--held-out"],
             capture_output=True, text=True, env=dict(os.environ, PYTHONPATH=str(repo)))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(result.stdout.startswith("BACKTEST, HELD OUT — A backtest is not evidence"))

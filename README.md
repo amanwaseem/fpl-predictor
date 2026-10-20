@@ -140,10 +140,11 @@ reproducibility from its `snapshot_id`; that claim covers the data, and the pin 
 around it. The package is installed editable, so the commands always run the checkout, never a
 stale copy from before the last `git pull`.
 
-Run every command from the repository root, with the virtualenv active. Paths resolve against
-the working directory, so the commands refuse to run anywhere else rather than start a second
-`data/raw/` or a `predictions/` that is not the log. `fpl-serve` and `fpl-migrate` are the exceptions: they read only the
-database, so they run anywhere, including the deployed image.
+Every `fpl-*` command is also `python -m fpl.<package>.<module>`; the two run the same function. Run them
+from the repository root, with the virtualenv active: paths resolve against the working directory, so
+the commands refuse to run anywhere else rather than start a second `data/raw/` or a `predictions/`
+that is not the log. `fpl-serve` and `fpl-migrate` are the exceptions: they read only the database,
+so they run anywhere, including the deployed image.
 
 ### Commands
 
@@ -163,7 +164,6 @@ database, so they run anywhere, including the deployed image.
 | `fpl-migrate` | Bring the database's schema to the latest migration; the deploy's release command |
 | `fpl-serve` | The read API over the database, at `http://127.0.0.1:8000`, with interactive docs at `/docs` |
 
-Every `fpl-*` command is also `python -m fpl.<module>`; the two run the same function.
 
 ### Making an entry
 

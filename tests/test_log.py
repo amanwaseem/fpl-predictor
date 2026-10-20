@@ -23,7 +23,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fpl.log import (
+from fpl.log.contract import (
     FIELDS,
     parse_entry_filename,
     validate_rows,

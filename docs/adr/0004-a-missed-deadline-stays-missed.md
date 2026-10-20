@@ -15,7 +15,7 @@ like one made on time.
 
 - No late entries and no backfill. A prediction made after its deadline cannot
   be told apart from one made knowing the result, so it is not evidence.
-  `fpl/log.py` refuses to write one into `predictions/` (SPEC §5 rule 5), and
+  `fpl/log/contract.py` refuses to write one into `predictions/` (SPEC §5 rule 5), and
   hard rule 2 in CLAUDE.md forbids using post-deadline information.
 - The gap is shown, not skipped. After a model's first entry, a settled
   gameweek with no entry is listed as missed in `scores/cumulative.json`

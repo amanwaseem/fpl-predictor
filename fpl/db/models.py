@@ -40,7 +40,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import INT4RANGE, JSONB, ExcludeConstraint, Range
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from fpl.log import POSITIONS, STATUSES
+from fpl.log.contract import POSITIONS, STATUSES
 
 # Constraint names are part of the schema: migrations refer to them by name, so
 # they are generated predictably rather than left to Postgres.

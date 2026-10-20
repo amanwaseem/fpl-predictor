@@ -264,7 +264,7 @@ def main(skip_players: bool, resume: bool) -> None:
 
 
 def cli(argv=None):
-    """`fpl-fetch`, or `python -m fpl.fetch`."""
+    """`fpl-fetch`, or `python -m fpl.ingest.fetch`."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-players", action="store_true", help="skip slow per-player fetch")
     ap.add_argument("--resume", action="store_true",

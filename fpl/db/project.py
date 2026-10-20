@@ -5,7 +5,7 @@
 The database is a projection of the log, not a second record of it. Every run
 rebuilds the log tables from the files in one transaction, so the database
 says what git says and nothing else; `fpl-reconcile` checks that it does.
-Entries are read with fpl.log.read_entry, the same reader the verifier and the
+Entries are read with fpl.log.contract.read_entry, the same reader the verifier and the
 scoring harness use.
 
 Reads predictions/ and scores/; writes neither. Run from the repository root,
@@ -25,9 +25,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from fpl.db.models import PlayerScore, Prediction, PredictionEntry, ScoreEntry, Season
 from fpl.db.session import exits_on_bad_url, make_engine
-from fpl.log import LOG_DIR_NAME, parse_entry_filename, parse_timestamp, read_entry
+from fpl.evaluation.score import SCORE_FIELDS, find_entries
+from fpl.log.contract import LOG_DIR_NAME, parse_entry_filename, parse_timestamp, read_entry
 from fpl.paths import require_project_root
-from fpl.score import SCORE_FIELDS, find_entries
 
 SCORES_DIR = "scores"
 # Any fixed key will do: it only has to be the same for every fpl-project.

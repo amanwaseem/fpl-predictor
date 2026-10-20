@@ -1,4 +1,4 @@
-"""Tests for fpl/predict_fixture.py, form-fixture-v1.
+"""Tests for fpl/models/predict_fixture.py, form-fixture-v1.
 
 One class per component the model sums (#32): minutes, attacking returns,
 clean sheet, the rest, and the prior they are all shrunk toward. Then a full
@@ -16,9 +16,10 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from fpl import predict_fixture, verify_entry
-from fpl.log import FIELDS
-from fpl.snapshot import usable_rounds
+from fpl.ingest.snapshot import usable_rounds
+from fpl.log import verify_entry
+from fpl.log.contract import FIELDS
+from fpl.models import predict_fixture
 from tests import fixtures
 
 EVENTS = fixtures.season(4, fixtures.future_deadline())
@@ -184,9 +185,10 @@ class TestImportBoundary(unittest.TestCase):
         imported = {node.module for node in ast.walk(tree)
                     if isinstance(node, ast.ImportFrom) and node.module}
         # fpl.paths is the shared repository-root check every command makes.
-        allowed = {"fpl.features", "fpl.log", "fpl.paths", "fpl.snapshot", "fpl.teams"}
+        allowed = {"fpl.models.features", "fpl.log.contract", "fpl.paths",
+                   "fpl.ingest.snapshot", "fpl.models.teams"}
         self.assertLessEqual(imported, allowed)
-        self.assertNotIn("fpl.predict_baseline", imported)
+        self.assertNotIn("fpl.models.predict_baseline", imported)
 
 
 class TestEndToEnd(fixtures.TempCwd):

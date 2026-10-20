@@ -17,8 +17,8 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from fpl import summarise
-from fpl.log import FIELDS
+from fpl.log import summarise
+from fpl.log.contract import FIELDS
 
 DEADLINE = "2026-09-12T12:30:00Z"
 GENERATED = "2026-09-10T10:52:16Z"

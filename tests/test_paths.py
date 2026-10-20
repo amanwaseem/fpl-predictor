@@ -19,7 +19,7 @@ import tomllib
 import unittest
 from pathlib import Path
 
-from fpl import predict_baseline
+from fpl.models import predict_baseline
 from fpl.paths import PROJECT_NAME, require_project_root
 
 ROOT = Path(__file__).resolve().parent.parent

@@ -1,4 +1,4 @@
-"""Tests for fpl/metrics.py against hand-computed values.
+"""Tests for fpl/evaluation/metrics.py against hand-computed values.
 
 Every expected number here was worked out by hand, not by running the code, so
 a test that passes is agreement between two independent derivations.
@@ -9,7 +9,7 @@ Run from the repository root: python -m unittest discover tests
 import math
 import unittest
 
-from fpl.metrics import (
+from fpl.evaluation.metrics import (
     average_ranks,
     bias,
     mae,

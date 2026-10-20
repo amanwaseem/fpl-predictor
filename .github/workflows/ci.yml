@@ -71,7 +71,7 @@ jobs:
         shell: bash
         run: |
           mkdir elsewhere && cd elsewhere
-          python -c "import fpl.predict_fixture"
+          python -c "import fpl.models.predict_fixture"
           for command in $(python -c "import tomllib; print(*tomllib.load(open('$GITHUB_WORKSPACE/pyproject.toml', 'rb'))['project']['scripts'])"); do
             "$command" --help > /dev/null && echo "$command --help ok"
           done

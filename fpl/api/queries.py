@@ -1,6 +1,6 @@
 """The SQL behind each route, as plain dicts shaped like fpl.api.schemas.
 
-Pooled metrics and missed gameweeks come from the helpers fpl.score.cumulative
+Pooled metrics and missed gameweeks come from the helpers fpl.evaluation.score.cumulative
 uses, so the API's scorecard cannot disagree with the scorecard scores/ writes.
 """
 
@@ -25,7 +25,7 @@ from fpl.db.models import (
     SeasonPlayer,
     Team,
 )
-from fpl.score import missed_gameweeks, pooled_block
+from fpl.evaluation.score import missed_gameweeks, pooled_block
 
 
 def not_found(detail):

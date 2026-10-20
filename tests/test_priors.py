@@ -1,13 +1,13 @@
-"""Tests for the priors in fpl/features.py and the candidate that isolates them.
+"""Tests for the priors in fpl/models/features.py and the candidate that isolates them.
 
 Run from the repository root: python -m unittest discover tests
 """
 
 import unittest
 
-from fpl import features, predict_baseline
-from fpl.candidates import baseline_prior_rows
-from fpl.snapshot import usable_rounds
+from fpl.ingest.snapshot import usable_rounds
+from fpl.models import features, predict_baseline
+from fpl.models.candidates import baseline_prior_rows
 from tests import fixtures
 
 EVENTS = fixtures.season(4, fixtures.future_deadline())  # GW1 in August 2026

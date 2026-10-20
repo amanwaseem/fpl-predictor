@@ -12,7 +12,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from fpl import entry, predict_baseline, predict_fixture
+from fpl.log import entry
+from fpl.models import predict_baseline, predict_fixture
 from tests import fixtures
 from tests.test_predict_fixture import played, row
 

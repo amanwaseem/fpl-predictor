@@ -5,7 +5,7 @@ events first: knowing a side will score three matters more than knowing which
 of its players will. This module rates each club's attack and defence from
 settled rounds and turns a fixture into expected goals for each side.
 
-Shared rather than inside a model file, like fpl.features: two models reading
+Shared rather than inside a model file, like fpl.models.features: two models reading
 fixtures differently would make their entries incomparable.
 
 ## The model
@@ -26,7 +26,7 @@ five rounds of goals are mostly finishing luck.
 Team xG for a fixture is the sum of its players' `expected_goals` from their
 history rows, and goals come from the fixture's score. Both read only rounds
 strictly before the target and in `usable` — the same rule 2 boundary as
-fpl.features.recent_history — so in the backtest's cut-back view they are
+fpl.models.features.recent_history — so in the backtest's cut-back view they are
 leak-free by construction.
 """
 

@@ -29,8 +29,8 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fpl.fetch import get
-from fpl.log import LOG_DIR_NAME, TIMESTAMP, parse_entry_filename
+from fpl.ingest.fetch import get
+from fpl.log.contract import LOG_DIR_NAME, TIMESTAMP, parse_entry_filename
 
 # Three days: room for a snapshot after the press conferences, a PR and a
 # merge, with the daily run firing on at least two of them.

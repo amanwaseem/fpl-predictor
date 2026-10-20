@@ -44,11 +44,11 @@ import json
 import sys
 from pathlib import Path
 
-from fpl import metrics
-from fpl.log import LOG_DIR_NAME, parse_entry_filename, read_entry
+from fpl.evaluation import metrics
+from fpl.evaluation.xi import best_xi
+from fpl.ingest.snapshot import SNAPSHOT_ID, load_live, load_snapshot
+from fpl.log.contract import LOG_DIR_NAME, parse_entry_filename, read_entry
 from fpl.paths import require_project_root
-from fpl.snapshot import SNAPSHOT_ID, load_live, load_snapshot
-from fpl.xi import best_xi
 
 # Bumped whenever a metric's definition changes, so that rewritten score files
 # say so.
@@ -215,7 +215,7 @@ def _comparators(matched, bootstrap):
     if missing:
         raise SystemExit(
             f"Players {missing[:5]} are in the entry but not in the snapshot it "
-            "names. The entry and its snapshot disagree; run fpl.verify_entry."
+            "names. The entry and its snapshot disagree; run fpl.log.verify_entry."
         )
 
     out = {"available": True}
@@ -484,7 +484,7 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
         if len(snapshot_ids) != 1:
             raise SystemExit(
                 f"{path} names {len(snapshot_ids)} snapshots ({', '.join(snapshot_ids[:3])}). "
-                "An entry is predicted from exactly one; run fpl.verify_entry on it."
+                "An entry is predicted from exactly one; run fpl.log.verify_entry on it."
             )
         if gw not in live_cache:
             live_cache[gw] = actuals(load_live(snap, gw))
@@ -526,7 +526,7 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
 
 
 def cli(argv=None):
-    """`fpl-score`, or `python -m fpl.score`."""
+    """`fpl-score`, or `python -m fpl.evaluation.score`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--actuals", default=None, metavar="SNAPSHOT_ID",
                     help="snapshot holding the actual results (default: LATEST)")

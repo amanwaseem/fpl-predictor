@@ -28,7 +28,7 @@ gameweeks can resolve.
 
 ## Decision
 
-Model fixture difficulty explicitly, in one shared module, `fpl/teams.py`. Each
+Model fixture difficulty explicitly, in one shared module, `fpl/models/teams.py`. Each
 club gets attack and defence ratings from settled rounds' xG, fitted jointly
 and shrunk toward league average. A fixture becomes expected goals for each
 side and a Poisson clean-sheet probability. Models read fixtures through this

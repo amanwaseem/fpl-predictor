@@ -1,4 +1,4 @@
-"""Tests for fpl/xi.py, the exact legal-XI selector.
+"""Tests for fpl/evaluation/xi.py, the exact legal-XI selector.
 
 The central claim is exactness, so it is checked the only way that does not
 trust the implementation: against brute force over every eleven-player subset
@@ -12,7 +12,7 @@ import unittest
 from collections import Counter
 from itertools import combinations
 
-from fpl.xi import FORMATIONS, MAX_PER_CLUB, best_xi
+from fpl.evaluation.xi import FORMATIONS, MAX_PER_CLUB, best_xi
 
 
 def player(pid, position, team, points):

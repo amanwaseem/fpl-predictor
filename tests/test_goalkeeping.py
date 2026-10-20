@@ -1,6 +1,6 @@
 """Tests for #48: goals conceded and saves, priced from the fixture.
 
-The scoring rules and the Poisson floor in fpl/features.py, then the
+The scoring rules and the Poisson floor in fpl/models/features.py, then the
 candidate for form-fixture-v2 (`goalkeeping=True`) on test_predict_fixture's
 league with a keeper added to two clubs. Also #45's defensive contribution
 (`defensive=True`), which is measured alongside it.
@@ -12,7 +12,7 @@ import math
 import unittest
 from unittest import mock
 
-from fpl import features, predict_fixture
+from fpl.models import features, predict_fixture
 from tests.test_predict_fixture import League
 
 SOFT = [(1, 3), (2, 4)]  # each strong side at home to a weak one

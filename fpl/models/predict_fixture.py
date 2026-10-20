@@ -20,7 +20,7 @@ constants, frozen for the log on 6 Oct.
 `points_per_90` in the log is the shrunk rate before the fixture is applied,
 so it keeps baseline-v1's meaning; `predicted_points` is after.
 
-Usage, as fpl.predict_baseline:
+Usage, as fpl.models.predict_baseline:
     fpl-predict-fixture                 # predict the next gameweek
     fpl-predict-fixture --gw 6          # a specific gameweek
     fpl-predict-fixture --out scratch/  # exploratory, not the log
@@ -32,7 +32,9 @@ import argparse
 import json
 import sys
 
-from fpl.features import (
+from fpl.ingest.snapshot import fixture_counts, load_snapshot, resolve_target_gw, usable_rounds
+from fpl.log.contract import write_entry
+from fpl.models.features import (
     CLEAN_SHEET_POINTS,
     CONCEDED_PER_POINT,
     CONCEDED_POINTS,
@@ -66,10 +68,8 @@ from fpl.features import (
     split_parts,
     split_rates,
 )
-from fpl.log import write_entry
+from fpl.models.teams import DifficultyRatings, Ratings, clean_sheet_probability, team_matches
 from fpl.paths import require_project_root
-from fpl.snapshot import fixture_counts, load_snapshot, resolve_target_gw, usable_rounds
-from fpl.teams import DifficultyRatings, Ratings, clean_sheet_probability, team_matches
 
 MODEL_VERSION = "form-fixture-v1"
 
@@ -105,8 +105,8 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
     `positional_prior`, if given, replaces the positional prior for a player
     without a usable last season: called as (player, position, priors,
     prior_minutes, minutes this season) with the positional (total, attack,
-    clean sheet) and its weight, it returns the pair to use instead. fpl.candidates' price prior
-    (#49) is one.
+    clean sheet) and its weight, it returns the pair to use instead.
+    fpl.models.candidates' price prior (#49) is one.
     """
     season = previous_season(bootstrap["events"]) if last_season else None
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
@@ -254,7 +254,7 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
 
 
 def main(requested_gw, out_dir, snapshot_id=None):
-    # snapshot_id names one snapshot in place of data/raw/LATEST. fpl.entry
+    # snapshot_id names one snapshot in place of data/raw/LATEST. fpl.log.entry
     # passes it so that every model in an entry reads the same snapshot, even
     # if a fetch moves LATEST partway through the run.
     snap, bootstrap, fixtures, players_dir = load_snapshot(snapshot_id)
@@ -339,7 +339,7 @@ def main(requested_gw, out_dir, snapshot_id=None):
 
 
 def cli(argv=None):
-    """`fpl-predict-fixture`, or `python -m fpl.predict_fixture`."""
+    """`fpl-predict-fixture`, or `python -m fpl.models.predict_fixture`."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--gw", type=int, default=None, help="target gameweek (default: next)")
     ap.add_argument(
