@@ -3,11 +3,13 @@
   "models": {
     "baseline-v1": {
       "gameweeks_missed": [
-        5
+        5,
+        7
       ],
       "gameweeks_pending": [],
       "gameweeks_scored": [
-        4
+        4,
+        6
       ],
       "per_gameweek": [
         {
@@ -17,30 +19,80 @@
           "n": 654,
           "rmse": 2.1885,
           "spearman": 0.7126
+        },
+        {
+          "bias": -0.1723,
+          "gameweek": 6,
+          "mae": 1.0313,
+          "n": 667,
+          "rmse": 2.0596,
+          "spearman": 0.7465
         }
       ],
       "pooled": {
         "all": {
-          "bias": -0.1688,
-          "mae": 1.1528,
-          "n": 654,
-          "rmse": 2.1885,
-          "spearman": 0.7126
+          "bias": -0.1706,
+          "mae": 1.0914,
+          "n": 1321,
+          "rmse": 2.1244,
+          "spearman": 0.7289
         },
-        "minutes_mae": 10.9122,
+        "minutes_mae": 10.9225,
         "predicted_to_play": {
-          "bias": -0.2135,
-          "mae": 1.9434,
-          "n": 372,
-          "rmse": 2.8517,
-          "spearman": 0.5094
+          "bias": -0.2292,
+          "mae": 1.8468,
+          "n": 752,
+          "rmse": 2.7735,
+          "spearman": 0.5092
         }
       },
       "xi": {
-        "captured": 56,
-        "captured_share": 0.3836,
+        "captured": 105,
+        "captured_share": 0.3777,
+        "gameweeks": 2,
+        "optimum": 278
+      }
+    },
+    "form-fixture-v1": {
+      "gameweeks_missed": [
+        7
+      ],
+      "gameweeks_pending": [],
+      "gameweeks_scored": [
+        6
+      ],
+      "per_gameweek": [
+        {
+          "bias": -0.2257,
+          "gameweek": 6,
+          "mae": 1.0275,
+          "n": 667,
+          "rmse": 2.0784,
+          "spearman": 0.7438
+        }
+      ],
+      "pooled": {
+        "all": {
+          "bias": -0.2257,
+          "mae": 1.0275,
+          "n": 667,
+          "rmse": 2.0784,
+          "spearman": 0.7438
+        },
+        "minutes_mae": 10.9325,
+        "predicted_to_play": {
+          "bias": -0.3383,
+          "mae": 1.7456,
+          "n": 380,
+          "rmse": 2.72,
+          "spearman": 0.5063
+        }
+      },
+      "xi": {
+        "captured": 30,
+        "captured_share": 0.2273,
         "gameweeks": 1,
-        "optimum": 146
+        "optimum": 132
       }
     }
   }
