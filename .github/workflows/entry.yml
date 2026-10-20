@@ -1,0 +1,222 @@
+# Makes each gameweek's entry and opens its PR before the deadline (#68). GW5
+# and GW7 were missed because nobody started the entry; for GW7 the watchdog
+# fired and still nothing happened. This runs hourly. Once the next deadline is
+# 12 hours away or less, with no entry on main and no open PR adding one, it
+# snapshots, runs fpl-entry, uploads the snapshot as a release asset and opens
+# the PR. A human reads the PR and merges it. See tools/plan_entry.py for the
+# decision and RUNBOOK.md for what to check before merging.
+#
+# The watchdog (deadline.yml) is separate and unchanged. It is the alarm if
+# this workflow fails or its PR sits unmerged: it still fails at 72 hours with
+# no entry on main.
+#
+# Snapshots are not committed (rule 3). Each one that produced an entry is
+# uploaded to a release tagged snapshot-<id>, so fpl-verify can be re-run
+# against it later; the PR body records the tag and its SHA-256.
+#
+# The PR is opened with ENTRY_BOT_TOKEN, a fine-grained personal access token
+# for this repository only (contents and pull requests: read and write). A PR
+# opened with the default GITHUB_TOKEN does not trigger other workflows, so the
+# required `ci` check would never report on it.
+#
+# Manual runs are dry runs unless told otherwise: everything up to the entry,
+# under scratch/, and nothing committed, released or opened. The window is
+# ignored unless a fake deadline is given. The digest goes to the run's
+# summary page.
+name: Entry
+
+on:
+  schedule:
+    # Hourly, off the top of the hour when scheduled runs queue longest.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: entry under scratch/; no commit, release or PR"
+        type: boolean
+        default: true
+      fake_deadline_hours:
+        description: "Dry run only: pretend the next deadline is this many hours away (blank = read the API)"
+        required: false
+        default: ""
+      fake_gameweek:
+        description: "Dry run only: the gameweek of the fake deadline"
+        required: false
+        default: ""
+
+permissions:
+  contents: write       # the snapshot release
+  pull-requests: read   # the duplicate check
+
+# One run at a time, none cancelled. A run queued behind one that opened the
+# PR finds that PR and skips.
+concurrency:
+  group: entry
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  entry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      FAKE_HOURS: ${{ inputs.fake_deadline_hours }}
+      FAKE_GW: ${{ inputs.fake_gameweek }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          # The push and the PR use the bot token so `ci` runs on the PR. A
+          # dry run never pushes, and works without the secret.
+          token: ${{ secrets.ENTRY_BOT_TOKEN || github.token }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+            pyproject.toml
+      - run: pip install -r requirements.txt
+
+      - name: Decide whether to make an entry now
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --state open --limit 100 --json number,headRefName,files > "$RUNNER_TEMP/prs.json"
+          git ls-remote --heads origin | sed 's|.*refs/heads/||' > "$RUNNER_TEMP/branches.txt"
+          args=(--open-prs "$RUNNER_TEMP/prs.json" --remote-branches "$RUNNER_TEMP/branches.txt")
+          # A plain dry run ignores the window, to rehearse at any time. A fake
+          # deadline keeps it, since testing the window is the point.
+          if [ "$DRY_RUN" = "true" ] && [ -n "$FAKE_HOURS" ]; then
+            args+=(--fake-deadline-hours "$FAKE_HOURS" --fake-gameweek "$FAKE_GW")
+          elif [ "$DRY_RUN" = "true" ]; then
+            args+=(--ignore-window)
+          elif [ -n "$FAKE_HOURS" ]; then
+            echo "A fake deadline is for dry runs only."; exit 1
+          fi
+          python tools/plan_entry.py "${args[@]}"
+
+      - name: The bot token is set
+        if: steps.plan.outputs.act == 'true' && env.DRY_RUN != 'true'
+        env:
+          TOKEN: ${{ secrets.ENTRY_BOT_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "ENTRY_BOT_TOKEN is not set: the PR would be opened without CI running on it."
+            echo "Add it under Settings > Secrets and variables > Actions. See RUNBOOK.md."
+            exit 1
+          fi
+
+      # About six minutes. Not piped: a failed fetch has to fail the step.
+      - name: Snapshot the API
+        if: steps.plan.outputs.act == 'true'
+        run: fpl-fetch
+
+      - name: The snapshot is for the planned gameweek
+        if: steps.plan.outputs.act == 'true'
+        id: snapshot
+        env:
+          PLANNED: ${{ steps.plan.outputs.gameweek }}
+        run: |
+          id=$(cat data/raw/LATEST)
+          next=$(python -c "import json, sys
+          events = json.load(open(sys.argv[1]))['events']
+          print(next((e['id'] for e in events if e['is_next']), ''))" "data/raw/$id/bootstrap.json")
+          echo "snapshot $id: is_next is GW$next; planned GW$PLANNED"
+          if [ "$DRY_RUN" != "true" ] || [ -z "$FAKE_HOURS" ]; then
+            [ "$next" = "$PLANNED" ] || { echo "The snapshot is not for the planned gameweek."; exit 1; }
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      - name: Make the entry
+        if: steps.plan.outputs.act == 'true'
+        env:
+          SNAPSHOT: ${{ steps.snapshot.outputs.id }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            fpl-entry --snapshot "$SNAPSHOT" --dry-run
+          else
+            fpl-entry --snapshot "$SNAPSHOT"
+          fi
+          digest=$(ls -td scratch/entry-gw*/ | head -1)digest.md
+          { echo "### Entry digest"; echo; cat "$digest"; } >> "$GITHUB_STEP_SUMMARY"
+          cp "$digest" "$RUNNER_TEMP/digest.md"
+
+      - name: The new entries are the planned gameweek's, and nothing else changed
+        if: steps.plan.outputs.act == 'true' && env.DRY_RUN != 'true'
+        env:
+          PLANNED: ${{ steps.plan.outputs.gameweek }}
+        run: |
+          gw=$(printf "%02d" "$PLANNED")
+          git status --porcelain
+          unexpected=$(git status --porcelain | grep -vE "^\?\? (predictions/gw${gw}_[^/]+\.csv|reports/gw${gw}_[^/]+\.md)$" || true)
+          [ -z "$unexpected" ] || { echo "Unexpected changes:"; echo "$unexpected"; exit 1; }
+          ls predictions/gw${gw}_*.csv
+          python tools/check_log_immutable.py --ref origin/main
+
+      - name: Upload the snapshot as a release asset
+        if: steps.plan.outputs.act == 'true' && env.DRY_RUN != 'true'
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SNAPSHOT: ${{ steps.snapshot.outputs.id }}
+          PLANNED: ${{ steps.plan.outputs.gameweek }}
+        run: |
+          tarball="$RUNNER_TEMP/snapshot-$SNAPSHOT.tar.gz"
+          tar -C data/raw -czf "$tarball" "$SNAPSHOT"
+          sha=$(sha256sum "$tarball" | cut -d' ' -f1)
+          gh release create "snapshot-$SNAPSHOT" "$tarball" --target main --latest=false \
+            --title "Snapshot $SNAPSHOT (GW$PLANNED entry)" \
+            --notes "Raw FPL API snapshot that produced the GW$PLANNED entry. SHA-256: \`$sha\`. To re-verify: RUNBOOK.md, \"Re-verifying an automated entry\"."
+          echo "tag=snapshot-$SNAPSHOT" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Commit, push and open the PR
+        if: steps.plan.outputs.act == 'true' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ENTRY_BOT_TOKEN }}
+          PLANNED: ${{ steps.plan.outputs.gameweek }}
+          DEADLINE: ${{ steps.plan.outputs.deadline }}
+          SNAPSHOT: ${{ steps.snapshot.outputs.id }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          gw=$(printf "%02d" "$PLANNED")
+          branch="predict/gw$gw"
+          models=$(ls predictions/gw${gw}_*.csv | sed -E "s|predictions/gw${gw}_(.*)\.csv|\1|" | paste -sd, - | sed 's/,/ and /g')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add predictions/gw${gw}_*.csv reports/gw${gw}_*.md
+          git commit -q -F - <<EOF
+          Log GW$PLANNED predictions: $models, from one snapshot
+
+          Made by the entry workflow from snapshot $SNAPSHOT, before the
+          $DEADLINE deadline. The snapshot is the release asset $TAG,
+          SHA-256 $SHA.
+
+          Entry-Made-By: entry-automation
+          EOF
+          git push -u origin "$branch"
+          {
+            echo "Made by the entry workflow (#68). **Merge before \`$DEADLINE\`.** A missed deadline stays missed."
+            echo
+            echo "- snapshot: \`$SNAPSHOT\`, release asset [\`$TAG\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG), SHA-256 \`$SHA\`"
+            echo "- run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo "Before merging (RUNBOOK.md, \"The automated entry\"):"
+            echo
+            echo "- [ ] \`included:\` and \`excluded:\` below are what you expect: no unsettled round included"
+            echo "- [ ] the deadline is right and \`generated\` is before it"
+            echo "- [ ] \`ci\` is green"
+            echo
+            cat "$RUNNER_TEMP/digest.md"
+          } > "$RUNNER_TEMP/body.md"
+          gh pr create --base main --head "$branch" \
+            --title "GW$PLANNED entries: $models, before $DEADLINE" \
+            --body-file "$RUNNER_TEMP/body.md"
