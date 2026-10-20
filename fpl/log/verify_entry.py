@@ -12,7 +12,7 @@ answer is wrong.
 
 It is `log.validate_rows` plus the cross-checks that need the snapshot open
 alongside the entry — row coverage, fixture counts, availability, and the
-deadline. Those cannot live in `fpl/log.py`, which validates rows in memory at
+deadline. Those cannot live in `fpl/log/contract.py`, which validates rows in memory at
 write time and has no snapshot to compare them against.
 
 The snapshot is chosen by the entry's own `snapshot_id` column, not by
@@ -30,8 +30,8 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fpl.features import availability
-from fpl.log import (
+from fpl.ingest.snapshot import fixture_counts, load_snapshot
+from fpl.log.contract import (
     MAX_REPORTED,
     PROVENANCE,
     TIMESTAMP,
@@ -39,8 +39,8 @@ from fpl.log import (
     read_entry,
     validate_rows,
 )
+from fpl.models.features import availability
 from fpl.paths import require_project_root
-from fpl.snapshot import fixture_counts, load_snapshot
 
 # The Premier League is twenty clubs. An entry representing fewer has lost a
 # whole team somewhere between the snapshot and the CSV, which no per-row check
@@ -428,7 +428,7 @@ def main(path):
 
 
 def cli(argv=None):
-    """`fpl-verify`, or `python -m fpl.verify_entry`."""
+    """`fpl-verify`, or `python -m fpl.log.verify_entry`."""
     ap = argparse.ArgumentParser(
         description="Verify a prediction log entry against its own snapshot."
     )

@@ -5,7 +5,7 @@ against the working tree. A modified or deleted entry exits non-zero and is
 named; a new entry passes, because appending is the whole point.
 
 The rule was previously enforced by nothing but the "file already exists"
-check inside `fpl/log.py`, which stops a second *write* through that function.
+check inside `fpl/log/contract.py`, which stops a second *write* through that function.
 It does nothing about an editor, a `sed -i`, or a rebase — the ways a
 committed prediction actually gets altered. Those are exactly the changes a
 human reviewer misses in a large diff, which is why CI runs this on every PR

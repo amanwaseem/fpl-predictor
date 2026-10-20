@@ -1,7 +1,7 @@
 """Tests for #49's candidate: the flat positional prior, moved by price.
 
-The fit and the prior in fpl/candidates.py, the positional_prior hook in
-fpl.predict_fixture they plug into, and the control that isolates what price
+The fit and the prior in fpl/models/candidates.py, the positional_prior hook in
+fpl.models.predict_fixture they plug into, and the control that isolates what price
 itself is worth. That neither candidate sees past the deadline is
 tests/test_backtest.py's poison test, which runs every model it registers.
 
@@ -10,8 +10,8 @@ Run from the repository root: python -m unittest discover tests
 
 import unittest
 
-from fpl import candidates, features
-from fpl.snapshot import usable_rounds
+from fpl.ingest.snapshot import usable_rounds
+from fpl.models import candidates, features
 from tests import fixtures
 from tests.test_predict_fixture import EVENTS, League
 

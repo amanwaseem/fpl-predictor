@@ -1,4 +1,4 @@
-"""Tests for fpl/teams.py, and the candidate and backtest measure that use it.
+"""Tests for fpl/models/teams.py, and the candidate and backtest measure that use it.
 
 Run from the repository root: python -m unittest discover tests
 """
@@ -6,9 +6,10 @@ Run from the repository root: python -m unittest discover tests
 import math
 import unittest
 
-from fpl import backtest, teams
-from fpl.candidates import baseline_fixture_rows
-from fpl.features import shrunk_pp90, split_rates
+from fpl.evaluation import backtest
+from fpl.models import teams
+from fpl.models.candidates import baseline_fixture_rows
+from fpl.models.features import shrunk_pp90, split_rates
 from tests import fixtures
 
 EVENTS = fixtures.season(4, fixtures.future_deadline())

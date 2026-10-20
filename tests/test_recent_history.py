@@ -10,9 +10,9 @@ Run from the repository root: python -m unittest discover tests
 
 import unittest
 
-from fpl.features import recent_history, weighted
-from fpl.predict_baseline import predict_player
-from fpl.snapshot import usable_rounds
+from fpl.ingest.snapshot import usable_rounds
+from fpl.models.features import recent_history, weighted
+from fpl.models.predict_baseline import predict_player
 
 
 def row(rnd, minutes=90, points=5):

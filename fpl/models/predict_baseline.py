@@ -23,15 +23,15 @@ import argparse
 import json
 import sys
 
-from fpl.features import availability, recent_history, weighted
-from fpl.log import write_entry
-from fpl.paths import require_project_root
-from fpl.snapshot import (
+from fpl.ingest.snapshot import (
     fixture_counts,
     load_snapshot,
     resolve_target_gw,
     usable_rounds,
 )
+from fpl.log.contract import write_entry
+from fpl.models.features import availability, recent_history, weighted
+from fpl.paths import require_project_root
 
 MODEL_VERSION = "baseline-v1"
 
@@ -77,7 +77,7 @@ def predict_rows(bootstrap, fixtures, histories, target_gw, usable):
     """Predictions for every player, as log rows without provenance.
 
     The whole model, separated from where its inputs come from. main() feeds
-    it a snapshot read off disk; the backtest (fpl/backtest.py) feeds it a
+    it a snapshot read off disk; the backtest (fpl/evaluation/backtest.py) feeds it a
     snapshot cut back to what was knowable at an earlier deadline. Both run
     this function, so a backtest of baseline-v1 is a backtest of the model
     that is actually logged, not of a copy that could drift from it.
@@ -129,7 +129,7 @@ def predict_rows(bootstrap, fixtures, histories, target_gw, usable):
 
 
 def main(requested_gw, out_dir, snapshot_id=None):
-    # snapshot_id names one snapshot in place of data/raw/LATEST. fpl.entry
+    # snapshot_id names one snapshot in place of data/raw/LATEST. fpl.log.entry
     # passes it so that every model in an entry reads the same snapshot, even
     # if a fetch moves LATEST partway through the run.
     snap, bootstrap, fixtures, players_dir = load_snapshot(snapshot_id)
@@ -202,7 +202,7 @@ def main(requested_gw, out_dir, snapshot_id=None):
 
 
 def cli(argv=None):
-    """`fpl-predict-baseline`, or `python -m fpl.predict_baseline`."""
+    """`fpl-predict-baseline`, or `python -m fpl.models.predict_baseline`."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--gw", type=int, default=None, help="target gameweek (default: next)")
     ap.add_argument(

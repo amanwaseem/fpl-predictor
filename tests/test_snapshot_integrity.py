@@ -11,8 +11,8 @@ Run from the repository root: python -m unittest discover tests
 import json
 import unittest
 
-from fpl import fetch
-from fpl.snapshot import load_snapshot, resolve_target_gw
+from fpl.ingest import fetch
+from fpl.ingest.snapshot import load_snapshot, resolve_target_gw
 from tests import fixtures
 
 

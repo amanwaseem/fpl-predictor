@@ -1,4 +1,4 @@
-"""Tests for fpl/score.py, the scoring harness.
+"""Tests for fpl/evaluation/score.py, the scoring harness.
 
 Every test builds two synthetic snapshots: the one an entry was predicted from
 (target GW4) and a later one holding the actual results (target GW5, so GW4 is
@@ -15,7 +15,7 @@ import json
 import os
 from pathlib import Path
 
-from fpl import score
+from fpl.evaluation import score
 from tests import fixtures
 
 PREDICTED_AT = "20260910T000000Z"
@@ -435,7 +435,7 @@ class TestCommandLine(ScoringCase):
         import sys
         repo = Path(__file__).resolve().parent.parent
         env = dict(os.environ, PYTHONPATH=str(repo))
-        return subprocess.run([sys.executable, "-m", "fpl.score", *args],
+        return subprocess.run([sys.executable, "-m", "fpl.evaluation.score", *args],
                               capture_output=True, text=True, env=env)
 
     def test_exit_zero_and_reports_what_it_did(self):

@@ -3,7 +3,7 @@
 A candidate isolates one idea so the backtest can say whether it earns its
 place before a logged model depends on it. Nothing here writes to
 predictions/, and nothing here has a log entry to be consistent with: when an
-idea is judged, it moves into a logged model (built from fpl.features, not
+idea is judged, it moves into a logged model (built from fpl.models.features, not
 from this file) and the candidate is deleted.
 
 baseline-prior (#30): baseline-v1 with last season's points-per-90 as the
@@ -12,7 +12,7 @@ are baseline-v1's, so a difference on the backtest is the prior's doing.
 
 Comparators for form-fixture-v1 (#32). Once an idea is judged it moves into
 the logged model, but the model still has to be judged against what it
-replaced. These run fpl.predict_fixture's own code with one piece swapped, so
+replaced. These run fpl.models.predict_fixture's own code with one piece swapped, so
 they cannot drift from it:
 
 - baseline-fixture: the positional prior instead of last season (#31 alone).
@@ -31,7 +31,8 @@ fit sees nothing later. flat-prior-weight is its control: the same weight
 on the flat prior, with no price.
 """
 
-from fpl.features import (
+from fpl.ingest.snapshot import fixture_counts, usable_rounds
+from fpl.models.features import (
     PLAYER_PRIOR_HALF_LIFE_MINUTES,
     PLAYER_PRIOR_MINUTES,
     POSITION_PRIOR_MINUTES,
@@ -44,8 +45,7 @@ from fpl.features import (
     season_minutes,
     shrunk_pp90,
 )
-from fpl.predict_fixture import predict_rows as fixture_rows
-from fpl.snapshot import fixture_counts, usable_rounds
+from fpl.models.predict_fixture import predict_rows as fixture_rows
 
 
 def baseline_prior_rows(bootstrap, fixtures, histories, target_gw, pasts,
@@ -55,7 +55,7 @@ def baseline_prior_rows(bootstrap, fixtures, histories, target_gw, pasts,
 
     `pasts` maps player id to history_past rows. The prior's weight, floor and
     xG weight are exposed so the backtest can tune them held out
-    (fpl.backtest.GRIDS); a logged model fixes them. None means features'
+    (fpl.evaluation.backtest.GRIDS); a logged model fixes them. None means features'
     constant.
     """
     usable, _ = usable_rounds(bootstrap["events"], target_gw)
@@ -109,7 +109,7 @@ def baseline_prior_rows(bootstrap, fixtures, histories, target_gw, pasts,
 def baseline_fixture_rows(bootstrap, fixtures, histories, target_gw, pasts, **options):
     """form-fixture-v1's code with pieces swapped, for comparison.
 
-    Runs fpl.predict_fixture.predict_rows, so a comparator differs from the
+    Runs fpl.models.predict_fixture.predict_rows, so a comparator differs from the
     logged model only in what it is asked to swap: `last_season=False` for
     the positional prior (baseline-fixture), `strength="fdr"` for FPL's
     difficulty in place of the ratings (baseline-fdr, baseline-prior-fdr).
@@ -173,7 +173,7 @@ def price_fit(bootstrap, pasts, floor=None, xg_weight=None):
 def faded(prior_minutes, minutes_this_season):
     """A prior's weight, fading as this season's minutes accumulate.
 
-    The same fade as the player prior's (fpl.features.prior): a weight chosen
+    The same fade as the player prior's (fpl.models.features.prior): a weight chosen
     on a few early rounds would otherwise outweigh a regular's form all
     season.
     """
@@ -182,7 +182,7 @@ def faded(prior_minutes, minutes_this_season):
 
 
 def price_prior(slopes, centres, prior_minutes):
-    """A positional_prior for fpl.predict_fixture: the flat prior, moved by price.
+    """A positional_prior for fpl.models.predict_fixture: the flat prior, moved by price.
 
     Attack, clean sheet and the rest each move by their slope times how far
     his price is from the mean of the players this applies to, and the total

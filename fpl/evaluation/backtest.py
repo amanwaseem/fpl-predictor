@@ -69,17 +69,18 @@ import math
 import sys
 from pathlib import Path
 
-from fpl import metrics, predict_fixture, score
-from fpl.candidates import (
+from fpl.evaluation import metrics, score
+from fpl.ingest.snapshot import load_live, load_snapshot, usable_rounds
+from fpl.models import predict_fixture
+from fpl.models.candidates import (
     baseline_fixture_rows,
     baseline_prior_rows,
     flat_prior_rows,
     price_prior_rows,
 )
-from fpl.features import player_prior, previous_season
+from fpl.models.features import player_prior, previous_season
+from fpl.models.predict_baseline import predict_rows as baseline_rows
 from fpl.paths import require_project_root
-from fpl.predict_baseline import predict_rows as baseline_rows
-from fpl.snapshot import load_live, load_snapshot, usable_rounds
 
 BACKTEST_VERSION = "backtest-v1"
 
@@ -208,7 +209,7 @@ def _form_fixture(bootstrap, fixtures, histories, target_gw, pasts=None, **setti
 # Every model the backtest can replay: name -> f(bootstrap, fixtures,
 # histories, target_gw, pasts) returning log-shaped rows. A logged model added
 # here must be the same function its log entries come from; a candidate from
-# fpl/candidates.py has no log entries and is never logged.
+# fpl/models/candidates.py has no log entries and is never logged.
 MODELS = {
     "baseline-v1": _baseline,
     "baseline-prior": baseline_prior_rows,
@@ -430,7 +431,7 @@ def run(snapshot_id, model, gameweeks=None):
         "snapshot_id": snap.name,
         "model_version": model,
         "gameweeks": gameweeks,
-        "availability": "every player treated as available; see fpl/backtest.py",
+        "availability": "every player treated as available; see fpl/evaluation/backtest.py",
         "per_gameweek": per_gw,
         "pooled": pooled,
     }
@@ -587,7 +588,7 @@ def main(snapshot_id, model, first, last, out_dir, held=False):
 
 
 def cli(argv=None):
-    """`fpl-backtest`, or `python -m fpl.backtest`."""
+    """`fpl-backtest`, or `python -m fpl.evaluation.backtest`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--snapshot", default=None, metavar="SNAPSHOT_ID",
                     help="snapshot to replay (default: LATEST)")

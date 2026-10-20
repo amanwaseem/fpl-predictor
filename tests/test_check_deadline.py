@@ -71,7 +71,7 @@ class TestCheck(unittest.TestCase):
                          check_deadline.FAIL)
 
     def test_the_log_filename_rule_decides_what_is_an_entry(self):
-        """A bare gameweek or a stray file is not an entry, as fpl/log.py reads names."""
+        """A bare gameweek or a stray file is not an entry, as fpl/log/contract.py reads names."""
         names = ["gw6_baseline-v1.csv", "gw06_baseline_v1.csv", "gw06.md", ".gitkeep"]
         self.assertEqual(check_deadline.check(bootstrap(6, 24), names, NOW)[0],
                          check_deadline.FAIL)

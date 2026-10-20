@@ -31,7 +31,7 @@ score table.
   whitelisted player fields, history cut before the target, and the target's
   results stripped; `tests/test_backtest.py:TestNoLeak` poisons everything after
   the cut, for every model, and demands identical output.
-- **Ideas are tested as candidates** (`fpl/candidates.py`) that change one
+- **Ideas are tested as candidates** (`fpl/models/candidates.py`) that change one
   thing against the baseline and are never logged. Once judged, the idea moves
   into a logged model and the candidate is deleted.
 

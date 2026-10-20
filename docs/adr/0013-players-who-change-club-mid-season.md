@@ -20,17 +20,17 @@ question gets decided rather than drifting.
   target fixtures follow the new club. That is correct.
 - **The form window and the last-season prior are per player**, so they carry
   across the move: points per 90 earned at the old club, and last season's rate
-  (`fpl/features.py:player_prior`, read from `history_past`) wherever it was
+  (`fpl/models/features.py:player_prior`, read from `history_past`) wherever it was
   earned.
 - **`form-fixture-v1` scales the attacking rate by the fixture relative to the
-  current club's usual goals** (`fpl/predict_fixture.py`, `usual_goals`). A rate
+  current club's usual goals** (`fpl/models/predict_fixture.py`, `usual_goals`). A rate
   earned at a weak attacking club is read against a strong club's baseline, or
   the reverse — the factor is calibrated for a player who stayed.
-- **Team ratings** (`fpl/teams.py`) are built from fixtures, club by club, and
+- **Team ratings** (`fpl/models/teams.py`) are built from fixtures, club by club, and
   are unaffected.
 - **The backtest** reads a player's club at each target from his last fixture
   row before it, and refuses to fall back to his current club
-  (`fpl/backtest.py:_as_of_row`), so a later move does not leak backwards.
+  (`fpl/evaluation/backtest.py:_as_of_row`), so a later move does not leak backwards.
 - **Scoring** groups by the `team` column written in the entry, so a player
   counts for the club he was predicted at.
 

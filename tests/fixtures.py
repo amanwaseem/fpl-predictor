@@ -19,10 +19,10 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fpl.features import availability
-from fpl.log import FIELDS, TIMESTAMP
+from fpl.ingest.snapshot import fixture_counts
+from fpl.log.contract import FIELDS, TIMESTAMP
+from fpl.models.features import availability
 from fpl.paths import PROJECT_NAME
-from fpl.snapshot import fixture_counts
 
 # Distinguishes "derive a sensible default" from an explicit None, which for
 # `manifest` means "write no manifest.json at all" — the interrupted-fetch

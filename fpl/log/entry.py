@@ -39,10 +39,11 @@ from contextlib import redirect_stdout
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fpl import predict_baseline, predict_fixture, summarise, verify_entry
-from fpl.log import TIMESTAMP
+from fpl.ingest.snapshot import load_snapshot, resolve_target_gw
+from fpl.log import summarise, verify_entry
+from fpl.log.contract import TIMESTAMP
+from fpl.models import predict_baseline, predict_fixture
 from fpl.paths import require_project_root
-from fpl.snapshot import load_snapshot, resolve_target_gw
 
 # The models logged each gameweek, declared here and nowhere else. Adding a
 # model to the log is adding it to this list, in the PR that freezes it.
@@ -218,7 +219,7 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS):
 
 
 def cli(argv=None):
-    """`fpl-entry`, or `python -m fpl.entry`."""
+    """`fpl-entry`, or `python -m fpl.log.entry`."""
     ap = argparse.ArgumentParser(
         description="Write, verify and summarise every logged model's entry "
                     "from one snapshot."

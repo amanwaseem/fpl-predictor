@@ -15,7 +15,7 @@ something to run on before any serious model existed.
 
 ## Decision
 
-- `baseline-v1` (`fpl/predict_baseline.py`) is deliberately simple: recent
+- `baseline-v1` (`fpl/models/predict_baseline.py`) is deliberately simple: recent
   minutes and points per 90, shrunk toward a positional prior, scaled by
   availability and fixture count. No machine learning.
 - **Any model that does not beat the baseline does not ship**, judged on
@@ -26,12 +26,12 @@ something to run on before any serious model existed.
   its entries have beaten the baseline's on the same gameweeks.
 - **The baseline has a gate of its own.** Every score compares it with naive
   predictors on the same rows, read from the prediction snapshot: all zeros,
-  and FPL's own `form` and `points_per_game` (`fpl/score.py`). Beating the
+  and FPL's own `form` and `points_per_game` (`fpl/evaluation/score.py`). Beating the
   baseline means little until the baseline is shown to beat these. At GW4 it
   did: MAE 1.153, against 1.277 (`form`), 1.365 (`points_per_game`) and 1.436
   (all zeros).
 - The baseline is meant to be beaten and deleted. New models import from
-  `fpl.snapshot`, `fpl.features` and `fpl.log`, never from it — a test enforces
+  `fpl.ingest.snapshot`, `fpl.models.features` and `fpl.log.contract`, never from it — a test enforces
   that for `form-fixture-v1`.
 
 ## Consequences

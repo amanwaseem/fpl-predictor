@@ -25,7 +25,7 @@ hindsight.
   reference commit, in CI on every PR and every push to main.
 - Because nothing can be fixed after the commit, everything that can be checked
   is checked before it:
-  - `fpl/log.py:write_entry` validates every row against the declared schema
+  - `fpl/log/contract.py:write_entry` validates every row against the declared schema
     (`FIELDS`, `validate_rows`), refuses an existing file, refuses to write
     into the log at or after the entry's own deadline, and writes atomically
     so a crash cannot leave a truncated entry at the final path.

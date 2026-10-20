@@ -9,7 +9,7 @@ and the captain that maximise expected points:
 
 - £100.0m budget, on the entry's `price` column;
 - 2 GKP, 5 DEF, 5 MID, 3 FWD, and at most three players from any club;
-- a legal XI, with the formations and the club cap taken from fpl.xi, so the
+- a legal XI, with the formations and the club cap taken from fpl.evaluation.xi, so the
   optimiser and the scoring harness cannot disagree about what is legal;
 - the captain scores double;
 - each bench player counts at BENCH_WEIGHT of their points;
@@ -46,7 +46,7 @@ does, and says so, even when that scores less than keeping it.
 
 ## Exact, and settled toward lower ids
 
-Points are counted in fpl.xi's hundredths and prices in tenths, so every
+Points are counted in fpl.evaluation.xi's hundredths and prices in tenths, so every
 coefficient is an integer and the optimum is exact to the last hundredth: the
 solver's gap is set to zero, not left at its default of 0.01%.
 
@@ -66,9 +66,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from fpl.log import read_entry
-from fpl.paths import require_project_root
-from fpl.xi import (
+from fpl.evaluation.xi import (
     FORMATIONS,
     MAX_PER_CLUB,
     POSITIONS,
@@ -78,6 +76,8 @@ from fpl.xi import (
     formation_of,
     order_xi,
 )
+from fpl.log.contract import read_entry
+from fpl.paths import require_project_root
 
 BUDGET = 100.0
 SQUAD = {"GKP": 2, "DEF": 5, "MID": 5, "FWD": 3}
@@ -97,10 +97,10 @@ MAX_FREE_TRANSFERS = 5
 AVAILABLE = frozenset("ad")
 UNAVAILABLE = frozenset("isn")
 
-# Starters per position, from fpl.xi's formations rather than a second copy:
+# Starters per position, from fpl.evaluation.xi's formations rather than a second copy:
 # 1 GKP, and each outfield position between its fewest and most in any
 # formation. With eleven starters in all, these bounds admit exactly the
-# formations fpl.xi lists; tests/test_optimise.py checks that.
+# formations fpl.evaluation.xi lists; tests/test_optimise.py checks that.
 XI_BOUNDS = {"GKP": (1, 1)} | {
     position: (min(f[i] for f in FORMATIONS), max(f[i] for f in FORMATIONS))
     for i, position in enumerate(("DEF", "MID", "FWD"))
@@ -140,7 +140,7 @@ def tenths(value):
 
 
 def points(value):
-    """Predicted points in fpl.xi's units, so the two count points alike."""
+    """Predicted points in fpl.evaluation.xi's units, so the two count points alike."""
     return round(value * SCALE)
 
 
@@ -191,7 +191,7 @@ def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavai
     """The squad, XI and captain maximising expected points, as a Squad.
 
     `players` are dicts with player_id, web_name, team, position, price and
-    predicted_points, and optionally status, as fpl.log.read_entry returns
+    predicted_points, and optionally status, as fpl.log.contract.read_entry returns
     them. Raises ValueError, naming the cause, if no legal squad fits.
     """
     check_positions(players)
@@ -212,7 +212,7 @@ def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=
     each beyond `free_transfers` costs HIT points. `keep` forbids transfers and
     drops the club cap, which FPL enforces only when a transfer is made, so a
     squad pushed over it by a player moving clubs may still be kept as it is.
-    `value` is the optimum in fpl.xi's units, net of hits.
+    `value` is the optimum in fpl.evaluation.xi's units, net of hits.
 
     The first solve maximises expected points alone, with small integer
     coefficients and a zero gap, so its optimum is exact. The second holds the
@@ -255,7 +255,7 @@ def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=
     model.addConstr(model.qsum(cost[pool[i]["player_id"]] * squad[i] for i in range(n))
                     <= budget)
 
-    # Expected points in fpl.xi's units: a starter's, again for the captain,
+    # Expected points in fpl.evaluation.xi's units: a starter's, again for the captain,
     # and bench_weight of a bench player's.
     worth = [points(p["predicted_points"]) for p in pool]
     bench = [round(worth[i] * bench_weight) for i in range(n)]

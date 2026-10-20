@@ -1,6 +1,6 @@
 """Tests for the mechanical enforcement of hard rule 1.
 
-`fpl/log.py` stops a second *write* through write_entry. It does nothing about
+`fpl/log/contract.py` stops a second *write* through write_entry. It does nothing about
 an editor, a `sed -i`, or a rebase — the ways a committed prediction actually
 gets altered. `tools/check_log_immutable.py` is what catches those, so these
 tests exercise it against a real git repository rather than a mock: the tool's

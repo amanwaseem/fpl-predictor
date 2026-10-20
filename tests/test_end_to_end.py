@@ -16,8 +16,9 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from fpl import predict_baseline, verify_entry
-from fpl.log import FIELDS
+from fpl.log import verify_entry
+from fpl.log.contract import FIELDS
+from fpl.models import predict_baseline
 from tests import fixtures
 
 SNAPSHOT_ID = "20260910T000000Z"

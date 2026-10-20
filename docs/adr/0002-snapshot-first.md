@@ -22,7 +22,7 @@ Bonus points are provisional until the gameweek's `data_checked` flips.
 - `fpl-fetch` writes an immutable, timestamped copy of everything a prediction
   needs to `data/raw/<timestamp>/`. Models read snapshots, never the network.
 - `manifest.json` is written last; a directory without it is an interrupted
-  fetch and is refused, not half-used (`fpl/snapshot.py:load_snapshot`).
+  fetch and is refused, not half-used (`fpl/ingest/snapshot.py:load_snapshot`).
   `data/raw/LATEST` moves only after a manifest is written, so a failed fetch
   leaves the last good snapshot in place — the fallback the runbook depends on.
 - Every entry row carries its `snapshot_id`, so any prediction can be rebuilt

@@ -21,7 +21,7 @@ from fpl.db.models import (
     Snapshot,
 )
 from fpl.db.session import make_engine
-from fpl.snapshot import load_snapshot
+from fpl.ingest.snapshot import load_snapshot
 from tests.database import URL, alembic_config, empty_every_table, require_test_database
 from tests.fixtures import TempCwd, element, event, team
 

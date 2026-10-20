@@ -41,8 +41,8 @@ from fpl.db.models import (
     Team,
 )
 from fpl.db.session import exits_on_bad_url, make_engine
+from fpl.ingest.snapshot import load_snapshot
 from fpl.paths import require_project_root
-from fpl.snapshot import load_snapshot
 
 POSITIONS = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
 LAST_GAMEWEEK = 38

@@ -18,7 +18,7 @@ SNAPSHOT_ID = re.compile(r"^\d{8}T\d{6}Z$")
 
 
 def load_snapshot(snapshot_id=None):
-    """Load a raw snapshot written by fpl/fetch.py, most recent by default.
+    """Load a raw snapshot written by fpl/ingest/fetch.py, most recent by default.
 
     `snapshot_id` names a particular snapshot directory instead. Verifying a
     committed entry needs that: an entry has to be checked against the
@@ -29,7 +29,7 @@ def load_snapshot(snapshot_id=None):
     if snapshot_id is None:
         latest_file = Path("data/raw/LATEST")
         if not latest_file.exists():
-            raise SystemExit("No snapshot found. Run: python -m fpl.fetch")
+            raise SystemExit("No snapshot found. Run: python -m fpl.ingest.fetch")
         source = "data/raw/LATEST"
         snapshot_id = latest_file.read_text().strip()
     else:
@@ -43,7 +43,7 @@ def load_snapshot(snapshot_id=None):
     if not SNAPSHOT_ID.match(snapshot_id):
         raise SystemExit(
             f"{snapshot_id!r} from {source} is not a snapshot id.\n"
-            "Expected a UTC timestamp as written by fpl.fetch, "
+            "Expected a UTC timestamp as written by fpl.ingest.fetch, "
             "'20260907T141922Z' in the form YYYYMMDDTHHMMSSZ."
         )
 
@@ -59,7 +59,7 @@ def load_snapshot(snapshot_id=None):
             f"No snapshot at {snap}.\n"
             "data/raw/ is gitignored and snapshots are not shared, so this one "
             "may never have existed here.\n"
-            "Take a fresh one with: python -m fpl.fetch"
+            "Take a fresh one with: python -m fpl.ingest.fetch"
         )
 
     manifest_path = snap / "manifest.json"
@@ -69,19 +69,19 @@ def load_snapshot(snapshot_id=None):
             "An interrupted fetch leaves a directory that looks finished but is "
             "missing players, and those players would be dropped from the "
             "prediction log silently.\n"
-            "Resume it with: python -m fpl.fetch --resume"
+            "Resume it with: python -m fpl.ingest.fetch --resume"
         )
 
     manifest = json.loads(manifest_path.read_text())
     if not manifest.get("has_players"):
         raise SystemExit(
             f"Snapshot {snap} was taken with --skip-players and has no "
-            "per-player history.\nRun: python -m fpl.fetch"
+            "per-player history.\nRun: python -m fpl.ingest.fetch"
         )
     if not players_dir.is_dir():
         raise SystemExit(
             f"Snapshot {snap} claims player history but has no players/ "
-            "directory.\nRun: python -m fpl.fetch"
+            "directory.\nRun: python -m fpl.ingest.fetch"
         )
 
     bootstrap = json.loads((snap / "bootstrap.json").read_text())
@@ -100,7 +100,7 @@ def load_snapshot(snapshot_id=None):
             f"Snapshot {snap} claims {manifest.get('element_count')} players but "
             f"{len(missing)} history files are missing: {shown}{more}.\n"
             "Refusing to write a partial prediction log.\n"
-            "Resume it with: python -m fpl.fetch --resume"
+            "Resume it with: python -m fpl.ingest.fetch --resume"
         )
 
     return snap, bootstrap, fixtures, players_dir
@@ -111,7 +111,7 @@ def load_live(snap, gw):
 
     The other side of the join the scoring harness makes: a prediction log
     entry says what was expected, this says what happened. Written by
-    fpl.fetch for gameweeks whose results are settled.
+    fpl.ingest.fetch for gameweeks whose results are settled.
 
     Refuses a gameweek with no live file rather than returning an empty
     result, which is the same posture as the rest of this module and matters
@@ -128,7 +128,7 @@ def load_live(snap, gw):
             "true, so either GW{} was not settled when this snapshot was "
             "taken, or the snapshot predates live ingestion.\n"
             "Check manifest.json's live_gameweeks, and take a fresh snapshot "
-            "with: python -m fpl.fetch".format(gw)
+            "with: python -m fpl.ingest.fetch".format(gw)
         )
 
     payload = json.loads(path.read_text())

@@ -62,7 +62,7 @@ def _table(headers, aligns, rows):
 def read_entry(path):
     """Read a committed entry, with the numbers as numbers.
 
-    Deliberately trusting: this runs on an entry that `fpl.verify_entry` has
+    Deliberately trusting: this runs on an entry that `fpl.log.verify_entry` has
     already accepted, so it parses for display rather than re-litigating the
     schema. A digest is not a validator and should not grow into one.
     """
@@ -103,7 +103,7 @@ def summarise(rows):
         "on zero — injured, suspended, out of the squad, or not expected to "
         "play enough to matter.",
         "",
-        "Generated from the committed entry by `python -m fpl.summarise`. The "
+        "Generated from the committed entry by `python -m fpl.log.summarise`. The "
         "entry is the record; this is a reading of it.",
         "",
         f"## Top {TOP_N}",
@@ -194,7 +194,7 @@ def main(entry, out_dir=None):
 
 
 def cli(argv=None):
-    """`fpl-summarise`, or `python -m fpl.summarise`."""
+    """`fpl-summarise`, or `python -m fpl.log.summarise`."""
     ap = argparse.ArgumentParser(
         description="Write the readable digest of a prediction log entry."
     )

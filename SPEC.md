@@ -31,7 +31,7 @@ accuracy verifiable.
 Source: the unofficial FPL API. No authentication, no documentation, no
 stability guarantees.
 
-Ingestion is **snapshot-first**: `fpl/fetch.py` writes an immutable timestamped
+Ingestion is **snapshot-first**: `fpl/ingest/fetch.py` writes an immutable timestamped
 copy of the raw API response to `data/raw/<timestamp>/`. Every prediction records
 the `snapshot_id` it was produced from, so any prediction can be reproduced
 exactly, and schema changes can be diagnosed by diffing snapshots.
@@ -49,7 +49,7 @@ to find out what happened. Fetched only for gameweeks whose `data_checked` is
 true, since bonus points are provisional until that flips and stored actuals
 would otherwise disagree with the ones everyone else can see.
 
-`fpl/snapshot.py`'s `load_live(snap, gw)` reads one back, and refuses a
+`fpl/ingest/snapshot.py`'s `load_live(snap, gw)` reads one back, and refuses a
 gameweek that has none rather than returning an empty result — an empty result
 is indistinguishable from a gameweek in which nobody scored, which would make a
 sound model look catastrophically wrong.
@@ -83,7 +83,7 @@ yet** — it gets defined alongside the first component models, after the break.
 
 ### Baseline
 
-A rolling-form model (`fpl/predict_baseline.py`) covers the same ground using no
+A rolling-form model (`fpl/models/predict_baseline.py`) covers the same ground using no
 machine learning: recent minutes and points-per-90, shrunk toward a positional
 prior, scaled by availability and fixture count. It is a standalone script rather
 than a `ComponentModel` implementation, and gets retrofitted once that interface
@@ -95,11 +95,11 @@ benchmark: **any component model that does not beat the baseline does not ship.*
 
 ### form-fixture-v1
 
-The first model logged beside the baseline, from GW6 (`fpl/predict_fixture.py`,
+The first model logged beside the baseline, from GW6 (`fpl/models/predict_fixture.py`,
 #32). It keeps the baseline's minutes and window, shrinks each player toward
 his own last season where it rests on a regular's minutes (#30), and splits his
 rate into attacking returns, clean-sheet points and the rest, so that club
-attack and defence ratings (#31, `fpl/teams.py`) can move the first two with
+attack and defence ratings (#31, `fpl/models/teams.py`) can move the first two with
 the fixture. It is the first slice of the component decomposition above, not
 the `ComponentModel` interface: the rest — bonus, saves, defensive
 contribution — is not modelled yet (#8).
@@ -148,7 +148,7 @@ named `gw<NN>_<model_version>.csv`.
 | `generated_at_utc` | `YYYY-MM-DDTHH:MM:SSZ` | When |
 | `deadline_utc` | `YYYY-MM-DDTHH:MM:SSZ` | The deadline it was committed ahead of |
 
-The column set is declared in `fpl/log.py` as `FIELDS`, in this order, and
+The column set is declared in `fpl/log/contract.py` as `FIELDS`, in this order, and
 validated before every write. Types are part of the contract, not an
 implementation detail: the scoring harness joins on `player_id` and does
 arithmetic on `predicted_points`, and a column that changes units between
@@ -188,7 +188,7 @@ Rules 1 and 2 apply to `predictions/` only. `scores/` is derived output and is
 explicitly regenerable — see section 6.
 
 Every check that runs before the deadline is recoverable and every check that
-runs after it is not, so validation happens at write time: `fpl/log.py`
+runs after it is not, so validation happens at write time: `fpl/log/contract.py`
 rejects a malformed entry rather than letting the scoring harness discover it
 weeks later, once the file is immutable. The write itself is atomic — an entry
 is built alongside its target and linked into place — because a truncated CSV
@@ -197,12 +197,12 @@ making recovery mean deleting a file out of `predictions/` in a hurry. `tools/ch
 enforces rule 2 mechanically, comparing `predictions/` against the committed
 tree and failing if an entry was modified or deleted.
 
-`fpl/verify_entry.py` is the last check before an entry is committed. It reads
+`fpl/log/verify_entry.py` is the last check before an entry is committed. It reads
 a written entry back and cross-checks it against the snapshot named in its own
 `snapshot_id` column — row coverage against the element list, `n_fixtures`
 against `fixtures.json`, flagged players against their availability, and
 `deadline_utc` against the bootstrap event — then runs `validate_rows` over
-the parsed rows. `fpl/log.py` cannot do this: it validates rows in memory at
+the parsed rows. `fpl/log/contract.py` cannot do this: it validates rows in memory at
 write time with no snapshot open beside them. Run it before opening the PR:
 
 ```
@@ -269,15 +269,15 @@ silent rewrite of the track record.
 
 The harness reads `predictions/` and writes nothing to it, ever.
 
-Implemented in `fpl/score.py` (`fpl-score`), with the metrics in
-`fpl/metrics.py` and the legal XI in `fpl/xi.py`. A settled gameweek with no
+Implemented in `fpl/evaluation/score.py` (`fpl-score`), with the metrics in
+`fpl/evaluation/metrics.py` and the legal XI in `fpl/evaluation/xi.py`. A settled gameweek with no
 entry for a model — after that model's first entry — is listed as *missed* in
 `scores/cumulative.json`, so a gap in the log stays visible in the record
 rather than reading as an unbroken run.
 
 ### Backtesting is not scoring
 
-`fpl/backtest.py` (`fpl-backtest`) replays settled gameweeks from one
+`fpl/evaluation/backtest.py` (`fpl-backtest`) replays settled gameweeks from one
 snapshot: for each GW N it cuts the snapshot back to what was knowable at N's
 deadline, runs a model, and scores it with the same metrics. It is how a model
 change is judged *before* it is logged, instead of a week after.
@@ -289,9 +289,9 @@ those alone. Backtest output goes to `scratch/`, never to `scores/` or
 `predictions/`.
 
 An idea can be backtested before any logged model carries it: a *candidate*
-(`fpl/candidates.py`) isolates one change against the baseline and is never
+(`fpl/models/candidates.py`) isolates one change against the baseline and is never
 logged. Once judged, the idea moves into a logged model built from
-`fpl.features`, and the candidate is deleted.
+`fpl.models.features`, and the candidate is deleted.
 
 Leak-freedom is structural rather than a promise: models receive a view with
 whitelisted player fields, history cut before N, and N's fixtures stripped of
@@ -332,7 +332,7 @@ make the locally optimal move frequently wrong.
 
 The formation and per-club constraints are shared with the legal-XI metric in
 section 6, which is built first because scoring needs it and it has no budget
-term. The optimiser takes its rules from `fpl/xi.py` (the formations, the club
+term. The optimiser takes its rules from `fpl/evaluation/xi.py` (the formations, the club
 cap, the point scale, the position check and the XI's order) rather than
 restating them, and its tests check its XI against `best_xi`. It does not call
 `best_xi`, which has no budget; and the dependency does not run the other way,
@@ -383,7 +383,7 @@ Decisions and their reasons are recorded in [`docs/adr/`](docs/adr/README.md).
 Settled:
 
 - ~~Whether to model fixture difficulty explicitly or let opponent-conditioned
-  components absorb it.~~ **Explicitly**, in `fpl/teams.py` (#31): club attack
+  components absorb it.~~ **Explicitly**, in `fpl/models/teams.py` (#31): club attack
   and defence ratings from settled rounds' xG, turned into expected goals per
   fixture and a Poisson clean-sheet probability. Opponent-conditioned
   components have nothing to condition on without them. The accuracy case is

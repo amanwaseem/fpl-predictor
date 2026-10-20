@@ -21,7 +21,8 @@ from unittest import mock
 import highspy
 
 from fpl import optimise
-from fpl.log import read_entry
+from fpl.evaluation.xi import FORMATIONS, MAX_PER_CLUB, SCALE
+from fpl.log.contract import read_entry
 from fpl.optimise import (
     HIT,
     MAX_FREE_TRANSFERS,
@@ -37,7 +38,6 @@ from fpl.optimise import (
     tenths,
     violations,
 )
-from fpl.xi import FORMATIONS, MAX_PER_CLUB, SCALE
 
 ROOT = Path(__file__).resolve().parent.parent
 ENTRY = sorted((ROOT / "predictions").glob("gw*_*.csv"))[-1]
@@ -201,7 +201,7 @@ class TestRefusals(unittest.TestCase):
 
 
 def objective(squad_players, bench_weight):
-    """The best line-up of a fixed squad, in fpl.xi's units: XI, captain, bench."""
+    """The best line-up of a fixed squad, in fpl.evaluation.xi's units: XI, captain, bench."""
     ranked = {pos: sorted((points(p["predicted_points"]) for p in squad_players
                            if p["position"] == pos), reverse=True) for pos in SQUAD}
     best = None
@@ -439,7 +439,7 @@ class TestSquadFiles(unittest.TestCase):
 class TestOnePositionCheck(unittest.TestCase):
 
     def test_every_selector_refuses_an_unknown_position_alike(self):
-        from fpl.xi import best_xi
+        from fpl.evaluation.xi import best_xi
         squad = even_squad()
         pool = squad + [player(100, "MGR", 0.0)]
         calls = {

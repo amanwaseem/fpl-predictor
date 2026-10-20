@@ -18,7 +18,7 @@ the first slice, without transfers, is built in #53 (`fpl/optimise.py`).
   merely inelegant: the budget and per-club constraints interact, so a locally
   best pick can leave the remaining budget unspendable, and transfer costs make
   the best move this week frequently not the best over a horizon.
-- **Built on the legal-XI selector's rules, not the reverse.** `fpl/xi.py`
+- **Built on the legal-XI selector's rules, not the reverse.** `fpl/evaluation/xi.py`
   already picks the exact best legal XI (formation and club cap, no budget) for
   scoring's points-captured metric, verified against brute force. The optimiser
   cannot call `best_xi`, which has no budget, so it takes the rules instead:

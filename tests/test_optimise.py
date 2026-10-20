@@ -1,7 +1,7 @@
 """Tests for fpl/optimise.py: the best legal squad for one gameweek.
 
 The optimiser is checked three ways: against an exhaustive search on small
-pools, against fpl.xi's selector on real committed entries, and by its own
+pools, against fpl.evaluation.xi's selector on real committed entries, and by its own
 rule checker, which shares nothing with the model.
 """
 
@@ -17,7 +17,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from fpl.log import read_entry
+from fpl.evaluation.xi import FORMATIONS, MAX_PER_CLUB, best_xi, formation_of, order_xi
+from fpl.log.contract import read_entry
 from fpl.optimise import (
     BENCH_WEIGHT,
     SQUAD,
@@ -28,7 +29,6 @@ from fpl.optimise import (
     tenths,
     violations,
 )
-from fpl.xi import FORMATIONS, MAX_PER_CLUB, best_xi, formation_of, order_xi
 
 ROOT = Path(__file__).resolve().parent.parent
 ENTRIES = sorted((ROOT / "predictions").glob("gw*_*.csv"))
@@ -129,7 +129,7 @@ class TestAgainstExhaustiveSearch(unittest.TestCase):
 class TestOnCommittedEntries(unittest.TestCase):
 
     def test_every_entry_gives_a_legal_squad_at_least_as_good_as_fpl_xi_would_pick(self):
-        """fpl.xi picks the best XI of the chosen squad; the optimiser's XI and captain
+        """fpl.evaluation.xi picks the best XI of the chosen squad; the optimiser's XI and captain
         together can be no worse than that XI with its own best player captained."""
         self.assertTrue(ENTRIES)
         for path in ENTRIES:
