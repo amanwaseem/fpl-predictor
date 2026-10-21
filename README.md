@@ -146,6 +146,8 @@ the working directory, so the commands refuse to run anywhere else rather than s
 | `fpl-score` | Score every committed entry against actual results, into `scores/` |
 | `fpl-backtest` | Replay settled gameweeks offline, without leaking the future (`--held-out`: the gate for a new factor) |
 | `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
+| `fpl-project` | Rebuild the database's copy of the log from `predictions/` and `scores/` |
+| `fpl-reconcile` | Check the database's copy of the log against git, row by row; non-zero on any difference |
 
 Every `fpl-*` command is also `python -m fpl.<module>`; the two run the same function.
 
@@ -211,7 +213,8 @@ Postgres runs in Docker:
 
 ```bash
 make up migrate    # start Postgres, bring the schema up to date
-make seed          # load data/raw/LATEST into it (fpl-load)
+make seed          # load data/raw/LATEST and the committed log into it
+make reconcile     # check the database's copy of the log against git
 make test-db       # migrations and constraints, against a separate fpl_test database
 make psql          # a shell on the local database
 ```
@@ -219,6 +222,10 @@ make psql          # a shell on the local database
 `fpl-load` writes a snapshot in one transaction, and loading one twice changes nothing. A snapshot
 newer than any loaded for its season updates rows; an older one only fills gaps, so loading out
 of order never rolls the database back.
+
+The log tables are a projection of `predictions/` and `scores/`, never a second record:
+`fpl-project` rebuilds them from the files, and CI rebuilds them into an empty database on every
+PR and runs `fpl-reconcile`, which fails on any row that differs from git.
 
 After changing a model, generate the migration with
 `alembic revision --autogenerate -m "what changed"` and read it before committing.
