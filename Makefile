@@ -1,7 +1,8 @@
 # Shortcuts for the local database. Run with .venv active.
 #
 #   make up migrate     # start Postgres and bring the schema up to date
-#   make seed           # load data/raw/LATEST into it
+#   make seed           # load data/raw/LATEST and the committed log into it
+#   make reconcile      # check the database's copy of the log against git
 #   make test-db        # the database tests, against fpl_test
 
 FPL_DB_PORT ?= 5432
@@ -9,7 +10,7 @@ DATABASE_URL ?= postgresql+psycopg://fpl:fpl@localhost:$(FPL_DB_PORT)/fpl
 TEST_DATABASE_URL ?= postgresql+psycopg://fpl:fpl@localhost:$(FPL_DB_PORT)/fpl_test
 export FPL_DB_PORT DATABASE_URL
 
-.PHONY: up down migrate seed test test-db psql
+.PHONY: up down migrate seed reconcile test test-db psql
 
 up:
 	docker compose up -d --wait db
@@ -22,6 +23,10 @@ migrate:
 
 seed: migrate
 	fpl-load
+	fpl-project
+
+reconcile:
+	fpl-reconcile
 
 test:
 	python -m unittest discover tests

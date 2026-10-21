@@ -159,6 +159,17 @@ jobs:
             pyproject.toml
       - run: pip install -r requirements-dev.txt
       - run: python -m unittest discover -v -s tests -t . -p "test_db*.py"
+      # The committed log, projected into an empty schema and checked row by
+      # row against git (#80). Proves the projection can always be rebuilt
+      # from the log alone, including on the commit that adds an entry.
+      - name: Project the log into a fresh database and reconcile it
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+          fpl-project
+          fpl-reconcile
 
   # The one required check. `always()` makes it run, and fail, when a job it
   # needs failed or was cancelled — without it a failed dependency would skip
