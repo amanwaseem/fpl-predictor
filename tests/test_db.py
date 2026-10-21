@@ -1,25 +1,17 @@
 """Tests for the schema: its migrations, and the constraints that keep rows sound.
 
-Runs against the Postgres named by TEST_DATABASE_URL, which it migrates up and
-down, so a database whose name does not end in _test is refused. Skipped
-without one, unless FPL_REQUIRE_DB is set, as it is in CI's db job.
-
-Locally: make test-db
+Needs a database; see tests/database.py. Locally: make test-db
 """
 
-import os
 import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
-from pathlib import Path
 
 from alembic import command
 from alembic.autogenerate import compare_metadata
-from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import insert, inspect, select
 from sqlalchemy.dialects.postgresql import Range
-from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError, SAWarning
 
 from fpl.db.models import (
@@ -37,33 +29,15 @@ from fpl.db.models import (
     Snapshot,
     Team,
 )
-from fpl.db.session import make_engine, normalise_url
-
-ROOT = Path(__file__).resolve().parent.parent
-URL = os.environ.get("TEST_DATABASE_URL")
+from fpl.db.session import make_engine
+from tests.database import URL, alembic_config, empty_every_table, require_test_database
 
 SEASON = "2026/27"
 DEADLINE = datetime(2026, 10, 23, 17, 30, tzinfo=UTC)
 
 
 def setUpModule():
-    if not URL:
-        if os.environ.get("FPL_REQUIRE_DB"):
-            raise RuntimeError("FPL_REQUIRE_DB is set, but TEST_DATABASE_URL is not")
-        raise unittest.SkipTest("TEST_DATABASE_URL is not set; make test-db runs these")
-    name = make_url(normalise_url(URL)).database or ""
-    if not name.endswith("_test"):
-        raise RuntimeError(
-            f"TEST_DATABASE_URL names {name!r}. These tests drop every table in it, "
-            "so they only run against a database whose name ends in _test."
-        )
-
-
-def alembic_config():
-    config = Config(str(ROOT / "alembic.ini"))
-    config.set_main_option("sqlalchemy.url", normalise_url(URL).replace("%", "%%"))
-    config.attributes["configure_logger"] = False
-    return config
+    require_test_database()
 
 
 class TestMigrations(unittest.TestCase):
@@ -111,6 +85,7 @@ class TestConstraints(unittest.TestCase):
         command.downgrade(config, "base")
         command.upgrade(config, "head")
         cls.engine = make_engine(URL)
+        empty_every_table(cls.engine)
 
     @classmethod
     def tearDownClass(cls):
