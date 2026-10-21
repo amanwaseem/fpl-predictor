@@ -23,8 +23,12 @@ def url():
 
 
 def run_migrations_offline():
-    """Print the SQL instead of running it: `alembic upgrade head --sql`."""
-    context.configure(url=url(), target_metadata=target_metadata,
+    """Print the SQL instead of running it: `alembic upgrade head --sql`.
+
+    Needs no database, only the dialect, so it runs without DATABASE_URL too.
+    """
+    offline_url = config.get_main_option("sqlalchemy.url") or "postgresql+psycopg://"
+    context.configure(url=offline_url, target_metadata=target_metadata,
                       literal_binds=True, compare_type=True)
     with context.begin_transaction():
         context.run_migrations()

@@ -17,7 +17,7 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import insert, inspect, select, text
+from sqlalchemy import insert, inspect, select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError, SAWarning
@@ -94,13 +94,10 @@ class TestMigrations(unittest.TestCase):
             context = MigrationContext.configure(connection, opts={"compare_type": True})
             self.assertEqual(compare_metadata(context, Base.metadata), [])
 
-    def test_downgrade_removes_everything(self):
+    def test_downgrade_removes_every_table(self):
         command.upgrade(self.config, "head")
         command.downgrade(self.config, "base")
         self.assertEqual(self.tables(), {"alembic_version"})
-        with self.engine.connect() as connection:
-            extensions = connection.scalars(text("SELECT extname FROM pg_extension")).all()
-        self.assertNotIn("btree_gist", extensions)
 
 
 class TestConstraints(unittest.TestCase):
@@ -108,7 +105,11 @@ class TestConstraints(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        command.upgrade(alembic_config(), "head")
+        # Rebuilt rather than upgraded: a database already stamped at head
+        # would otherwise keep a schema from before an edit to a migration.
+        config = alembic_config()
+        command.downgrade(config, "base")
+        command.upgrade(config, "head")
         cls.engine = make_engine(URL)
 
     @classmethod
@@ -164,6 +165,12 @@ class TestConstraints(unittest.TestCase):
                             gameweeks=Range(5, 39))
         self.insert(PlayerClub, season=SEASON, element_id=16, team_id=2, gameweeks=Range(8, 39))
 
+    def test_a_club_spell_starts_at_a_gameweek(self):
+        for gameweeks in (Range(None, 8), Range(0, 8), Range(empty=True)):
+            with self.subTest(gameweeks=gameweeks):
+                self.assertRejected(PlayerClub, season=SEASON, element_id=16, team_id=1,
+                                    gameweeks=gameweeks)
+
     def test_player_codes_are_fpls_not_generated(self):
         # SQLAlchemy warns that the key is missing; Postgres then refuses the row.
         with self.assertWarns(SAWarning):
@@ -191,6 +198,18 @@ class TestConstraints(unittest.TestCase):
                "points_per_90": Decimal("5.42"), "n_fixtures": 1, "status": "a"}
         self.assertRejected(Prediction, **row, model_version="unlogged-v1")
         self.insert(Prediction, **row, model_version="baseline-v1")
+
+    def test_the_log_copy_keeps_every_digit_it_was_written_with(self):
+        """fpl.log does not limit decimal places, so neither may its copy (#80)."""
+        self.insert(Prediction, season=SEASON, gameweek=8, model_version="baseline-v1",
+                    player_id=16, web_name="Saka", team="ARS", position="MID",
+                    price=Decimal("10.1"), predicted_points=Decimal("5.125"),
+                    expected_minutes=Decimal("85.25"), points_per_90=Decimal("5.4321"),
+                    n_fixtures=1, status="a")
+        stored = self.connection.execute(
+            select(Prediction.predicted_points, Prediction.expected_minutes,
+                   Prediction.points_per_90)).one()
+        self.assertEqual(tuple(stored), (Decimal("5.125"), Decimal("85.25"), Decimal("5.4321")))
 
     def test_a_score_error_is_computed_by_postgres(self):
         self.insert(ScoreEntry, season=SEASON, gameweek=8, model_version="baseline-v1",

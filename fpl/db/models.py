@@ -40,6 +40,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import INT4RANGE, JSONB, ExcludeConstraint, Range
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from fpl.log import POSITIONS, STATUSES
+
 # Constraint names are part of the schema: migrations refer to them by name, so
 # they are generated predictably rather than left to Postgres.
 NAMING_CONVENTION = {
@@ -50,12 +52,10 @@ NAMING_CONVENTION = {
     "pk": "pk_%(table_name)s",
 }
 
-POSITIONS = ("GKP", "DEF", "MID", "FWD")
-STATUSES = ("a", "d", "i", "s", "u", "n")
-
 
 def one_of(column, values):
-    return f"{column} IN ({', '.join(repr(v) for v in values)})"
+    """A CHECK that column is one of values. Sorted, so a set gives stable SQL."""
+    return f"{column} IN ({', '.join(repr(v) for v in sorted(values))})"
 
 
 class Base(DeclarativeBase):
@@ -126,7 +126,12 @@ class PlayerClub(Base):
             ["season", "element_id"], ["season_players.season", "season_players.element_id"]
         ),
         ForeignKeyConstraint(["season", "team_id"], ["teams.season", "teams.team_id"]),
-        CheckConstraint("NOT isempty(gameweeks) AND lower(gameweeks) >= 1", name="gameweeks"),
+        # lower() is null for an unbounded range, and a null CHECK passes, so
+        # lower_inf is refused explicitly: every spell starts at a gameweek.
+        CheckConstraint(
+            "NOT isempty(gameweeks) AND NOT lower_inf(gameweeks) AND lower(gameweeks) >= 1",
+            name="gameweeks",
+        ),
         ExcludeConstraint(
             ("season", "="),
             ("element_id", "="),
@@ -170,7 +175,8 @@ class Fixture(Base):
         Index("ix_fixtures_gameweek", "season", "gameweek"),
     )
 
-    season: Mapped[str] = mapped_column(ForeignKey("seasons.season"), primary_key=True)
+    # No key into seasons of its own: the team keys already carry the season.
+    season: Mapped[str] = mapped_column(Text, primary_key=True)
     fixture_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     # Null while a postponed fixture waits to be rescheduled.
     gameweek: Mapped[int | None] = mapped_column(SmallInteger)
@@ -200,6 +206,7 @@ class PlayerFixtureStats(Base):
         ),
         CheckConstraint("minutes >= 0", name="minutes"),
         Index("ix_player_fixture_stats_fixture", "season", "fixture_id"),
+        Index("ix_player_fixture_stats_snapshot", "snapshot_id"),
     )
 
     season: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -328,11 +335,13 @@ class Prediction(Base):
     web_name: Mapped[str] = mapped_column(Text)
     team: Mapped[str] = mapped_column(Text)
     position: Mapped[str] = mapped_column(Text)
-    price: Mapped[Decimal] = mapped_column(Numeric(4, 1))
+    # Unconstrained numeric: a copy of the log keeps every digit it was written
+    # with, so it can be reconciled against predictions/ exactly (#80).
+    price: Mapped[Decimal] = mapped_column(Numeric)
     # Can be negative: a red card or an own goal scores below zero.
-    predicted_points: Mapped[Decimal] = mapped_column(Numeric(6, 2))
-    expected_minutes: Mapped[Decimal] = mapped_column(Numeric(4, 1))
-    points_per_90: Mapped[Decimal] = mapped_column(Numeric(6, 2))
+    predicted_points: Mapped[Decimal] = mapped_column(Numeric)
+    expected_minutes: Mapped[Decimal] = mapped_column(Numeric)
+    points_per_90: Mapped[Decimal] = mapped_column(Numeric)
     n_fixtures: Mapped[int] = mapped_column(SmallInteger)
     status: Mapped[str] = mapped_column(Text)
 
@@ -385,11 +394,11 @@ class PlayerScore(Base):
     gameweek: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
     model_version: Mapped[str] = mapped_column(Text, primary_key=True)
     player_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    predicted_points: Mapped[Decimal] = mapped_column(Numeric(6, 2))
+    predicted_points: Mapped[Decimal] = mapped_column(Numeric)
     actual_points: Mapped[int] = mapped_column(SmallInteger)
-    expected_minutes: Mapped[Decimal] = mapped_column(Numeric(4, 1))
+    expected_minutes: Mapped[Decimal] = mapped_column(Numeric)
     actual_minutes: Mapped[int] = mapped_column(SmallInteger)
     # Derived by Postgres, so it cannot disagree with the two columns it is from.
     error: Mapped[Decimal] = mapped_column(
-        Numeric(6, 2), Computed("predicted_points - actual_points", persisted=True)
+        Numeric, Computed("predicted_points - actual_points", persisted=True)
     )
