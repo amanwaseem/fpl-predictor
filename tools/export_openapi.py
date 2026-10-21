@@ -2,7 +2,7 @@
 
     python tools/export_openapi.py      # or: make openapi
 
-The document is committed, and tests/test_api_openapi.py fails when it
+The document is committed, and tests/test_api_http.py (TestOpenAPI) fails when it
 differs from what the code generates, so any change to the API's contract
 shows up in review as a diff of this file.
 """

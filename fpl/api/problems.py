@@ -4,7 +4,6 @@ Every error the API returns has the same shape, whether it is a missing
 gameweek, a malformed query parameter or a route that does not exist.
 """
 
-import logging
 from http import HTTPStatus
 from typing import Any
 
@@ -16,9 +15,6 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
 MEDIA_TYPE = "application/problem+json"
-
-log = logging.getLogger(__name__)
-
 
 class Problem(BaseModel):
     type: str = "about:blank"
@@ -50,7 +46,8 @@ async def validation_error(request: Request, exc: RequestValidationError):
 
 
 async def server_error(request: Request, exc: Exception):
-    log.exception("Unhandled error on %s", request.url.path)
+    # Not logged here: Starlette re-raises after this handler, and the server
+    # logs the traceback then. Logging it here too would print it twice.
     return problem_response(request, 500)
 
 

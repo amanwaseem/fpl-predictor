@@ -179,6 +179,8 @@ jobs:
         run: |
           fpl-serve --port 8000 > api.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8000/readyz > /dev/null && break; sleep 1; done
+          curl -sf localhost:8000/readyz > /dev/null \
+            || { echo "The API never became ready."; cat api.log; exit 1; }
           schemathesis run http://127.0.0.1:8000/openapi.json --checks all --max-examples 50 \
             || { echo "--- API log ---"; cat api.log; exit 1; }
 

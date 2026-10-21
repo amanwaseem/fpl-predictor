@@ -323,6 +323,37 @@ def score_entry(rows, gameweek, model_version, events, actual, bootstrap,
     return matched, result
 
 
+def missed_gameweeks(logged, settled):
+    """Settled gameweeks from a model's first entry on that it has no entry for.
+
+    `logged` is the model's gameweeks in order; `settled` any collection.
+    """
+    last_settled = max(settled, default=0)
+    return [gw for gw in range(logged[0], last_settled + 1)
+            if gw in settled and gw not in logged]
+
+
+def pooled_block(groups):
+    """Pooled metrics over a model's scored rows, one group per gameweek.
+
+    Each row needs predicted_points, actual_points, expected_minutes and
+    actual_minutes. The API's scorecard uses this too, so it cannot drift from
+    scores/cumulative.json.
+    """
+    all_pairs = [[(p["predicted_points"], p["actual_points"]) for p in group]
+                 for group in groups]
+    playing_pairs = [[(p["predicted_points"], p["actual_points"])
+                      for p in group if p["expected_minutes"] > 0]
+                     for group in groups]
+    minutes = [(p["expected_minutes"], p["actual_minutes"]) for group in groups for p in group]
+    return {
+        "all": metrics.pooled_summary(all_pairs) if groups else None,
+        "predicted_to_play": (metrics.pooled_summary(playing_pairs)
+                              if any(playing_pairs) else None),
+        "minutes_mae": metrics.mae(minutes) if minutes else None,
+    }
+
+
 def cumulative(scored, events, entries):
     """Pooled figures per model, with pending and missed gameweeks listed.
 
@@ -337,28 +368,14 @@ def cumulative(scored, events, entries):
         logged = sorted(gw for gw, m in entries if m == model)
         mine = sorted((gw, matched, res) for (gw, m), (matched, res) in scored.items()
                       if m == model)
-        all_pairs = [[(p["predicted_points"], p["actual_points"]) for p in matched]
-                     for _, matched, _ in mine]
-        playing_pairs = [[(p["predicted_points"], p["actual_points"])
-                          for p in matched if p["expected_minutes"] > 0]
-                         for _, matched, _ in mine]
-        minutes = [(p["expected_minutes"], p["actual_minutes"])
-                   for _, matched, _ in mine for p in matched]
         with_xi = [res["xi"] for _, _, res in mine if res["xi"]["available"]]
         captured = sum(xi["captured"]["actual"] for xi in with_xi)
         optimum = sum(xi["optimum"]["actual"] for xi in with_xi)
-        last_settled = max(settled) if settled else 0
         out["models"][model] = {
             "gameweeks_scored": [gw for gw, _, _ in mine],
             "gameweeks_pending": [gw for gw in logged if gw not in settled],
-            "gameweeks_missed": [gw for gw in range(logged[0], last_settled + 1)
-                                 if gw in settled and gw not in logged],
-            "pooled": {
-                "all": metrics.pooled_summary(all_pairs) if mine else None,
-                "predicted_to_play": (metrics.pooled_summary(playing_pairs)
-                                      if any(playing_pairs) else None),
-                "minutes_mae": metrics.mae(minutes) if minutes else None,
-            },
+            "gameweeks_missed": missed_gameweeks(logged, settled),
+            "pooled": pooled_block([matched for _, matched, _ in mine]),
             "xi": {"gameweeks": len(with_xi), "captured": captured, "optimum": optimum,
                    "captured_share": captured / optimum if optimum else None},
             "per_gameweek": [

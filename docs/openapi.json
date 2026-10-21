@@ -8,8 +8,15 @@
             "type": "integer"
           },
           "last_gameweek": {
-            "title": "Last Gameweek",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Gameweek"
           },
           "team": {
             "title": "Team",
@@ -1310,7 +1317,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^-?\\d{1,4}(\\.\\d{1,6})?:\\d{1,6}$",
+                  "pattern": "^-?\\d{1,20}(\\.\\d{1,30})?:\\d{1,9}$",
                   "type": "string"
                 },
                 {

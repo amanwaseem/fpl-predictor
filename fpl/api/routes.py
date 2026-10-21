@@ -68,7 +68,7 @@ def list_predictions(
     max_price: Annotated[float | None, Query(ge=0, le=20, description="£m")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 50,
     after: Annotated[str | None, Query(
-        pattern=r"^-?\d{1,4}(\.\d{1,6})?:\d{1,6}$", examples=["6.94:124"],
+        pattern=r"^-?\d{1,20}(\.\d{1,30})?:\d{1,9}$", examples=["6.94:124"],
         description="next_cursor from the previous page: its last row's "
                     "predicted_points:player_id")] = None,
 ):
