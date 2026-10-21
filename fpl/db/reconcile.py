@@ -8,13 +8,19 @@ in the database, one in the database but not in git, or one that differs. Run
 `fpl-project` to rebuild the database's copy; the files are never changed.
 
 A player score's `error` is computed by Postgres, so it is also checked
-against the error column scores/ wrote, rounded as the harness rounds it.
+against the error column scores/ wrote, recomputed as the harness computed it:
+in floats, then rounded. Rounding the exact Decimal would round some halves the
+other way.
+
+The tables are read in one REPEATABLE READ transaction, so a projection that
+commits partway through cannot show up as differences.
 
 Run from the repository root, with DATABASE_URL set.
 """
 
 import argparse
 import sys
+from decimal import Decimal
 
 from sqlalchemy import select
 
@@ -52,10 +58,12 @@ def compare(table, in_git, in_database):
 
 
 def differences(engine, log):
-    with engine.connect() as connection:
+    snapshot = engine.connect().execution_options(isolation_level="REPEATABLE READ")
+    with snapshot as connection, connection.begin():
         player_scores = table_rows(connection, PlayerScore)
         for row in player_scores:
-            row["error"] = round(row["error"], 2)
+            harness_error = float(row["predicted_points"]) - row["actual_points"]
+            row["error"] = Decimal(repr(round(harness_error, 2)))
         return (compare(PredictionEntry.__table__, log.entries,
                         table_rows(connection, PredictionEntry))
                 + compare(Prediction.__table__, log.predictions,

@@ -4,7 +4,7 @@ import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from fpl.db.project import as_decimal, read_log, season_for
+from fpl.db.project import read_log, season_for
 from tests.fixtures import TempCwd, read_csv, write_csv
 from tests.log_files import write_entry, write_score
 
@@ -15,14 +15,6 @@ class TestSeason(unittest.TestCase):
         for deadline in (datetime(2026, 8, 14, tzinfo=UTC), datetime(2027, 5, 23, tzinfo=UTC)):
             with self.subTest(deadline=deadline):
                 self.assertEqual(season_for(deadline), "2026/27")
-
-
-class TestAsDecimal(unittest.TestCase):
-
-    def test_a_parsed_float_comes_back_as_the_text_it_was(self):
-        for text in ("5.12", "0.1", "10.0", "5.125", "-1.5"):
-            with self.subTest(text=text):
-                self.assertEqual(as_decimal(float(text)), Decimal(text))
 
 
 class TestReadLog(TempCwd):
@@ -57,6 +49,24 @@ class TestReadLog(TempCwd):
         with self.assertRaises(SystemExit):
             read_log()
 
+    def test_a_decimal_keeps_digits_a_float_would_lose(self):
+        path = write_entry(self.tmp)
+        rows = read_csv(path)
+        rows[0]["predicted_points"] = "0.12345678901234567890"
+        write_csv(path, rows)
+        stored = {p["predicted_points"] for p in read_log().predictions}
+        self.assertIn(Decimal("0.12345678901234567890"), stored)
+
+    def test_a_timestamp_without_a_zone_is_refused(self):
+        path = write_entry(self.tmp)
+        rows = read_csv(path)
+        for row in rows:
+            row["deadline_utc"] = "2026-10-23T17:30:00"
+        write_csv(path, rows)
+        with self.assertRaises(SystemExit) as raised:
+            read_log()
+        self.assertIn("deadline_utc", str(raised.exception))
+
     def test_a_filename_that_disagrees_with_its_rows_is_refused(self):
         path = write_entry(self.tmp)
         path.rename(path.with_name("gw08_other-v1.csv"))
@@ -71,6 +81,33 @@ class TestReadLog(TempCwd):
         with self.assertRaises(SystemExit) as raised:
             read_log()
         self.assertIn("not in the log", str(raised.exception))
+
+    def test_a_score_whose_filename_disagrees_with_its_contents_is_refused(self):
+        write_entry(self.tmp)
+        write_entry(self.tmp, gameweek=9)
+        stem = write_score(self.tmp)
+        for suffix in (".json", ".csv"):
+            stem.with_suffix(suffix).rename(stem.with_name("gw09_baseline-v1" + suffix))
+        with self.assertRaises(SystemExit) as raised:
+            read_log()
+        self.assertIn("its filename", str(raised.exception))
+
+    def test_a_score_without_its_rows_is_refused(self):
+        write_entry(self.tmp)
+        write_score(self.tmp).with_suffix(".csv").unlink()
+        with self.assertRaises(SystemExit) as raised:
+            read_log()
+        self.assertIn("no player rows", str(raised.exception))
+
+    def test_a_score_that_disagrees_with_its_entry_is_refused(self):
+        write_entry(self.tmp)
+        path = write_score(self.tmp).with_suffix(".csv")
+        rows = read_csv(path)
+        rows[0]["predicted_points"] = "99.0"
+        write_csv(path, rows, fieldnames=list(rows[0]))
+        with self.assertRaises(SystemExit) as raised:
+            read_log()
+        self.assertIn("predicted_points", str(raised.exception))
 
     def test_cumulative_json_is_not_read_as_a_score(self):
         write_entry(self.tmp)
