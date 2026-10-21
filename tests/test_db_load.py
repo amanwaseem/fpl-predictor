@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from fpl.db.load import load
 from fpl.db.models import (
     Base,
+    Player,
     PlayerClub,
     PlayerFixtureStats,
     SeasonPlayer,
@@ -215,6 +216,23 @@ class TestLoad(TempCwd):
             select(PlayerFixtureStats.total_points, PlayerFixtureStats.snapshot_id)
             .where(PlayerFixtureStats.element_id == 1, PlayerFixtureStats.fixture_id == 1)),
             [(6, SECOND)])
+        spells = self.rows(select(PlayerClub.element_id, PlayerClub.team_id)
+                           .where(PlayerClub.element_id.in_([1, 5])))
+        self.assertEqual(sorted(spells), [(1, 1), (5, 2)])
+
+    def test_an_older_season_does_not_rename_players(self):
+        self.write(FIRST)
+        self.load(FIRST)
+        last_season = [event(gw, deadline=f"2025-08-{8 + gw * 7:02d}T17:30:00Z",
+                             finished=True, data_checked=True) for gw in (1, 2, 3)]
+        self.snapshot("20250901T080000Z",
+                      elements=[full_element(1, team=1, web_name="Old") | {"first_name": "Old"}],
+                      teams=[full_team(1)], events=last_season, fixtures=[], histories={1: []},
+                      manifest={"snapshot_id": "20250901T080000Z", "element_count": 1,
+                                "has_players": True, "completed_at_utc": "2025-09-01T08:06:00Z"})
+        self.assertTrue(self.load("20250901T080000Z").newest)
+        self.assertEqual(self.scalar(select(Player.first_name).where(Player.code == 1001)),
+                         "First1")
 
     def test_a_load_that_fails_leaves_nothing_behind(self):
         broken = history_row(1, FIXTURES[0], home=True)

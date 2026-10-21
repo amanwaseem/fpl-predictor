@@ -41,6 +41,10 @@ class TestClubSpells(unittest.TestCase):
         self.assertEqual(club_spells(history, FIXTURES, 2, 3),
                          [(1, Range(1, 2)), (2, Range(2, 39))])
 
+    def test_a_return_inside_one_gameweek_stays_one_spell(self):
+        history = [played(11, 1, True), played(22, 2, True), played(21, 2, False)]
+        self.assertEqual(club_spells(history, FIXTURES, 1, 3), [(1, Range(1, 39))])
+
     def test_a_move_after_the_season_ends_adds_nothing(self):
         history = [played(11, 1, True)]
         self.assertEqual(club_spells(history, FIXTURES, 2, None), [(1, Range(1, 39))])
