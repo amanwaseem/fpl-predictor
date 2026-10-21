@@ -96,15 +96,31 @@ phantom model in the log.
 
 ### When the deadline watchdog fires
 
-`.github/workflows/deadline.yml` runs every morning at 07:00 UTC. It fails, and
-GitHub emails you, when the next deadline is under 72 hours away and `main`
-has no `predictions/gwNN_*.csv` for it. That email means: start at §1 now. If
-time is short, go straight to §9's fallback. An entry from a stale snapshot is
-still evidence; no entry is not.
+`.github/workflows/deadline.yml` runs hourly. It fails, and GitHub emails you,
+when the next deadline is 10 hours away or less and `main` has no
+`predictions/gwNN_*.csv` made for it. The automated entry (below) opens its PR
+from 12 hours out, so by then something has gone wrong, and the email says
+which:
+
+- **"Read and merge #N"**: the PR is open and waiting for you. Read it as
+  below and merge it.
+- **"no open PR adds one"**: the entry workflow did not make it. Start at §1
+  now. If time is short, go straight to §9's fallback. An entry from a stale
+  snapshot is still evidence; no entry is not.
 
 It stops failing once an entry for that gameweek is merged. If it says "could
 not check", the API was unreachable. That is not a missed deadline, but look
-up the next one by hand as above.
+up the next one by hand as above. If it says "malformed", the API answered in
+a shape the project does not expect: its schema may have changed, and
+`fpl-fetch` is probably broken too. That needs a person whatever the
+deadline.
+
+An entry only counts if its `deadline_utc` is this gameweek's. Entry names
+carry no season, so next season's GW4 would otherwise find this season's
+`gw04_*.csv` and pass; one from another season is named and not counted.
+
+Once a day, at 07:00 UTC, it also checks `ENTRY_BOT_TOKEN` (below) and fails
+when it is missing, rejected, or expires within 7 days.
 
 Check it any time, from the repository root:
 
@@ -113,17 +129,17 @@ python tools/check_deadline.py
 ```
 
 To test the alert end to end, run the workflow by hand from the Actions tab
-with a fake deadline: 48 hours and a gameweek with no entry should fail; the
-same with a logged gameweek should pass.
+with a fake deadline: 6 hours and a gameweek with no entry should fail; 48
+hours should pass; 6 hours with a logged gameweek should pass.
 
 ### The automated entry
 
 `.github/workflows/entry.yml` runs hourly. Once the next deadline is 12 hours
-away or less, with no entry on `main`, no open PR adding one and no leftover
-`predict/gwNN` branch, it takes a snapshot, runs `fpl-entry`, uploads the
-snapshot as a release asset and opens a PR on `predict/gwNN`. It never
-merges. The decision is `tools/plan_entry.py`; each run's summary page says
-what it decided and why.
+away or less, with nothing for that gameweek on `main` or in an open PR, it
+takes a snapshot, runs `fpl-entry`, uploads the snapshot and digest as the
+release `snapshot-<id>`, and opens a PR from `entry-bot/<season>-gwNN`. It
+never merges. Every decision is `tools/entry_bot.py decide`; each run's summary
+page says what it decided and why.
 
 When its PR appears, read it as you would your own run, then merge it before
 the deadline:
@@ -133,26 +149,40 @@ the deadline:
 - the deadline is right, and `generated` is before it;
 - `ci` is green.
 
-It does not replace the watchdog, which still fails at 72 hours with no entry
-on `main`. If the workflow fails, its run is red and GitHub emails you; the
-next hourly run tries again. A run that fails with "branch predict/gwNN exists
-on the remote with no open PR" needs you: open the PR from that branch, or
-make the entry by hand from §1. It skips while any open PR adds an entry for
-the gameweek, so a hand-made entry and an automated one never both happen.
+What it does in the cases that are not the usual one:
+
+| It finds | It does |
+|---|---|
+| an entry on `main` for this deadline | skips |
+| an open PR adding one, by hand or not | skips; merge that one |
+| its own branch with no PR (an earlier run pushed, then failed to open it) | **resumes**: re-checks the branch, re-verifies the entry against the release asset, opens the PR |
+| its own branch whose PR was closed without merging | skips: you closed it, it is not reopened. The watchdog still warns |
+| `predict/gwNN` with no PR, inside the window | fails: you are making the entry by hand. Open its PR |
+| an entry on `main` for this gameweek number from another season | fails: the log has no season dimension yet. Your call |
+| an open PR for a gameweek whose deadline has passed | comments on it, once: close it, do not merge |
+| the deadline under 5 minutes away mid-run | stops before pushing or opening anything |
+
+Nothing fails outside the 12-hour window, so a branch you push days early
+does not turn every hourly run red. A failure before the push deletes that
+run's release again; a failure after it leaves the branch for the next run to
+resume. It skips while any open PR adds an entry for the gameweek, so a
+hand-made entry and an automated one never both happen.
 
 **Setting it up.** The PR is opened with `ENTRY_BOT_TOKEN`, so that `ci` runs
 on it (a PR opened with the default token triggers no workflows). Create a
 fine-grained personal access token: this repository only; Contents and Pull
 requests, read and write. Add it under Settings > Secrets and variables >
-Actions as `ENTRY_BOT_TOKEN`. Without it a real run stops before fetching and
-says so. A dry run does not need it.
+Actions as `ENTRY_BOT_TOKEN`. It is used only to push and to open the PR, and
+checked just before; an acting run without a working one stops there. Put the
+expiry in your calendar: the watchdog warns a week ahead. A dry run does not
+need it.
 
 **Testing it.** Run the workflow by hand from the Actions tab. `dry_run` is on
 by default: it ignores the window, makes the entry under `scratch/`, and puts
 the digest on the run's summary page. Nothing is committed, released or
-opened. A fake deadline (dry runs only) keeps the window, to test the
-decision: 6 hours and a gameweek with no entry acts, 48 hours skips, and a
-gameweek with an entry on `main` skips.
+opened. A fake deadline (dry runs only) tests just the decision, with the
+window kept and nothing fetched: 6 hours and a gameweek with no entry acts,
+48 hours skips, and a gameweek with an entry on `main` skips.
 
 ### Re-verifying an automated entry
 
@@ -538,5 +568,5 @@ fpl-summarise predictions/gwNN_<model>.csv --out reports/
 python tools/check_log_immutable.py --ref origin/main      # rule 1, mechanically
 python -m unittest discover tests
 fpl-score                                                  # after GW N settles, not before
-python tools/plan_entry.py --open-prs F --remote-branches F  # what the entry workflow would decide
+python tools/entry_bot.py decide --prs F --branches F       # what the entry workflow would decide
 ```

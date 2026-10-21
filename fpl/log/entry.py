@@ -25,6 +25,7 @@ Usage:
     fpl-entry                         # every logged model, from data/raw/LATEST
     fpl-entry --snapshot 20261016T190000Z
     fpl-entry --dry-run               # the same, written under scratch/ instead
+    fpl-entry --digest digest.md      # also copy the digest there
 
 Run from the repository root.
 """
@@ -132,7 +133,13 @@ def digest(snapshot_id, target_gw, deadline, outputs):
     return "\n".join(lines) + "\n"
 
 
-def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS):
+def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None):
+    # Checked first: discovering it after the entries are written would leave
+    # them in predictions/ with no digest for the PR.
+    if digest_out is not None and not Path(digest_out).parent.is_dir():
+        raise SystemExit(f"--digest {digest_out}: {Path(digest_out).parent} does not "
+                         "exist. Nothing was run.")
+
     # Resolved once here, then passed to every model by id: each reads exactly
     # this snapshot, whatever LATEST says by the time it runs.
     snap, bootstrap, _, _ = load_snapshot(snapshot_id)
@@ -207,6 +214,10 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS):
 
     text = digest(snapshot_id, target_gw, deadline, outputs)
     (run_dir / "digest.md").write_text(text)
+    # For a caller that must not guess which scratch/entry-gw* directory is
+    # this run's: the entry workflow puts this file in the PR body.
+    if digest_out is not None:
+        Path(digest_out).write_text(text)
 
     print("\n" + "=" * 72 + "\n")
     print(text)
@@ -229,9 +240,11 @@ def cli(argv=None):
     ap.add_argument("--dry-run", action="store_true",
                     help="write entries and reports under scratch/ instead of "
                          "predictions/ and reports/")
+    ap.add_argument("--digest", default=None, metavar="PATH",
+                    help="also write the digest to PATH, on success only")
     args = ap.parse_args(argv)
     require_project_root()
-    return main(args.snapshot, args.dry_run)
+    return main(args.snapshot, args.dry_run, digest_out=args.digest)
 
 
 if __name__ == "__main__":

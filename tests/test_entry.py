@@ -94,6 +94,26 @@ class TestEntry(fixtures.TempCwd):
                      "prior:", "ratings:", "rows:"):
             self.assertIn(line, text)
 
+    def test_digest_out_is_the_same_digest(self):
+        code, _, err = self.run_entry(digest_out="here.md")
+        self.assertEqual(code, 0, err)
+        saved = next(Path("scratch").glob("entry-gw04-*/digest.md")).read_text()
+        self.assertEqual(Path("here.md").read_text(), saved)
+
+    def test_a_digest_path_that_cannot_be_written_refuses_before_anything_runs(self):
+        with self.assertRaises(SystemExit) as raised:
+            self.run_entry(digest_out="no/such/dir/digest.md")
+        self.assertIn("Nothing was run", str(raised.exception))
+        self.assertEqual(list(Path("predictions").glob("gw04_*")), [])
+
+    def test_digest_out_is_not_written_when_a_model_fails(self):
+        """No digest means no PR body: a failed run cannot be mistaken for one."""
+        code, _, _ = self.run_entry(
+            models=[("baseline-v1", predict_baseline.main), ("broken-v1", failing)],
+            digest_out="here.md")
+        self.assertEqual(code, 1)
+        self.assertFalse(Path("here.md").exists())
+
     def test_every_model_reads_the_named_snapshot_not_latest(self):
         # A later snapshot becomes LATEST, as a fetch during the run would make it.
         self.league_with_results("20260911T000000Z")
