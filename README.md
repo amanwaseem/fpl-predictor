@@ -40,26 +40,40 @@ the points cost of transfers.
 
 ## Current status
 
-Early development, building against the 2026/27 season.
+Logging predictions for the 2026/27 season. Entries are on `main` for GW4 and GW6; GW5 and
+GW7 were missed and stay missed, recorded as missed in `scores/`.
 
 **Working**
 
-- Raw data ingestion from the official FPL API, written to immutable timestamped snapshots
-- Rolling-form baseline model, running end to end against a full snapshot
+- Raw data ingestion from the FPL API (unofficial and undocumented), written to immutable
+  timestamped snapshots
+- Two logged models: the rolling-form baseline (`baseline-v1`, from GW4) and `form-fixture-v1`
+  (from GW6), which adds last-season priors and opponent-aware team strength
 - Prediction log: a declared schema, validated before every write, with the append-only rule
-  enforced mechanically rather than by discipline
+  enforced mechanically in CI rather than by discipline
+- `fpl-entry`: every logged model's entry from one snapshot, written, verified and summarised
+  in one command
 - Pre-commit verification of an entry against the snapshot that produced it
 - Human-readable digests of a committed entry
+- Scoring harness (`fpl-score`, since 22 Sep): every committed entry against actual results,
+  beside naive comparators, with the points its best XI would have captured
+- Backtest bench (`fpl-backtest`): replays settled gameweeks without leaking the future, and
+  judges each candidate held out before it can be logged
+- Deadline watchdog: a scheduled check that warns when a deadline is near with no entry
 
-**In progress**
+**In progress** (to 3 Nov)
 
-- Scoring harness
+- Automated entries: a scheduled workflow that makes each entry and opens its PR before the
+  deadline (#68)
+- A static scorecard and JSON API on GitHub Pages (#56, #9)
+- Squad optimiser, first slice: the best legal squad and captain for one gameweek (#53)
 
 **Planned**
 
-- Component models (minutes, goals, assists, clean sheet, saves, defensive contribution, bonus)
-- Squad optimiser
-- Public scorecard and web frontend
+- Further component models (minutes, goals, assists, saves, defensive contribution, bonus);
+  clean sheets are already priced from the fixture in `form-fixture-v1`
+- Optimiser transfers and a multi-gameweek horizon (#54, #55)
+- Web frontend (#10)
 
 The rolling-form baseline exists so that the pipeline, optimiser and frontend can be built and
 validated end to end without waiting on model accuracy. Any model that beats the baseline
