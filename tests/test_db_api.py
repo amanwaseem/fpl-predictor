@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import insert
+from sqlalchemy import insert, update
 from sqlalchemy.dialects.postgresql import Range
 
 from fpl.api.app import create_app
@@ -201,6 +201,13 @@ class TestRoutes(APICase):
         self.assertEqual([(p["gameweek"], p["model_version"]) for p in body["predictions"]],
                          [(6, "baseline-v1"), (8, "baseline-v1"), (8, "form-fixture-v1")])
         self.assertIsNotNone(body["predictions"][0]["actual_points"])
+
+    def test_an_open_ended_spell_has_no_last_gameweek(self):
+        with self.engine.begin() as c:
+            c.execute(update(PlayerClub).where(PlayerClub.team_id == 1)
+                      .values(gameweeks=Range(3, None)))
+        self.assertEqual(self.get("/v1/players/1")["clubs"][-1],
+                         {"team": "ARS", "first_gameweek": 3, "last_gameweek": None})
 
     def test_a_player_not_in_the_season_is_404(self):
         self.get("/v1/players/999", 404)

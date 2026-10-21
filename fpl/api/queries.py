@@ -1,8 +1,7 @@
 """The SQL behind each route, as plain dicts shaped like fpl.api.schemas.
 
-Pooled metrics come from fpl.metrics and missed gameweeks follow
-fpl.score.cumulative, so the API's scorecard cannot disagree with the
-scorecard scores/ writes.
+Pooled metrics and missed gameweeks come from the helpers fpl.score.cumulative
+uses, so the API's scorecard cannot disagree with the scorecard scores/ writes.
 """
 
 from collections import defaultdict
@@ -12,7 +11,6 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import aliased
 
-from fpl import metrics
 from fpl.db.models import (
     Fixture,
     Gameweek,
@@ -27,6 +25,7 @@ from fpl.db.models import (
     SeasonPlayer,
     Team,
 )
+from fpl.score import missed_gameweeks, pooled_block
 
 
 def not_found(detail):
@@ -96,16 +95,18 @@ def gameweek(connection, season, number):
 
     return dict(row) | {"season": season, "fixtures": [dict(f) for f in fixtures],
                         "entries": entries,
-                        "models_logged": [e["model_version"] for e in entries]}
+                        "models_logged": _logged(connection, season).get(number, [])}
 
 
 def encode_cursor(predicted_points, player_id):
     """The last row's sort key, as text: '6.94:124'.
 
     Not opaque on purpose. routes.py's pattern for `after` then describes every
-    valid cursor exactly, so no string the schema allows can be refused.
+    valid cursor exactly, so no string the schema allows can be refused. Fixed
+    point, never str(): a Decimal like 1E-7 would otherwise come out in
+    exponent form, which the pattern refuses.
     """
-    return f"{predicted_points}:{player_id}"
+    return f"{predicted_points:f}:{player_id}"
 
 
 def decode_cursor(cursor):
@@ -166,8 +167,10 @@ def player(connection, season, player_id):
     if row is None:
         raise not_found(f"No player {player_id} in {season}.")
 
+    # An open-ended spell ('[6,)') is allowed by the schema: no last gameweek yet.
     clubs = [
-        {"team": team, "first_gameweek": gameweeks.lower, "last_gameweek": gameweeks.upper - 1}
+        {"team": team, "first_gameweek": gameweeks.lower,
+         "last_gameweek": None if gameweeks.upper is None else gameweeks.upper - 1}
         for team, gameweeks in connection.execute(
             select(Team.short_name, PlayerClub.gameweeks)
             .join(Team, and_(Team.season == PlayerClub.season,
@@ -208,11 +211,7 @@ def player(connection, season, player_id):
 
 
 def models(connection, season):
-    """Every model logged this season: logged, scored and missed gameweeks.
-
-    Missed follows fpl.score.cumulative: settled after the model's first entry,
-    with no entry from it.
-    """
+    """Every model logged this season: logged, scored and missed gameweeks."""
     logged = defaultdict(list)
     for gameweek, models_logged in _logged(connection, season).items():
         for model in models_logged:
@@ -224,12 +223,10 @@ def models(connection, season):
         scored[model].append(gameweek)
     settled = set(connection.scalars(select(Gameweek.gameweek).where(
         Gameweek.season == season, Gameweek.finished, Gameweek.data_checked)))
-    last_settled = max(settled, default=0)
 
     return [{"model_version": model, "first_gameweek": gameweeks[0],
              "gameweeks_logged": gameweeks, "gameweeks_scored": scored[model],
-             "gameweeks_missed": [gw for gw in range(gameweeks[0], last_settled + 1)
-                                  if gw in settled and gw not in gameweeks]}
+             "gameweeks_missed": missed_gameweeks(gameweeks, settled)}
             for model, gameweeks in sorted(logged.items())]
 
 
@@ -247,23 +244,13 @@ def scorecard(connection, season):
             select(PlayerScore.model_version, PlayerScore.gameweek, PlayerScore.predicted_points,
                    PlayerScore.actual_points, PlayerScore.expected_minutes,
                    PlayerScore.actual_minutes).where(PlayerScore.season == season)):
-        rows[model][gameweek].append(
-            (float(predicted), actual, float(expected_minutes), actual_minutes))
-
-    def pooled(model):
-        groups = list(rows[model].values())
-        if not groups:
-            return {"all": None, "predicted_to_play": None, "minutes_mae": None}
-        playing = [[(p, a) for p, a, m, _ in group if m > 0] for group in groups]
-        return {
-            "all": metrics.pooled_summary([[(p, a) for p, a, _, _ in g] for g in groups]),
-            "predicted_to_play": metrics.pooled_summary(playing) if any(playing) else None,
-            "minutes_mae": metrics.mae([(m, am) for g in groups for _, _, m, am in g]),
-        }
+        rows[model][gameweek].append({
+            "predicted_points": float(predicted), "actual_points": actual,
+            "expected_minutes": float(expected_minutes), "actual_minutes": actual_minutes})
 
     harness_versions = sorted(connection.scalars(
         select(ScoreEntry.harness_version).where(ScoreEntry.season == season).distinct()))
     return {"season": season, "harness_versions": harness_versions,
             "models": [model | {"per_gameweek": per_gameweek[model["model_version"]],
-                                "pooled": pooled(model["model_version"])}
+                                "pooled": pooled_block(list(rows[model["model_version"]].values()))}
                        for model in models(connection, season)]}

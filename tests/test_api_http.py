@@ -5,15 +5,19 @@ database. The routes' contracts against real data are in tests/test_db_api.py.
 """
 
 import json
+import re
 import sys
 import unittest
+from decimal import Decimal
 from pathlib import Path
 
+from fastapi import Response
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 
-from fpl.api.app import create_app
+from fpl.api.app import create_app, matches
 from fpl.api.problems import MEDIA_TYPE
+from fpl.api.queries import decode_cursor, encode_cursor
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
@@ -71,6 +75,45 @@ class TestWithoutADatabase(unittest.TestCase):
     def test_a_database_failure_is_a_500_problem_not_a_traceback(self):
         body = self.assertProblem(self.client.get("/v1/models"), 500)
         self.assertNotIn("detail", body)
+
+
+class TestConditionalRequests(unittest.TestCase):
+
+    def test_if_none_match_is_a_list_of_tags(self):
+        etag = '"abc"'
+        for header, expected in [('"abc"', True), ('"x", W/"abc"', True), ("*", True),
+                                 ('"xabcx"', False), ('"abcd"', False), ("", False)]:
+            with self.subTest(header=header):
+                self.assertEqual(matches(header, etag), expected)
+
+    def test_repeated_headers_survive_the_caching_middleware(self):
+        app = create_app(create_engine(NOWHERE))
+
+        @app.get("/v1/test-headers")
+        def two_cookies():
+            response = Response("{}", media_type="application/json")
+            response.set_cookie("a", "1")
+            response.set_cookie("b", "2")
+            return response
+
+        with TestClient(app) as client:
+            response = client.get("/v1/test-headers")
+        self.assertEqual(len(response.headers.get_list("set-cookie")), 2)
+        self.assertIn("etag", response.headers)
+
+
+class TestCursor(unittest.TestCase):
+
+    def test_every_cursor_issued_matches_the_pattern_it_comes_back_through(self):
+        document = json.loads(export_openapi.document())
+        parameters = document["paths"]["/v1/gameweeks/{gameweek}/predictions"]["get"]
+        after = next(p for p in parameters["parameters"] if p["name"] == "after")
+        pattern = next(s["pattern"] for s in after["schema"]["anyOf"] if "pattern" in s)
+        for points in ("6.94", "6.9412345", "1E-7", "0E-7", "-1.5", "12345.5", "-0"):
+            with self.subTest(points=points):
+                cursor = encode_cursor(Decimal(points), 124)
+                self.assertRegex(cursor, re.compile(pattern))
+                self.assertEqual(decode_cursor(cursor), (Decimal(points), 124))
 
 
 class TestOpenAPI(unittest.TestCase):

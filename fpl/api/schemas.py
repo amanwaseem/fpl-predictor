@@ -87,7 +87,8 @@ class PredictionPage(BaseModel):
 class Club(BaseModel):
     team: str
     first_gameweek: int
-    last_gameweek: int
+    # None while the spell is open-ended.
+    last_gameweek: int | None
 
 
 class PlayedFixture(BaseModel):

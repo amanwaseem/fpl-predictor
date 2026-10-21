@@ -27,6 +27,12 @@ def etag_for(body):
     return f'"{hashlib.sha256(body).hexdigest()[:32]}"'
 
 
+def matches(if_none_match, etag):
+    """Whether an If-None-Match header covers `etag`, compared weakly (RFC 9110 13.1.2)."""
+    tags = [tag.strip().removeprefix("W/") for tag in if_none_match.split(",")]
+    return "*" in tags or etag in tags
+
+
 async def http_caching(request: Request, call_next):
     """ETag and Cache-Control on successful /v1 reads; 304 when the client is current."""
     response = await call_next(request)
@@ -39,10 +45,13 @@ async def http_caching(request: Request, call_next):
     body = b"".join([chunk async for chunk in response.body_iterator])
     etag = etag_for(body)
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
-    if etag in request.headers.get("if-none-match", ""):
+    if matches(request.headers.get("if-none-match", ""), etag):
         return Response(status_code=304, headers=headers)
-    return Response(body, status_code=200, media_type=response.media_type,
-                    headers=dict(response.headers) | headers)
+    # raw_headers rather than a dict, which would keep one of each repeated header.
+    buffered = Response(body, status_code=200)
+    buffered.raw_headers = response.raw_headers
+    buffered.headers.update(headers)
+    return buffered
 
 
 def openapi_with_problems(app):
