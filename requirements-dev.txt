@@ -1,7 +1,7 @@
 # Development tools: the linter and the coverage runner CI uses. Not needed to
 # fetch, predict, verify or score, which is why they are kept out of
 # requirements.txt — the runtime that produces a log entry stays requests and
-# nothing else. Includes the database layer, so the whole suite can run.
+# nothing else. Includes the database layer and the API, so the whole suite can run.
 #
 # Pinned for the same reason as requirements.txt: a linter upgrade that starts
 # flagging new rules should arrive as a deliberate change, not as a red PR
@@ -9,7 +9,33 @@
 #
 #   pip install -r requirements-dev.txt
 
--r requirements-db.txt
+-r requirements-api.txt
 
 coverage==7.16.2
 ruff==0.16.10
+
+# Starlette's TestClient, for the API's tests. httpx2 rather than httpx, which
+# starlette.testclient now warns about.
+httpx2==2.16.0
+httpcore2==2.16.0
+truststore==0.10.5
+
+# Fuzzes the API from its OpenAPI document in CI's db job (#81).
+schemathesis==4.32.3
+graphql-core==3.3.0
+harfile==0.6.0
+hypothesis==6.170.5
+hypothesis-graphql==0.13.5
+iniconfig==2.3.1
+jsonschema-rs==0.59.0
+markdown-it-py==4.2.0
+mdurl==0.1.2
+packaging==26.3
+pluggy==1.7.0
+pygments==2.21.0
+pyrate-limiter==4.5.1
+pytest==9.1.1
+pyyaml==6.0.3
+rich==15.0.0
+sortedcontainers==2.4.0
+werkzeug==3.1.9

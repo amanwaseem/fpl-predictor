@@ -1,0 +1,10 @@
+# The image needs fpl/, pyproject.toml, README.md and the requirements files.
+# Everything else stays out of the build context, data/raw above all.
+*
+!fpl/
+!pyproject.toml
+!README.md
+!requirements.txt
+!requirements-db.txt
+!requirements-api.txt
+**/__pycache__

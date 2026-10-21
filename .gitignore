@@ -224,3 +224,6 @@ scratch/
 # Partial log entries — write_entry cleans these up, but a hard kill
 # could leave one, and a truncated entry must never be committed.
 predictions/*.tmp
+
+# schemathesis's run cache, from make fuzz
+.schemathesis/

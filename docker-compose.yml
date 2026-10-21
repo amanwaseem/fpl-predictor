@@ -1,6 +1,9 @@
-# Local services. `make up` starts them; `make down` stops them and keeps the data.
+# Local services. `docker compose up` starts both; `make up` starts only the
+# database, for running commands against it from the host. `make down` stops
+# them and keeps the data.
 #
-# Only Postgres for now. The API and the ingest worker join it in #81 and #78.
+# The API reads the database; it does not migrate it. Run `make migrate seed`
+# from the host first.
 
 services:
   db:
@@ -20,6 +23,16 @@ services:
       interval: 2s
       timeout: 5s
       retries: 15
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://fpl:fpl@db:5432/fpl
+    ports:
+      - "${FPL_API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

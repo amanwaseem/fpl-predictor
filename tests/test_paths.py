@@ -73,6 +73,11 @@ class TestRequireProjectRoot(InDirectory):
         self.assertEqual(raised.exception.code, 0)
 
 
+# Commands that read and write no paths, only the database, and so must run
+# anywhere: fpl-serve runs in a container image with no checkout at all.
+PATHLESS = {"fpl-serve"}
+
+
 class TestEveryCommandChecks(unittest.TestCase):
 
     def test_every_cli_calls_require_project_root(self):
@@ -80,6 +85,8 @@ class TestEveryCommandChecks(unittest.TestCase):
         with (ROOT / "pyproject.toml").open("rb") as f:
             scripts = tomllib.load(f)["project"]["scripts"]
         for command, target in scripts.items():
+            if command in PATHLESS:
+                continue
             with self.subTest(command=command):
                 module = importlib.import_module(target.partition(":")[0])
                 tree = ast.parse(Path(module.__file__).read_text())

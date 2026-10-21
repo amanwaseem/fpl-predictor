@@ -1,0 +1,1579 @@
+{
+  "components": {
+    "schemas": {
+      "Club": {
+        "properties": {
+          "first_gameweek": {
+            "title": "First Gameweek",
+            "type": "integer"
+          },
+          "last_gameweek": {
+            "title": "Last Gameweek",
+            "type": "integer"
+          },
+          "team": {
+            "title": "Team",
+            "type": "string"
+          }
+        },
+        "required": [
+          "team",
+          "first_gameweek",
+          "last_gameweek"
+        ],
+        "title": "Club",
+        "type": "object"
+      },
+      "Entry": {
+        "description": "One model's committed entry for a gameweek, and its score once settled.",
+        "properties": {
+          "deadline_utc": {
+            "format": "date-time",
+            "title": "Deadline Utc",
+            "type": "string"
+          },
+          "generated_at_utc": {
+            "format": "date-time",
+            "title": "Generated At Utc",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Metrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "snapshot_id": {
+            "title": "Snapshot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_version",
+          "snapshot_id",
+          "generated_at_utc",
+          "deadline_utc",
+          "score"
+        ],
+        "title": "Entry",
+        "type": "object"
+      },
+      "Fixture": {
+        "properties": {
+          "away": {
+            "title": "Away",
+            "type": "string"
+          },
+          "away_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Score"
+          },
+          "finished": {
+            "title": "Finished",
+            "type": "boolean"
+          },
+          "fixture_id": {
+            "title": "Fixture Id",
+            "type": "integer"
+          },
+          "home": {
+            "title": "Home",
+            "type": "string"
+          },
+          "home_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Score"
+          },
+          "kickoff_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kickoff Utc"
+          }
+        },
+        "required": [
+          "fixture_id",
+          "kickoff_utc",
+          "home",
+          "away",
+          "home_score",
+          "away_score",
+          "finished"
+        ],
+        "title": "Fixture",
+        "type": "object"
+      },
+      "Gameweek": {
+        "properties": {
+          "data_checked": {
+            "title": "Data Checked",
+            "type": "boolean"
+          },
+          "deadline_utc": {
+            "format": "date-time",
+            "title": "Deadline Utc",
+            "type": "string"
+          },
+          "finished": {
+            "title": "Finished",
+            "type": "boolean"
+          },
+          "gameweek": {
+            "title": "Gameweek",
+            "type": "integer"
+          },
+          "models_logged": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models Logged",
+            "type": "array"
+          }
+        },
+        "required": [
+          "gameweek",
+          "deadline_utc",
+          "finished",
+          "data_checked",
+          "models_logged"
+        ],
+        "title": "Gameweek",
+        "type": "object"
+      },
+      "GameweekDetail": {
+        "properties": {
+          "data_checked": {
+            "title": "Data Checked",
+            "type": "boolean"
+          },
+          "deadline_utc": {
+            "format": "date-time",
+            "title": "Deadline Utc",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/Entry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "finished": {
+            "title": "Finished",
+            "type": "boolean"
+          },
+          "fixtures": {
+            "items": {
+              "$ref": "#/components/schemas/Fixture"
+            },
+            "title": "Fixtures",
+            "type": "array"
+          },
+          "gameweek": {
+            "title": "Gameweek",
+            "type": "integer"
+          },
+          "models_logged": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models Logged",
+            "type": "array"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gameweek",
+          "deadline_utc",
+          "finished",
+          "data_checked",
+          "models_logged",
+          "season",
+          "fixtures",
+          "entries"
+        ],
+        "title": "GameweekDetail",
+        "type": "object"
+      },
+      "GameweekList": {
+        "properties": {
+          "gameweeks": {
+            "items": {
+              "$ref": "#/components/schemas/Gameweek"
+            },
+            "title": "Gameweeks",
+            "type": "array"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          }
+        },
+        "required": [
+          "season",
+          "gameweeks"
+        ],
+        "title": "GameweekList",
+        "type": "object"
+      },
+      "GameweekMetrics": {
+        "properties": {
+          "bias": {
+            "title": "Bias",
+            "type": "number"
+          },
+          "gameweek": {
+            "title": "Gameweek",
+            "type": "integer"
+          },
+          "mae": {
+            "title": "Mae",
+            "type": "number"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "rmse": {
+            "title": "Rmse",
+            "type": "number"
+          },
+          "spearman": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spearman"
+          }
+        },
+        "required": [
+          "n",
+          "mae",
+          "rmse",
+          "bias",
+          "spearman",
+          "gameweek"
+        ],
+        "title": "GameweekMetrics",
+        "type": "object"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "Health",
+        "type": "object"
+      },
+      "Metrics": {
+        "properties": {
+          "bias": {
+            "title": "Bias",
+            "type": "number"
+          },
+          "mae": {
+            "title": "Mae",
+            "type": "number"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "rmse": {
+            "title": "Rmse",
+            "type": "number"
+          },
+          "spearman": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spearman"
+          }
+        },
+        "required": [
+          "n",
+          "mae",
+          "rmse",
+          "bias",
+          "spearman"
+        ],
+        "title": "Metrics",
+        "type": "object"
+      },
+      "Model": {
+        "properties": {
+          "first_gameweek": {
+            "title": "First Gameweek",
+            "type": "integer"
+          },
+          "gameweeks_logged": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Gameweeks Logged",
+            "type": "array"
+          },
+          "gameweeks_missed": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Gameweeks Missed",
+            "type": "array"
+          },
+          "gameweeks_scored": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Gameweeks Scored",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_version",
+          "first_gameweek",
+          "gameweeks_logged",
+          "gameweeks_scored",
+          "gameweeks_missed"
+        ],
+        "title": "Model",
+        "type": "object"
+      },
+      "ModelList": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/Model"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          }
+        },
+        "required": [
+          "season",
+          "models"
+        ],
+        "title": "ModelList",
+        "type": "object"
+      },
+      "PlayedFixture": {
+        "properties": {
+          "assists": {
+            "title": "Assists",
+            "type": "integer"
+          },
+          "bonus": {
+            "title": "Bonus",
+            "type": "integer"
+          },
+          "clean_sheets": {
+            "title": "Clean Sheets",
+            "type": "integer"
+          },
+          "expected_assists": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Assists"
+          },
+          "expected_goals": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Goals"
+          },
+          "fixture_id": {
+            "title": "Fixture Id",
+            "type": "integer"
+          },
+          "gameweek": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gameweek"
+          },
+          "goals_scored": {
+            "title": "Goals Scored",
+            "type": "integer"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "opponent": {
+            "title": "Opponent",
+            "type": "string"
+          },
+          "total_points": {
+            "title": "Total Points",
+            "type": "integer"
+          },
+          "was_home": {
+            "title": "Was Home",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gameweek",
+          "fixture_id",
+          "opponent",
+          "was_home",
+          "minutes",
+          "total_points",
+          "goals_scored",
+          "assists",
+          "clean_sheets",
+          "bonus",
+          "expected_goals",
+          "expected_assists"
+        ],
+        "title": "PlayedFixture",
+        "type": "object"
+      },
+      "Player": {
+        "properties": {
+          "clubs": {
+            "items": {
+              "$ref": "#/components/schemas/Club"
+            },
+            "title": "Clubs",
+            "type": "array"
+          },
+          "first_name": {
+            "title": "First Name",
+            "type": "string"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/PlayedFixture"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "position": {
+            "title": "Position",
+            "type": "string"
+          },
+          "predictions": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerPrediction"
+            },
+            "title": "Predictions",
+            "type": "array"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "second_name": {
+            "title": "Second Name",
+            "type": "string"
+          },
+          "web_name": {
+            "title": "Web Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "season",
+          "player_id",
+          "web_name",
+          "first_name",
+          "second_name",
+          "position",
+          "clubs",
+          "history",
+          "predictions"
+        ],
+        "title": "Player",
+        "type": "object"
+      },
+      "PlayerPrediction": {
+        "properties": {
+          "actual_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Minutes"
+          },
+          "actual_points": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Points"
+          },
+          "expected_minutes": {
+            "title": "Expected Minutes",
+            "type": "number"
+          },
+          "gameweek": {
+            "title": "Gameweek",
+            "type": "integer"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "predicted_points": {
+            "title": "Predicted Points",
+            "type": "number"
+          }
+        },
+        "required": [
+          "gameweek",
+          "model_version",
+          "predicted_points",
+          "expected_minutes",
+          "actual_points",
+          "actual_minutes"
+        ],
+        "title": "PlayerPrediction",
+        "type": "object"
+      },
+      "Pooled": {
+        "description": "Across every scored player-gameweek row, not a mean of weekly means.",
+        "properties": {
+          "all": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Metrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minutes_mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Mae"
+          },
+          "predicted_to_play": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Metrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "all",
+          "predicted_to_play",
+          "minutes_mae"
+        ],
+        "title": "Pooled",
+        "type": "object"
+      },
+      "Prediction": {
+        "properties": {
+          "actual_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Minutes"
+          },
+          "actual_points": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Points"
+          },
+          "expected_minutes": {
+            "title": "Expected Minutes",
+            "type": "number"
+          },
+          "n_fixtures": {
+            "title": "N Fixtures",
+            "type": "integer"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "points_per_90": {
+            "title": "Points Per 90",
+            "type": "number"
+          },
+          "position": {
+            "title": "Position",
+            "type": "string"
+          },
+          "predicted_points": {
+            "title": "Predicted Points",
+            "type": "number"
+          },
+          "price": {
+            "title": "Price",
+            "type": "number"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "team": {
+            "title": "Team",
+            "type": "string"
+          },
+          "web_name": {
+            "title": "Web Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "player_id",
+          "web_name",
+          "team",
+          "position",
+          "price",
+          "predicted_points",
+          "expected_minutes",
+          "points_per_90",
+          "n_fixtures",
+          "status",
+          "actual_points",
+          "actual_minutes"
+        ],
+        "title": "Prediction",
+        "type": "object"
+      },
+      "PredictionPage": {
+        "properties": {
+          "deadline_utc": {
+            "format": "date-time",
+            "title": "Deadline Utc",
+            "type": "string"
+          },
+          "gameweek": {
+            "title": "Gameweek",
+            "type": "integer"
+          },
+          "generated_at_utc": {
+            "format": "date-time",
+            "title": "Generated At Utc",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Prediction"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "title": "Snapshot Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "season",
+          "gameweek",
+          "model_version",
+          "snapshot_id",
+          "generated_at_utc",
+          "deadline_utc",
+          "items",
+          "next_cursor"
+        ],
+        "title": "PredictionPage",
+        "type": "object"
+      },
+      "Problem": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "default": "about:blank",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "status"
+        ],
+        "title": "Problem",
+        "type": "object"
+      },
+      "Readiness": {
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "migration": {
+            "title": "Migration",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "database",
+          "migration"
+        ],
+        "title": "Readiness",
+        "type": "object"
+      },
+      "Scorecard": {
+        "properties": {
+          "harness_versions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Harness Versions",
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ScorecardModel"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          }
+        },
+        "required": [
+          "season",
+          "harness_versions",
+          "models"
+        ],
+        "title": "Scorecard",
+        "type": "object"
+      },
+      "ScorecardModel": {
+        "properties": {
+          "first_gameweek": {
+            "title": "First Gameweek",
+            "type": "integer"
+          },
+          "gameweeks_logged": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Gameweeks Logged",
+            "type": "array"
+          },
+          "gameweeks_missed": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Gameweeks Missed",
+            "type": "array"
+          },
+          "gameweeks_scored": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Gameweeks Scored",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "per_gameweek": {
+            "items": {
+              "$ref": "#/components/schemas/GameweekMetrics"
+            },
+            "title": "Per Gameweek",
+            "type": "array"
+          },
+          "pooled": {
+            "$ref": "#/components/schemas/Pooled"
+          }
+        },
+        "required": [
+          "model_version",
+          "first_gameweek",
+          "gameweeks_logged",
+          "gameweeks_scored",
+          "gameweeks_missed",
+          "per_gameweek",
+          "pooled"
+        ],
+        "title": "ScorecardModel",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Committed FPL predictions, their scores, and the data behind them. Read-only. Errors are RFC 9457 problem details.",
+    "title": "fpl-predictor",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "description": "The process is up. Says nothing about the database.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "description": "The database answers and its schema is at the latest migration.",
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Readyz",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/gameweeks": {
+      "get": {
+        "description": "Every gameweek of the season, with the models that logged an entry for it.",
+        "operationId": "list_gameweeks_v1_gameweeks_get",
+        "parameters": [
+          {
+            "description": "Defaults to the latest season.",
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}/\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the latest season.",
+              "examples": [
+                "2026/27"
+              ],
+              "title": "Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameweekList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Gameweeks",
+        "tags": [
+          "gameweeks"
+        ]
+      }
+    },
+    "/v1/gameweeks/{gameweek}": {
+      "get": {
+        "description": "One gameweek: its fixtures, and each model's entry with its score once settled.",
+        "operationId": "get_gameweek_v1_gameweeks__gameweek__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gameweek",
+            "required": true,
+            "schema": {
+              "examples": [
+                6
+              ],
+              "maximum": 38,
+              "minimum": 1,
+              "title": "Gameweek",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Defaults to the latest season.",
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}/\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the latest season.",
+              "examples": [
+                "2026/27"
+              ],
+              "title": "Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameweekDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Gameweek",
+        "tags": [
+          "gameweeks"
+        ]
+      }
+    },
+    "/v1/gameweeks/{gameweek}/predictions": {
+      "get": {
+        "description": "One committed entry's predictions, highest first, with actual points once scored.",
+        "operationId": "list_predictions_v1_gameweeks__gameweek__predictions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gameweek",
+            "required": true,
+            "schema": {
+              "examples": [
+                6
+              ],
+              "maximum": 38,
+              "minimum": 1,
+              "title": "Gameweek",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "A model_version.",
+            "in": "query",
+            "name": "model",
+            "required": true,
+            "schema": {
+              "description": "A model_version.",
+              "examples": [
+                "baseline-v1",
+                "form-fixture-v1"
+              ],
+              "pattern": "^[A-Za-z0-9.-]{1,40}$",
+              "title": "Model",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Defaults to the latest season.",
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}/\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the latest season.",
+              "examples": [
+                "2026/27"
+              ],
+              "title": "Season"
+            }
+          },
+          {
+            "in": "query",
+            "name": "position",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "GKP",
+                    "DEF",
+                    "MID",
+                    "FWD"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Position"
+            }
+          },
+          {
+            "in": "query",
+            "name": "team",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{3}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "examples": [
+                "ARS"
+              ],
+              "title": "Team"
+            }
+          },
+          {
+            "description": "\u00a3m",
+            "in": "query",
+            "name": "max_price",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 20,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "\u00a3m",
+              "title": "Max Price"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "next_cursor from the previous page: its last row's predicted_points:player_id",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^-?\\d{1,4}(\\.\\d{1,6})?:\\d{1,6}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "next_cursor from the previous page: its last row's predicted_points:player_id",
+              "examples": [
+                "6.94:124"
+              ],
+              "title": "After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Predictions",
+        "tags": [
+          "gameweeks"
+        ]
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "description": "Every logged model: the gameweeks it logged, had scored, and missed.",
+        "operationId": "list_models_v1_models_get",
+        "parameters": [
+          {
+            "description": "Defaults to the latest season.",
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}/\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the latest season.",
+              "examples": [
+                "2026/27"
+              ],
+              "title": "Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/players/{player_id}": {
+      "get": {
+        "description": "A player's clubs, matches and every prediction made for them, with actuals.",
+        "operationId": "get_player_v1_players__player_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "player_id",
+            "required": true,
+            "schema": {
+              "examples": [
+                411
+              ],
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Player Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Defaults to the latest season.",
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}/\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the latest season.",
+              "examples": [
+                "2026/27"
+              ],
+              "title": "Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Player"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Player",
+        "tags": [
+          "players"
+        ]
+      }
+    },
+    "/v1/scorecard": {
+      "get": {
+        "description": "Each model's metrics per gameweek and pooled, with missed gameweeks shown.",
+        "operationId": "get_scorecard_v1_scorecard_get",
+        "parameters": [
+          {
+            "description": "Defaults to the latest season.",
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}/\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the latest season.",
+              "examples": [
+                "2026/27"
+              ],
+              "title": "Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scorecard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Scorecard",
+        "tags": [
+          "models"
+        ]
+      }
+    }
+  }
+}
