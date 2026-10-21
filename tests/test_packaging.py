@@ -67,7 +67,15 @@ class TestPackage(unittest.TestCase):
 
     def test_only_fpl_ships(self):
         """tests/, tools/, data/ and scratch/ must never end up installed."""
-        self.assertEqual(PYPROJECT["tool"]["setuptools"]["packages"], ["fpl"])
+        for package in PYPROJECT["tool"]["setuptools"]["packages"]:
+            with self.subTest(package=package):
+                self.assertTrue(package == "fpl" or package.startswith("fpl."))
+
+    def test_every_subpackage_is_declared(self):
+        """Packages are listed by hand, so a new one cannot be left out of an install."""
+        on_disk = {".".join(p.parent.relative_to(ROOT).parts)
+                   for p in (ROOT / "fpl").rglob("__init__.py")}
+        self.assertEqual(set(PYPROJECT["tool"]["setuptools"]["packages"]), on_disk)
 
     def test_one_python(self):
         self.assertEqual(PYPROJECT["project"]["requires-python"], "==3.13.*")

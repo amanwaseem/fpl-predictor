@@ -22,6 +22,11 @@ license = "MIT"
 requires-python = "==3.13.*"
 dependencies = ["requests>=2.34,<3"]
 
+# The database layer (#77), installed by requirements-db.txt. Optional so the
+# runtime that makes a log entry stays requests alone.
+[project.optional-dependencies]
+db = ["sqlalchemy>=2.0,<2.1", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
+
 # One command per module, each the module's cli(). `python -m fpl.<module>`
 # runs exactly the same function, so the two spellings cannot drift apart.
 [project.scripts]
@@ -37,7 +42,10 @@ fpl-entry = "fpl.entry:cli"
 [tool.setuptools]
 # Stated rather than discovered, so tests/, tools/, data/ and scratch/ can
 # never end up inside the installed package.
-packages = ["fpl"]
+packages = ["fpl", "fpl.db", "fpl.db.migrations", "fpl.db.migrations.versions"]
+
+[tool.setuptools.package-data]
+"fpl.db.migrations" = ["script.py.mako"]
 
 # Lint, not format. `ruff format` would rewrite most of the repository for no
 # change in meaning and bury `git blame` under it, so only `ruff check` runs.
@@ -51,6 +59,11 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+
+# Migrations are generated, then formatted, and long constraint expressions
+# stay on one line rather than being split by hand.
+[tool.ruff.lint.per-file-ignores]
+"fpl/db/migrations/versions/*" = ["E501"]
 
 # Coverage is reported in CI's job summary, not gated on: a threshold invites
 # tests written for the number.

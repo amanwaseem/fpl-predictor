@@ -203,6 +203,21 @@ coverage run -m unittest discover tests   # [tool.coverage] measures subprocesse
 coverage combine && coverage report
 ```
 
+### Database
+
+The schema lives in `fpl/db/models.py`, with Alembic migrations in `fpl/db/migrations/`. Locally,
+Postgres runs in Docker:
+
+```bash
+make up migrate    # start Postgres, bring the schema up to date
+make test-db       # migrations and constraints, against a separate fpl_test database
+make psql          # a shell on the local database
+```
+
+After changing a model, generate the migration with
+`alembic revision --autogenerate -m "what changed"` and read it before committing.
+`tests/test_db.py` fails if the models and migrations ever disagree.
+
 ## Decisions
 
 Why the project is built the way it is (an append-only log, snapshots instead of live calls,
