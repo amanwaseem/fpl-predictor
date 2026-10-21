@@ -170,6 +170,17 @@ jobs:
           alembic upgrade head
           fpl-project
           fpl-reconcile
+      # The API, served over the projection above and fuzzed from its own
+      # OpenAPI document (#81): every response must match the schema, no input
+      # may cause a 500, and every input the schema allows must be accepted.
+      - name: Fuzz the API from its OpenAPI document
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: |
+          fpl-serve --port 8000 > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/readyz > /dev/null && break; sleep 1; done
+          schemathesis run http://127.0.0.1:8000/openapi.json --checks all --max-examples 50 \
+            || { echo "--- API log ---"; cat api.log; exit 1; }
 
   # The one required check. `always()` makes it run, and fail, when a job it
   # needs failed or was cancelled — without it a failed dependency would skip

@@ -1,0 +1,21 @@
+# The read API (#81): FastAPI and the uvicorn server, pinned with their
+# transitive dependencies like requirements.txt. On top of the database layer,
+# which the API reads. Folds into uv dependency groups in #76.
+#
+#   pip install -r requirements-api.txt
+
+-r requirements-db.txt
+
+fastapi==0.159.1
+uvicorn==0.54.0
+
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+click==8.5.0
+h11==0.16.0
+opentelemetry-api==1.45.1
+pydantic==2.14.1
+pydantic-core==2.50.1
+starlette==1.9.0
+typing-inspection==0.4.4

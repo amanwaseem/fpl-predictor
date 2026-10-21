@@ -26,6 +26,8 @@ dependencies = ["requests>=2.34,<3"]
 # runtime that makes a log entry stays requests alone.
 [project.optional-dependencies]
 db = ["sqlalchemy>=2.0,<2.1", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
+# The read API (#81), installed by requirements-api.txt.
+api = ["fpl-predictor[db]", "fastapi>=0.159,<1", "uvicorn>=0.54,<1"]
 
 # One command per module, each the module's cli(). `python -m fpl.<module>`
 # runs exactly the same function, so the two spellings cannot drift apart.
@@ -41,11 +43,12 @@ fpl-entry = "fpl.entry:cli"
 fpl-load = "fpl.db.load:cli"
 fpl-project = "fpl.db.project:cli"
 fpl-reconcile = "fpl.db.reconcile:cli"
+fpl-serve = "fpl.api.serve:cli"
 
 [tool.setuptools]
 # Stated rather than discovered, so tests/, tools/, data/ and scratch/ can
 # never end up inside the installed package.
-packages = ["fpl", "fpl.db", "fpl.db.migrations", "fpl.db.migrations.versions"]
+packages = ["fpl", "fpl.api", "fpl.db", "fpl.db.migrations", "fpl.db.migrations.versions"]
 
 [tool.setuptools.package-data]
 "fpl.db.migrations" = ["script.py.mako"]

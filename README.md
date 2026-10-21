@@ -132,7 +132,8 @@ stale copy from before the last `git pull`.
 
 Run every command from the repository root, with the virtualenv active. Paths resolve against
 the working directory, so the commands refuse to run anywhere else rather than start a second
-`data/raw/` or a `predictions/` that is not the log.
+`data/raw/` or a `predictions/` that is not the log. `fpl-serve` is the exception: it reads only the database, so it
+runs anywhere.
 
 ### Commands
 
@@ -148,6 +149,7 @@ the working directory, so the commands refuse to run anywhere else rather than s
 | `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
 | `fpl-project` | Rebuild the database's copy of the log from `predictions/` and `scores/` |
 | `fpl-reconcile` | Check the database's copy of the log against git, row by row; non-zero on any difference |
+| `fpl-serve` | The read API over the database, at `http://127.0.0.1:8000`, with interactive docs at `/docs` |
 
 Every `fpl-*` command is also `python -m fpl.<module>`; the two run the same function.
 
@@ -184,6 +186,7 @@ nothing can be corrected.
 | `tests/` | The test suite |
 | `tools/` | CI and scheduled checks: rule 1, the deadline watchdog |
 | `docs/adr/` | Why the project is built the way it is |
+| `docs/openapi.json` | The API's contract, generated from the code and committed |
 | [`RUNBOOK.md`](RUNBOOK.md) | The procedure for one entry, step by step |
 | [`SPEC.md`](SPEC.md) | The full requirements |
 
@@ -226,6 +229,24 @@ of order never rolls the database back.
 The log tables are a projection of `predictions/` and `scores/`, never a second record:
 `fpl-project` rebuilds them from the files, and CI rebuilds them into an empty database on every
 PR and runs `fpl-reconcile`, which fails on any row that differs from git.
+
+### API
+
+A read-only HTTP API over the database, under `/v1`: gameweeks with their fixtures and entries,
+each entry's predictions (filtered by position, club and price, and paged), players with their
+clubs, matches and predictions, the logged models, and the scorecard. Errors are RFC 9457 problem
+details, and reads carry an `ETag`, so an unchanged response costs a `304`.
+
+```bash
+docker compose up        # Postgres and the API; docs at http://localhost:8000/docs
+make serve               # or the API from the checkout, reloading on changes
+```
+
+The contract is [`docs/openapi.json`](docs/openapi.json), committed and checked against the code
+by the tests: regenerate it with `make openapi` after changing a route. CI serves the API over the
+projected log and fuzzes it from that document with [schemathesis](https://schemathesis.io).
+
+### Migrations
 
 After changing a model, generate the migration with
 `alembic revision --autogenerate -m "what changed"` and read it before committing.
