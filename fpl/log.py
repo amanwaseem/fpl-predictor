@@ -268,7 +268,7 @@ def validate_rows(rows, target_gw):
         )
 
 
-def _parse_timestamp(value, what):
+def parse_timestamp(value, what):
     try:
         return datetime.strptime(value, TIMESTAMP).replace(tzinfo=UTC)
     except (TypeError, ValueError):
@@ -321,7 +321,7 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
             "Use '-' instead."
         )
 
-    deadline_at = _parse_timestamp(deadline, "deadline")
+    deadline_at = parse_timestamp(deadline, "deadline")
     now = datetime.now(UTC)
     generated_at = now.strftime(TIMESTAMP)
 

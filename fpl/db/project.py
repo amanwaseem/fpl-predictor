@@ -17,7 +17,6 @@ import csv
 import json
 import sys
 from dataclasses import dataclass
-from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -26,7 +25,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from fpl.db.models import PlayerScore, Prediction, PredictionEntry, ScoreEntry, Season
 from fpl.db.session import make_engine
-from fpl.log import LOG_DIR_NAME, read_entry
+from fpl.log import LOG_DIR_NAME, parse_entry_filename, parse_timestamp, read_entry
 from fpl.paths import require_project_root
 from fpl.score import SCORE_FIELDS, find_entries
 
@@ -59,17 +58,16 @@ def season_for(deadline):
     return f"{start}/{(start + 1) % 100:02d}"
 
 
-def timestamp(value):
-    return datetime.fromisoformat(value)
+def raw_decimals(path):
+    """Each row's decimal columns as written in the file, digit for digit.
 
-
-def as_decimal(value):
-    """A number read_entry parsed as a float, back as the decimal it was written as.
-
-    repr is the shortest text that reads back as the same float, which for the
-    log's few decimal places is the text in the file.
+    read_entry parses them as floats, which keeps only about 17 digits, so the
+    database takes them from the text instead. Called only once read_entry has
+    accepted the file, so the rows line up with its rows.
     """
-    return Decimal(repr(value))
+    with Path(path).open(newline="") as f:
+        return [{field: Decimal(row[field]) for field in DECIMAL_FIELDS}
+                for row in csv.DictReader(f)]
 
 
 def read_entries(log_dir):
@@ -89,35 +87,50 @@ def read_entries(log_dir):
             raise SystemExit(f"{path}: rows say model_version "
                              f"{provenance['model_version']!r}, the filename {model_version!r}")
 
-        deadline = timestamp(provenance["deadline_utc"])
+        deadline = parse_timestamp(provenance["deadline_utc"], f"{path}: deadline_utc")
         key = {"season": season_for(deadline), "gameweek": gameweek,
                "model_version": model_version}
         entries.append(key | {"snapshot_id": provenance["snapshot_id"],
-                              "generated_at_utc": timestamp(provenance["generated_at_utc"]),
+                              "generated_at_utc": parse_timestamp(
+                                  provenance["generated_at_utc"], f"{path}: generated_at_utc"),
                               "deadline_utc": deadline})
-        for row in rows:
+        for row, decimals in zip(rows, raw_decimals(path), strict=True):
             predictions.append(key | {
                 "player_id": row["player_id"], "web_name": row["web_name"],
                 "team": row["team"], "position": row["position"],
                 "n_fixtures": row["n_fixtures"], "status": row["status"],
-            } | {field: as_decimal(row[field]) for field in DECIMAL_FIELDS})
+            } | decimals)
     return entries, predictions
 
 
-def read_scores(scores_dir, entries):
+def read_scores(scores_dir, entries, predictions):
     """(score_entries, player_scores) from scores/, for entries already read.
 
     A player score keeps the file's `error` column, which the database computes
     for itself: fpl-reconcile compares the two, and fpl-project drops it.
+
+    A score's predicted_points and expected_minutes must be the entry's, as the
+    harness read them: compared as floats, because that is what it wrote.
     """
     season_of = {(e["gameweek"], e["model_version"]): e["season"] for e in entries}
+    predicted = {(p["gameweek"], p["model_version"], p["player_id"]): p for p in predictions}
     score_entries, player_scores = [], []
     for summary_path in sorted(Path(scores_dir).glob("gw*_*.json")):
+        rows_path = summary_path.with_suffix(".csv")
+        try:
+            named = parse_entry_filename(rows_path)
+        except ValueError as e:
+            raise SystemExit(f"{summary_path}: {str(e).splitlines()[0]}") from None
         summary = json.loads(summary_path.read_text())
         entry = (summary["gameweek"], summary["model_version"])
+        if entry != named:
+            raise SystemExit(f"{summary_path} says it scores GW{entry[0]} {entry[1]}, "
+                             f"its filename GW{named[0]} {named[1]}")
         if entry not in season_of:
             raise SystemExit(f"{summary_path} scores an entry that is not in the log: "
                              f"GW{entry[0]} {entry[1]}")
+        if not rows_path.exists():
+            raise SystemExit(f"{summary_path} has no player rows: {rows_path} is missing")
         key = {"season": season_of[entry], "gameweek": entry[0], "model_version": entry[1]}
         headline = summary["metrics"]["all"]
         score_entries.append(key | {
@@ -128,12 +141,21 @@ def read_scores(scores_dir, entries):
             "summary": summary,
         })
 
-        with summary_path.with_suffix(".csv").open(newline="") as f:
+        with rows_path.open(newline="") as f:
             reader = csv.DictReader(f)
             if reader.fieldnames != SCORE_FIELDS:
-                raise SystemExit(f"{summary_path.with_suffix('.csv')} has columns "
+                raise SystemExit(f"{rows_path} has columns "
                                  f"{reader.fieldnames}, expected {SCORE_FIELDS}")
             for row in reader:
+                prediction = predicted.get((*entry, int(row["player_id"])))
+                if prediction is None:
+                    raise SystemExit(f"{rows_path}: player {row['player_id']} "
+                                     "is not in the entry it scores")
+                for field in ("predicted_points", "expected_minutes"):
+                    if float(row[field]) != float(prediction[field]):
+                        raise SystemExit(
+                            f"{rows_path}: player {row['player_id']} has {field} "
+                            f"{row[field]}, the entry {prediction[field]}")
                 player_scores.append(key | {
                     "player_id": int(row["player_id"]),
                     "predicted_points": Decimal(row["predicted_points"]),
@@ -147,7 +169,7 @@ def read_scores(scores_dir, entries):
 
 def read_log(log_dir=LOG_DIR_NAME, scores_dir=SCORES_DIR):
     entries, predictions = read_entries(log_dir)
-    return Log(entries, predictions, *read_scores(scores_dir, entries))
+    return Log(entries, predictions, *read_scores(scores_dir, entries, predictions))
 
 
 def project(engine, log):

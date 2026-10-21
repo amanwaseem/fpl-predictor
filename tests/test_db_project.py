@@ -119,11 +119,23 @@ class TestProjection(DatabaseCase):
         self.assertEqual(len(found), 1)
         self.assertIn("error", found[0])
 
+    def test_an_error_rounded_in_floats_reconciles(self):
+        # 2.335 - 2 is 0.33499... as a float, so the harness wrote 0.33; the
+        # exact Decimal 0.335 would round half to even, to 0.34.
+        path = self.tmp / "predictions/gw08_baseline-v1.csv"
+        rows = read_csv(path)
+        rows[0]["predicted_points"] = "2.335"
+        write_csv(path, rows)
+        write_score(self.tmp, actual=(2, 2, 0))
+        self.project()
+        self.assertEqual(self.differences(), [])
+
     def test_every_digit_of_a_prediction_is_kept(self):
         path = self.tmp / "predictions/gw08_baseline-v1.csv"
         rows = read_csv(path)
         rows[0]["predicted_points"] = "5.125"
         write_csv(path, rows)
+        write_score(self.tmp)
         self.project()
         with self.engine.connect() as connection:
             stored = connection.scalar(select(func.max(Prediction.predicted_points)))
