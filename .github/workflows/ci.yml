@@ -158,7 +158,7 @@ jobs:
             requirements*.txt
             pyproject.toml
       - run: pip install -r requirements-dev.txt
-      - run: python -m unittest -v tests.test_db
+      - run: python -m unittest discover -v -s tests -t . -p "test_db*.py"
 
   # The one required check. `always()` makes it run, and fail, when a job it
   # needs failed or was cancelled — without it a failed dependency would skip

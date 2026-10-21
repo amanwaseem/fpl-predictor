@@ -145,6 +145,7 @@ the working directory, so the commands refuse to run anywhere else rather than s
 | `fpl-summarise` | A readable digest of an entry, into `reports/` |
 | `fpl-score` | Score every committed entry against actual results, into `scores/` |
 | `fpl-backtest` | Replay settled gameweeks offline, without leaking the future (`--held-out`: the gate for a new factor) |
+| `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
 
 Every `fpl-*` command is also `python -m fpl.<module>`; the two run the same function.
 
@@ -210,9 +211,14 @@ Postgres runs in Docker:
 
 ```bash
 make up migrate    # start Postgres, bring the schema up to date
+make seed          # load data/raw/LATEST into it (fpl-load)
 make test-db       # migrations and constraints, against a separate fpl_test database
 make psql          # a shell on the local database
 ```
+
+`fpl-load` writes a snapshot in one transaction, and loading one twice changes nothing. A snapshot
+newer than any loaded for its season updates rows; an older one only fills gaps, so loading out
+of order never rolls the database back.
 
 After changing a model, generate the migration with
 `alembic revision --autogenerate -m "what changed"` and read it before committing.

@@ -38,6 +38,7 @@ fpl-summarise = "fpl.summarise:cli"
 fpl-score = "fpl.score:cli"
 fpl-backtest = "fpl.backtest:cli"
 fpl-entry = "fpl.entry:cli"
+fpl-load = "fpl.db.load:cli"
 
 [tool.setuptools]
 # Stated rather than discovered, so tests/, tools/, data/ and scratch/ can

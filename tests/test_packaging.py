@@ -43,7 +43,8 @@ class TestScripts(unittest.TestCase):
     def test_every_command_module_has_a_script(self):
         """A new `python -m fpl.x` command cannot ship without its console script."""
         declared = {target.partition(":")[0] for target in SCRIPTS.values()}
-        commands = {f"fpl.{p.stem}" for p in (ROOT / "fpl").glob("*.py") if has_main_block(p)}
+        commands = {".".join(p.relative_to(ROOT).with_suffix("").parts)
+                    for p in (ROOT / "fpl").rglob("*.py") if has_main_block(p)}
         self.assertEqual(commands, declared)
 
     def test_every_script_is_the_modules_cli(self):
