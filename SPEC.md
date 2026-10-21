@@ -337,7 +337,7 @@ way, so nothing here has to exist before a gameweek can be scored.
 
 ## 8. Delivery
 
-- **API** — versioned static JSON on GitHub Pages, built from the committed log and
+- **API**: versioned static JSON on GitHub Pages, built from the committed log and
   scores: gameweeks, predictions and results under `/api/v1/` (#9,
   [ADR 0014](docs/adr/0014-a-static-json-api-not-a-hosted-server.md))
 - **Frontend** — squad suggestions plus the public scorecard
