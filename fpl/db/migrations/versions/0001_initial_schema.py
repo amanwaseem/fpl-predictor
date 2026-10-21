@@ -2,7 +2,7 @@
 
 Revision ID: 0001
 Revises:
-Created: 2026-10-21 13:39:33.418360
+Created: 2026-10-21 14:02:07.541741
 """
 
 from collections.abc import Sequence
@@ -80,7 +80,7 @@ def upgrade() -> None:
         sa.Column("web_name", sa.Text(), nullable=False),
         sa.Column("position", sa.Text(), nullable=False),
         sa.CheckConstraint(
-            "position IN ('GKP', 'DEF', 'MID', 'FWD')", name=op.f("ck_season_players_position")
+            "position IN ('DEF', 'FWD', 'GKP', 'MID')", name=op.f("ck_season_players_position")
         ),
         sa.ForeignKeyConstraint(
             ["player_code"], ["players.code"], name=op.f("fk_season_players_player_code_players")
@@ -160,9 +160,6 @@ def upgrade() -> None:
             ["teams.season", "teams.team_id"],
             name=op.f("fk_fixtures_season_team_h_teams"),
         ),
-        sa.ForeignKeyConstraint(
-            ["season"], ["seasons.season"], name=op.f("fk_fixtures_season_seasons")
-        ),
         sa.PrimaryKeyConstraint("season", "fixture_id", name=op.f("pk_fixtures")),
     )
     op.create_index("ix_fixtures_gameweek", "fixtures", ["season", "gameweek"], unique=False)
@@ -180,7 +177,7 @@ def upgrade() -> None:
             name="ex_player_clubs_one_club_at_a_time",
         ),
         sa.CheckConstraint(
-            "NOT isempty(gameweeks) AND lower(gameweeks) >= 1",
+            "NOT isempty(gameweeks) AND NOT lower_inf(gameweeks) AND lower(gameweeks) >= 1",
             name=op.f("ck_player_clubs_gameweeks"),
         ),
         sa.ForeignKeyConstraint(
@@ -204,17 +201,17 @@ def upgrade() -> None:
         sa.Column("web_name", sa.Text(), nullable=False),
         sa.Column("team", sa.Text(), nullable=False),
         sa.Column("position", sa.Text(), nullable=False),
-        sa.Column("price", sa.Numeric(precision=4, scale=1), nullable=False),
-        sa.Column("predicted_points", sa.Numeric(precision=6, scale=2), nullable=False),
-        sa.Column("expected_minutes", sa.Numeric(precision=4, scale=1), nullable=False),
-        sa.Column("points_per_90", sa.Numeric(precision=6, scale=2), nullable=False),
+        sa.Column("price", sa.Numeric(), nullable=False),
+        sa.Column("predicted_points", sa.Numeric(), nullable=False),
+        sa.Column("expected_minutes", sa.Numeric(), nullable=False),
+        sa.Column("points_per_90", sa.Numeric(), nullable=False),
         sa.Column("n_fixtures", sa.SmallInteger(), nullable=False),
         sa.Column("status", sa.Text(), nullable=False),
         sa.CheckConstraint(
-            "position IN ('GKP', 'DEF', 'MID', 'FWD')", name=op.f("ck_predictions_position")
+            "position IN ('DEF', 'FWD', 'GKP', 'MID')", name=op.f("ck_predictions_position")
         ),
         sa.CheckConstraint(
-            "status IN ('a', 'd', 'i', 's', 'u', 'n')", name=op.f("ck_predictions_status")
+            "status IN ('a', 'd', 'i', 'n', 's', 'u')", name=op.f("ck_predictions_status")
         ),
         sa.CheckConstraint(
             "price >= 0 AND expected_minutes >= 0 AND n_fixtures >= 0",
@@ -332,19 +329,22 @@ def upgrade() -> None:
         ["season", "fixture_id"],
         unique=False,
     )
+    op.create_index(
+        "ix_player_fixture_stats_snapshot", "player_fixture_stats", ["snapshot_id"], unique=False
+    )
     op.create_table(
         "player_scores",
         sa.Column("season", sa.Text(), nullable=False),
         sa.Column("gameweek", sa.SmallInteger(), nullable=False),
         sa.Column("model_version", sa.Text(), nullable=False),
         sa.Column("player_id", sa.Integer(), nullable=False),
-        sa.Column("predicted_points", sa.Numeric(precision=6, scale=2), nullable=False),
+        sa.Column("predicted_points", sa.Numeric(), nullable=False),
         sa.Column("actual_points", sa.SmallInteger(), nullable=False),
-        sa.Column("expected_minutes", sa.Numeric(precision=4, scale=1), nullable=False),
+        sa.Column("expected_minutes", sa.Numeric(), nullable=False),
         sa.Column("actual_minutes", sa.SmallInteger(), nullable=False),
         sa.Column(
             "error",
-            sa.Numeric(precision=6, scale=2),
+            sa.Numeric(),
             sa.Computed("predicted_points - actual_points", persisted=True),
             nullable=False,
         ),
@@ -364,8 +364,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # btree_gist stays: it belongs to the database, may predate this migration,
+    # and something else may use it.
     op.drop_index("ix_player_scores_player", table_name="player_scores")
     op.drop_table("player_scores")
+    op.drop_index("ix_player_fixture_stats_snapshot", table_name="player_fixture_stats")
     op.drop_index("ix_player_fixture_stats_fixture", table_name="player_fixture_stats")
     op.drop_table("player_fixture_stats")
     op.drop_table("score_entries")
@@ -381,4 +384,3 @@ def downgrade() -> None:
     op.drop_table("gameweeks")
     op.drop_table("seasons")
     op.drop_table("players")
-    op.execute("DROP EXTENSION IF EXISTS btree_gist")
