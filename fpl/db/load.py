@@ -46,6 +46,8 @@ from fpl.snapshot import load_snapshot
 
 POSITIONS = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
 LAST_GAMEWEEK = 38
+# Any fixed key will do: it only has to be the same for every fpl-load.
+LOAD_LOCK = 78
 
 
 @dataclass
@@ -115,7 +117,10 @@ def club_spells(history, fixtures_by_id, current_team, next_gameweek):
         if starts and starts[-1][0] == team:
             continue
         if starts and starts[-1][1] == row["round"]:
-            starts[-1] = (team, row["round"])
+            starts.pop()
+            # The club before this gameweek may be the one it ends at.
+            if not (starts and starts[-1][0] == team):
+                starts.append((team, row["round"]))
         else:
             starts.append((team, row["round"]))
 
@@ -154,6 +159,9 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
     report = Report(snapshot_id, season)
 
     with engine.begin() as connection:
+        # One load at a time: which snapshot is newest is read below and acted
+        # on before commit, so two loads at once could both think they were.
+        connection.execute(select(func.pg_advisory_xact_lock(LOAD_LOCK)))
         if connection.scalar(select(Snapshot.snapshot_id).where(
                 Snapshot.snapshot_id == snapshot_id)):
             report.already_loaded = True
@@ -162,6 +170,10 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
         latest = connection.scalar(
             select(func.max(Snapshot.snapshot_id)).where(Snapshot.season == season))
         report.newest = latest is None or snapshot_id > latest
+        # Players are not per season, so only a snapshot newer than every one
+        # loaded, of any season, may rename them.
+        latest_any = connection.scalar(select(func.max(Snapshot.snapshot_id)))
+        newest_overall = latest_any is None or snapshot_id > latest_any
 
         connection.execute(insert(Season).values(season=season).on_conflict_do_nothing())
         connection.execute(insert(Snapshot).values(
@@ -183,7 +195,7 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
                 report.skipped_elements.append(e["id"])
         rows["players"] = upsert(connection, Player, [
             {"code": e["code"], "first_name": e["first_name"], "second_name": e["second_name"]}
-            for e in elements], report.newest)
+            for e in elements], newest_overall)
         rows["season_players"] = upsert(connection, SeasonPlayer, [
             {"season": season, "element_id": e["id"], "player_code": e["code"],
              "web_name": e["web_name"], "position": POSITIONS[e["element_type"]]}
@@ -215,11 +227,14 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
 
         # Spells are derived whole from one snapshot's histories, so the newest
         # snapshot replaces them rather than merging with an older derivation.
+        # An older one only adds spells for players who have none.
         if report.newest:
             connection.execute(delete(PlayerClub).where(PlayerClub.season == season))
-            rows["player_clubs"] = upsert(connection, PlayerClub, spells, newest=True)
         else:
-            rows["player_clubs"] = 0
+            have_spells = set(connection.scalars(
+                select(PlayerClub.element_id).where(PlayerClub.season == season)))
+            spells = [s for s in spells if s["element_id"] not in have_spells]
+        rows["player_clubs"] = upsert(connection, PlayerClub, spells, report.newest)
         rows["player_fixture_stats"] = upsert(connection, PlayerFixtureStats, stats,
                                               report.newest)
     return report

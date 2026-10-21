@@ -30,7 +30,7 @@ from fpl.db.models import (
     Team,
 )
 from fpl.db.session import make_engine
-from tests.database import URL, alembic_config, empty_every_table, require_test_database
+from tests.database import URL, alembic_config, require_test_database
 
 SEASON = "2026/27"
 DEADLINE = datetime(2026, 10, 23, 17, 30, tzinfo=UTC)
@@ -85,7 +85,6 @@ class TestConstraints(unittest.TestCase):
         command.downgrade(config, "base")
         command.upgrade(config, "head")
         cls.engine = make_engine(URL)
-        empty_every_table(cls.engine)
 
     @classmethod
     def tearDownClass(cls):
