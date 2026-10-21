@@ -1,0 +1,25 @@
+# Local services. `make up` starts them; `make down` stops them and keeps the data.
+#
+# Only Postgres for now. The API and the ingest worker join it in #81 and #78.
+
+services:
+  db:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: fpl
+      POSTGRES_PASSWORD: fpl
+      POSTGRES_DB: fpl
+    ports:
+      - "${FPL_DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once, on an empty volume: creates fpl_test beside fpl.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "fpl", "-d", "fpl"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  pgdata:
