@@ -26,7 +26,7 @@ from sqlalchemy import select
 
 from fpl.db.models import PlayerScore, Prediction, PredictionEntry, ScoreEntry
 from fpl.db.project import read_log
-from fpl.db.session import make_engine
+from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.paths import require_project_root
 
 # Enough to see the pattern of a systematic difference without burying it.
@@ -73,10 +73,12 @@ def differences(engine, log):
                 + compare(PlayerScore.__table__, log.player_scores, player_scores))
 
 
+@exits_on_bad_url
 def main():
-    log = read_log()
+    # The URL first: a bad one is refused before the log is read.
     engine = make_engine()
     try:
+        log = read_log()
         found = differences(engine, log)
     finally:
         engine.dispose()

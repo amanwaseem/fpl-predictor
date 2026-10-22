@@ -24,7 +24,7 @@ from sqlalchemy import delete, func, insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from fpl.db.models import PlayerScore, Prediction, PredictionEntry, ScoreEntry, Season
-from fpl.db.session import make_engine
+from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.log import LOG_DIR_NAME, parse_entry_filename, parse_timestamp, read_entry
 from fpl.paths import require_project_root
 from fpl.score import SCORE_FIELDS, find_entries
@@ -188,10 +188,12 @@ def project(engine, log):
                 connection.execute(insert(model), rows)
 
 
+@exits_on_bad_url
 def main():
-    log = read_log()
+    # The URL first: a bad one is refused before the log is read.
     engine = make_engine()
     try:
+        log = read_log()
         project(engine, log)
     finally:
         engine.dispose()

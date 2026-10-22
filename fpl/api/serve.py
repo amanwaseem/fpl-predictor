@@ -12,6 +12,9 @@ import sys
 
 import uvicorn
 
+from fpl.db.session import database_url
+from fpl.db.url import DatabaseURLError
+
 
 def cli(argv=None):
     """`fpl-serve`, or `python -m fpl.api.serve`."""
@@ -20,6 +23,12 @@ def cli(argv=None):
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--reload", action="store_true", help="restart on code changes")
     args = ap.parse_args(argv)
+    # Checked before the server starts, so a bad URL is a one-line refusal
+    # rather than a traceback from the app's startup.
+    try:
+        database_url()
+    except DatabaseURLError as e:
+        raise SystemExit(str(e)) from None
     uvicorn.run("fpl.api.app:app", host=args.host, port=args.port, reload=args.reload,
                 proxy_headers=True)
     return 0
