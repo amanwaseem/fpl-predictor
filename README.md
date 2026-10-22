@@ -130,6 +130,11 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt      # pinned dependencies, then this package, editable
 ```
 
+That is everything a prediction needs. The other commands need more, pinned in files of their
+own: `requirements-optimise.txt` for `fpl-optimise` (the HiGHS solver), `requirements-db.txt`
+for the database commands, and `requirements-api.txt` for `fpl-serve`.
+`requirements-dev.txt` installs all of them, with the test tools.
+
 Dependencies are pinned, transitive ones included. Every entry in the prediction log claims
 reproducibility from its `snapshot_id`; that claim covers the data, and the pin covers the code
 around it. The package is installed editable, so the commands always run the checkout, never a
