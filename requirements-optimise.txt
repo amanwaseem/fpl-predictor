@@ -1,0 +1,12 @@
+# The squad optimiser (#53): HiGHS, through its own Python bindings, pinned
+# with numpy, its one dependency. Kept apart from requirements.txt, because
+# making a prediction does not need a solver. ADR 0010 says why HiGHS and why
+# highspy rather than scipy or PuLP. Folds into uv dependency groups in #76.
+#
+#   pip install -r requirements-optimise.txt
+
+-r requirements.txt
+
+highspy==1.15.1
+
+numpy==2.5.4

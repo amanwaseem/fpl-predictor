@@ -335,6 +335,13 @@ section 6, which is built first because scoring needs it and it has no budget
 term. The optimiser reuses that selector; the dependency does not run the other
 way, so nothing here has to exist before a gameweek can be scored.
 
+The first slice is built (#53, `fpl-optimise`): the best squad, XI and captain
+for one gameweek from one entry's predictions, with each bench player counted
+at a tenth of their points. Squad, XI and captain are solved as one model by
+HiGHS, exactly and with ties broken toward lower player ids
+([ADR 0010](docs/adr/0010-squad-selection-by-integer-programming.md)).
+Transfers and a multi-gameweek horizon follow (#54, #55).
+
 ## 8. Delivery
 
 - **API**: a read-only HTTP API under `/v1/` (#81), on Fly.io over Postgres on
