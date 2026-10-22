@@ -14,8 +14,8 @@ cents to a few dollars a month.
 ### 1. The database, on Neon
 
 1. Sign up at [neon.tech](https://neon.tech) and create a project. Name it
-   `fpl-predictor`, choose Postgres 17, and pick **AWS US West 2 (Oregon)**, the
-   region nearest Fly's `sea` (Seattle) in `fly.toml`. The API makes several
+   `fpl-predictor`, choose Postgres 17, and pick **AWS US West 2 (Oregon)**, Neon's
+   nearest region to Fly's `sjc` (San Jose) in `fly.toml`. The API makes several
    queries per request, so the two should be close.
 2. On the project dashboard, open **Connect** and copy the connection string with
    **connection pooling off**. It looks like:
@@ -32,23 +32,21 @@ cents to a few dollars a month.
 
 1. Install `flyctl` (`brew install flyctl`), then run `fly auth signup` (or
    `fly auth login`). Add a card when it asks.
-2. Check that `sea` is still offered: `fly platform regions`. If it is not, put
-   the nearest US West region in `fly.toml`'s `primary_region`.
-3. Pick an app name. Names are global, so `fpl-predictor` may be taken. Put
+2. Pick an app name. Names are global, so `fpl-predictor` may be taken. Put
    yours in `fly.toml` (`app = "..."`) and commit it.
-4. From the repository root, create the app without deploying it:
+3. From the repository root, create the app without deploying it:
 
    ```bash
    fly apps create <your-app-name>
    ```
 
-5. Give the app its database:
+4. Give the app its database:
 
    ```bash
    fly secrets set DATABASE_URL='<the Neon connection string>' --app <your-app-name>
    ```
 
-6. Create a deploy token for CI, and keep its output for the next step:
+5. Create a deploy token for CI, and keep its output for the next step:
 
    ```bash
    fly tokens create deploy --app <your-app-name>
