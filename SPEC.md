@@ -340,7 +340,11 @@ for one gameweek from one entry's predictions, with each bench player counted
 at a tenth of their points. Squad, XI and captain are solved as one model by
 HiGHS, exactly and with ties broken toward lower player ids
 ([ADR 0010](docs/adr/0010-squad-selection-by-integer-programming.md)).
-Transfers and a multi-gameweek horizon follow (#54, #55).
+Transfers from an owned squad are built too (#54, `fpl-optimise --squad`), in
+the same model: a kept player costs his selling price, which is given rather
+than guessed because reading it needs the manager's login; each transfer beyond
+the free ones costs 4 points; ties go to fewer transfers. A multi-gameweek
+horizon follows (#55).
 
 ## 8. Delivery
 

@@ -2,6 +2,7 @@
 
     fpl-optimise predictions/gw06_form-fixture-v1.csv
     fpl-optimise scratch/gw08_baseline-v1.csv --budget 98.5 --json
+    fpl-optimise predictions/gw06_form-fixture-v1.csv --squad my-squad.json
 
 Given one entry's predictions, picks the fifteen players, the starting eleven
 and the captain that maximise expected points:
@@ -19,6 +20,25 @@ and the captain that maximise expected points:
 Squad, XI and captain are chosen together in one model rather than in turn:
 the best squad depends on who would start, and greedy picking is wrong once
 the budget and the club cap interact (ADR 0010).
+
+## Transfers
+
+With --squad, it plans transfers from a squad already owned instead (#54). The
+file gives the fifteen players' ids and selling prices, the bank, and the free
+transfers:
+
+    {"bank": 0.5, "free_transfers": 1,
+     "players": [{"player_id": 16, "selling_price": 10.1}, ...]}
+
+It is the same model with more in it, not a second one:
+
+- a player kept costs his selling price, and the money to spend is the bank
+  plus what the squad sells for;
+- each transfer beyond the free ones costs HIT points;
+- ties go to fewer transfers, so a transfer that gains nothing is not made.
+
+The gain is measured against the best line-up of the squad as it stands, net
+of hits, so a transfer is suggested only when it pays for itself.
 
 ## Exact, and settled toward lower ids
 
@@ -40,6 +60,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 from fpl.log import read_entry
 from fpl.paths import require_project_root
@@ -51,6 +72,10 @@ SQUAD = {"GKP": 2, "DEF": 5, "MID": 5, "FWD": 3}
 # at a tenth makes the optimiser prefer a bench that might score over one that
 # will not, at the same price, without letting bench points buy a worse XI.
 BENCH_WEIGHT = 0.1
+# Points each transfer beyond the free ones costs, and the most free
+# transfers FPL lets a manager bank.
+HIT = 4
+MAX_FREE_TRANSFERS = 5
 
 # Who may be picked, by the entry's status column. Available and doubtful
 # players always; injured, suspended and not-available ones only when asked,
@@ -152,14 +177,6 @@ def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavai
     `players` are dicts with player_id, web_name, team, position, price and
     predicted_points, and optionally status, as fpl.log.read_entry returns
     them. Raises ValueError, naming the cause, if no legal squad fits.
-
-    Two solves. The first maximises expected points alone, with small integer
-    coefficients and a zero gap, so its optimum is exact. The second holds the
-    points at that optimum and minimises the sum of the chosen players'
-    positions in id order, which settles ties toward lower ids. Kept apart, the
-    tie-break can never be weighed against points, and no coefficient is large
-    enough for the solver's tolerances to matter. Ties that survive an equal
-    sum (rare) are the solver's to break, consistently for the pinned HiGHS.
     """
     unknown = sorted({p["position"] for p in players} - set(POSITIONS))
     if unknown:
@@ -168,7 +185,28 @@ def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavai
     reasons = shortfalls(pool, budget)
     if reasons:
         raise ValueError("no legal squad: " + "; ".join(reasons))
+    cost = {p["player_id"]: tenths(p["price"]) for p in pool}
+    squad, starters, captain, _ = _solve(pool, cost, tenths(budget), bench_weight)
+    return _squad(squad, starters, captain, cost, budget)
 
+
+def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=False):
+    """Build the model and solve it twice: (squad, starters, captain, value).
+
+    `cost` maps player id to tenths of a million and `budget` is in tenths.
+    With `owned`, a set of player ids, buying anyone else is a transfer and
+    each beyond `free_transfers` costs HIT points; `keep` forbids transfers.
+    `value` is the optimum in fpl.xi's units, net of hits.
+
+    The first solve maximises expected points alone, with small integer
+    coefficients and a zero gap, so its optimum is exact. The second holds the
+    points at that optimum and settles ties: toward fewer transfers, so a
+    transfer that gains nothing is not suggested, then toward lower player ids
+    by the sum of the chosen players' positions in id order. Kept apart, a
+    tie-break can never be weighed against points, and no coefficient is large
+    enough for the solver's tolerances to matter. Ties that survive an equal
+    sum (rare) are the solver's to break, consistently for the pinned HiGHS.
+    """
     highspy = _solver()
     n = len(pool)
     model = highspy.Highs()
@@ -194,8 +232,8 @@ def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavai
     for club in sorted({p["team"] for p in pool}):
         model.addConstr(model.qsum(squad[i] for i in range(n) if pool[i]["team"] == club)
                         <= MAX_PER_CLUB)
-    model.addConstr(model.qsum(tenths(pool[i]["price"]) * squad[i] for i in range(n))
-                    <= tenths(budget))
+    model.addConstr(model.qsum(cost[pool[i]["player_id"]] * squad[i] for i in range(n))
+                    <= budget)
 
     # Expected points in fpl.xi's units: a starter's, again for the captain,
     # and bench_weight of a bench player's.
@@ -203,10 +241,23 @@ def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavai
     bench = [round(worth[i] * bench_weight) for i in range(n)]
     value = model.qsum(worth[i] * start[i] + worth[i] * captain[i]
                        + bench[i] * (squad[i] - start[i]) for i in range(n))
+
+    transfers = None
+    if owned is not None:
+        bought = [i for i in range(n) if pool[i]["player_id"] not in owned]
+        transfers = model.qsum(squad[i] for i in bought)
+        if keep:
+            model.addConstr(transfers == 0)
+        # The hits beyond the free transfers: maximising makes this exactly
+        # max(0, transfers - free_transfers).
+        hits = model.addIntegral(lb=0, ub=sum(SQUAD.values()))
+        model.addConstr(hits >= transfers - free_transfers)
+        value = value - HIT * SCALE * hits
+
     model.maximize(value)
     if model.getModelStatus() != highspy.HighsModelStatus.kOptimal:
         raise ValueError(
-            f"no legal squad within £{budget:.1f}m: each rule can be met alone, but not "
+            f"no legal squad within £{budget / 10:.1f}m: each rule can be met alone, but not "
             "together; the budget and the three-per-club cap leave no squad (solver: "
             f"{model.modelStatusToString(model.getModelStatus())}).")
     best = round(model.getObjectiveValue())
@@ -214,19 +265,22 @@ def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavai
     # Half a unit below the optimum, so the solver's tolerances cannot exclude
     # the optimum itself, and still above every worse squad.
     model.addConstr(value >= best - 0.5)
-    model.minimize(model.qsum(i * (squad[i] + start[i] + captain[i]) for i in range(n)))
+    rank = model.qsum(i * (squad[i] + start[i] + captain[i]) for i in range(n))
+    # Fewer transfers first: one transfer outweighs any difference in rank,
+    # which is at most 27 chosen variables each ranked below n.
+    model.minimize(rank if transfers is None else (27 * n + 1) * transfers + rank)
 
     def chosen(variables):
         return [pool[i] for i, v in enumerate(model.vals(variables)) if v > 0.5]
 
-    return _squad(chosen(squad), chosen(start), chosen(captain)[0], budget)
+    return chosen(squad), chosen(start), chosen(captain)[0], best
 
 
 def _pick(player):
     return Pick(**{field: player[field] for field in Pick.__dataclass_fields__})
 
 
-def _squad(squad, starters, captain, budget):
+def _squad(squad, starters, captain, cost, budget):
     xi = order_xi(starters, lambda p: p["predicted_points"])
     starting = {p["player_id"] for p in xi}
     # FPL's bench order: the reserve goalkeeper first, then outfield players
@@ -239,7 +293,7 @@ def _squad(squad, starters, captain, budget):
     result = Squad(
         xi=[_pick(p) for p in xi], bench=[_pick(p) for p in bench],
         captain=_pick(captain), vice_captain=_pick(vice), formation=formation_of(xi),
-        cost=sum(tenths(p["price"]) for p in squad) / 10, budget=budget,
+        cost=sum(cost[p["player_id"]] for p in squad) / 10, budget=budget,
         expected_points=(sum(points(p["predicted_points"]) for p in xi)
                          + points(captain["predicted_points"])) / SCALE,
         bench_points=sum(points(p["predicted_points"]) for p in bench) / SCALE,
@@ -248,6 +302,108 @@ def _squad(squad, starters, captain, budget):
     if broken:
         raise AssertionError("the solver returned an illegal squad: " + "; ".join(broken))
     return result
+
+
+# --- Transfers (#54) ---------------------------------------------------------
+
+
+@dataclass
+class Transfer:
+    out: Pick
+    # What FPL pays for him: his purchase price plus half of any rise, rounded
+    # down. Given, not guessed: reading it needs the manager's login.
+    selling_price: float
+    into: Pick
+
+
+@dataclass
+class Plan:
+    transfers: list[Transfer]
+    free_transfers: int
+    # Transfers beyond the free ones, and the points they cost.
+    hits: int
+    hit_points: int
+    bank: float
+    bank_after: float
+    # Expected points over the best line-up of the squad as it stands, net of
+    # hits. Never negative: keeping the squad is always one of the options.
+    gain: float
+    squad: Squad
+
+
+def check_current(players, current, bank, free_transfers):
+    """Why the current squad cannot be planned from, as readable lines."""
+    found = []
+    by_id = {p["player_id"]: p for p in players}
+    if len(current) != 15:
+        found.append(f"the squad has {len(current)} players, not 15")
+    missing = sorted(set(current) - set(by_id))
+    if missing:
+        found.append(f"not in the entry: {missing}")
+    known = [by_id[i] for i in current if i in by_id]
+    if not missing and len(current) == 15:
+        for position, quota in SQUAD.items():
+            have = sum(p["position"] == position for p in known)
+            if have != quota:
+                found.append(f"{have} {position} in the squad, not {quota}")
+    if any(price <= 0 for price in current.values()):
+        found.append("every selling price must be above zero")
+    if bank < 0:
+        found.append(f"the bank is £{bank:.1f}m, below zero")
+    if not (isinstance(free_transfers, int) and 0 <= free_transfers <= MAX_FREE_TRANSFERS):
+        found.append(f"free transfers must be a whole number from 0 to {MAX_FREE_TRANSFERS}")
+    return found
+
+
+def best_transfers(players, current, bank, free_transfers, bench_weight=BENCH_WEIGHT,
+                   include_unavailable=False):
+    """The transfers from `current` that maximise expected points net of hits.
+
+    `current` maps each of the fifteen owned players' ids to his selling
+    price; `bank` is the money in the bank, in £m. The money to spend is the
+    bank plus what the squad sells for, and a player kept costs his selling
+    price: that is FPL's rule, as one budget constraint. Owned players stay
+    eligible whatever their status, since a manager may keep anyone.
+    """
+    unknown = sorted({p["position"] for p in players} - set(POSITIONS))
+    if unknown:
+        raise ValueError(f"unknown position(s): {unknown}")
+    problems = check_current(players, current, bank, free_transfers)
+    if problems:
+        raise ValueError("cannot plan from this squad: " + "; ".join(problems))
+
+    owned = set(current)
+    pool = sorted([p for p in eligible(players, include_unavailable)
+                   if p["player_id"] not in owned]
+                  + [p for p in players if p["player_id"] in owned],
+                  key=lambda p: p["player_id"])
+    cost = {p["player_id"]: (tenths(current[p["player_id"]]) if p["player_id"] in owned
+                             else tenths(p["price"])) for p in pool}
+    budget = tenths(bank) + sum(tenths(price) for price in current.values())
+
+    *_, kept = _solve(pool, cost, budget, bench_weight, owned, free_transfers, keep=True)
+    squad, starters, captain, value = _solve(pool, cost, budget, bench_weight, owned,
+                                             free_transfers)
+    result = _squad(squad, starters, captain, cost, budget / 10)
+
+    by_id = {p["player_id"]: p for p in pool}
+    new = {p["player_id"] for p in squad}
+    transfers = []
+    for position in POSITIONS:
+        # Each position's quota is fixed, so its sales and buys pair off.
+        # Shown weakest out against strongest in.
+        sold = sorted((by_id[i] for i in owned - new if by_id[i]["position"] == position),
+                      key=lambda p: (p["predicted_points"], p["player_id"]))
+        bought = sorted((p for p in squad if p["player_id"] not in owned
+                         and p["position"] == position),
+                        key=lambda p: (-p["predicted_points"], p["player_id"]))
+        transfers += [Transfer(out=_pick(o), selling_price=current[o["player_id"]],
+                               into=_pick(b)) for o, b in zip(sold, bought, strict=True)]
+    hits = max(0, len(transfers) - free_transfers)
+    return Plan(transfers=transfers, free_transfers=free_transfers, hits=hits,
+                hit_points=HIT * hits, bank=bank,
+                bank_after=round(budget / 10 - result.cost, 1),
+                gain=(value - kept) / SCALE, squad=result)
 
 
 def violations(squad):
@@ -300,16 +456,59 @@ def describe(squad):
     return "\n".join(lines)
 
 
-def main(entry, budget, bench_weight, as_json, include_unavailable=False):
+def describe_plan(plan):
+    """A transfer plan as a readable block of text, then the squad it leaves."""
+    if not plan.transfers:
+        free = plan.free_transfers
+        lines = ["No transfer gains enough: keep the squad"
+                 + (f" and roll the free transfer{'s' if free > 1 else ''}." if free else ".")]
+    else:
+        lines = [f"Transfers, {len(plan.transfers)} with {plan.free_transfers} free:"]
+        for t in plan.transfers:
+            lines.append(
+                f"  OUT {t.out.web_name} ({t.out.team} {t.out.position}, sells £"
+                f"{t.selling_price:.1f}m, {t.out.predicted_points:.2f})  ->  IN "
+                f"{t.into.web_name} ({t.into.team}, £{t.into.price:.1f}m, "
+                f"{t.into.predicted_points:.2f})")
+        hit = (f"-{plan.hit_points} for {plan.hits} beyond the free" if plan.hits
+               else "none")
+        lines.append(f"Hit: {hit}. Bank: £{plan.bank:.1f}m -> £{plan.bank_after:.1f}m.")
+    lines.append(f"Expected gain over keeping the squad: {plan.gain:+.2f} points, net of hits.")
+    return "\n".join(lines) + "\n\n" + describe(plan.squad)
+
+
+def read_squad(path):
+    """(current, bank, free_transfers) from a --squad JSON file."""
+    try:
+        data = json.loads(Path(path).read_text())
+        current = {int(p["player_id"]): float(p["selling_price"]) for p in data["players"]}
+        return current, float(data["bank"]), data["free_transfers"]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise SystemExit(
+            f"{path} is not a squad file ({type(e).__name__}: {e}). Expected "
+            '{"bank": 0.5, "free_transfers": 1, "players": '
+            '[{"player_id": 16, "selling_price": 10.1}, ...]}') from None
+
+
+def main(entry, budget, bench_weight, as_json, include_unavailable=False, squad_file=None):
     rows, faults = read_entry(entry)
     if faults:
         raise SystemExit(f"{entry} cannot be read:\n  " + "\n  ".join(faults[:10]))
     try:
-        squad = best_squad(rows, budget=budget, bench_weight=bench_weight,
-                           include_unavailable=include_unavailable)
+        if squad_file is None:
+            result = best_squad(rows, budget=budget, bench_weight=bench_weight,
+                                include_unavailable=include_unavailable)
+        else:
+            current, bank, free_transfers = read_squad(squad_file)
+            result = best_transfers(rows, current, bank, free_transfers,
+                                    bench_weight=bench_weight,
+                                    include_unavailable=include_unavailable)
     except (ValueError, ImportError) as e:
         raise SystemExit(str(e)) from None
-    print(json.dumps(asdict(squad), indent=2) if as_json else describe(squad))
+    if as_json:
+        print(json.dumps(asdict(result), indent=2))
+    else:
+        print(describe(result) if squad_file is None else describe_plan(result))
     return 0
 
 
@@ -317,7 +516,11 @@ def cli(argv=None):
     """`fpl-optimise`, or `python -m fpl.optimise`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("entry", help="a prediction entry CSV, committed or under scratch/")
-    ap.add_argument("--budget", type=float, default=BUDGET, help="£m (default: 100.0)")
+    ap.add_argument("--budget", type=float, default=None,
+                    help=f"£m, for a squad from scratch (default: {BUDGET})")
+    ap.add_argument("--squad", metavar="FILE",
+                    help="plan transfers from this squad instead: a JSON file of "
+                         "player ids and selling prices, the bank and free transfers")
     ap.add_argument("--bench-weight", type=float, default=BENCH_WEIGHT,
                     help=f"what a bench player's points are worth (default: {BENCH_WEIGHT})")
     ap.add_argument("--include-unavailable", action="store_true",
@@ -327,9 +530,12 @@ def cli(argv=None):
     args = ap.parse_args(argv)
     if not 0 <= args.bench_weight <= 1:
         ap.error("--bench-weight must be between 0 and 1")
+    if args.squad and args.budget is not None:
+        ap.error("--budget does not apply with --squad: the bank and selling prices "
+                 "set what there is to spend")
     require_project_root()
-    return main(args.entry, args.budget, args.bench_weight, args.json,
-                args.include_unavailable)
+    return main(args.entry, BUDGET if args.budget is None else args.budget,
+                args.bench_weight, args.json, args.include_unavailable, args.squad)
 
 
 if __name__ == "__main__":

@@ -155,7 +155,7 @@ database, so they run anywhere, including the deployed image.
 | `fpl-verify` | Check an entry against the snapshot named in its own rows; non-zero on any disagreement |
 | `fpl-summarise` | A readable digest of an entry, into `reports/` |
 | `fpl-score` | Score every committed entry against actual results, into `scores/` |
-| `fpl-optimise` | The best legal squad, XI and captain for one entry's predictions, under the £100m budget, by integer programming |
+| `fpl-optimise` | The best legal squad, XI and captain for one entry's predictions, under the £100m budget, by integer programming (`--squad FILE`: the best transfers from a squad you own, net of hits) |
 | `fpl-backtest` | Replay settled gameweeks offline, without leaking the future (`--held-out`: the gate for a new factor) |
 | `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
 | `fpl-project` | Rebuild the database's copy of the log from `predictions/` and `scores/` |
