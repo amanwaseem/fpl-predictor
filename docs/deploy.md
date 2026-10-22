@@ -98,3 +98,15 @@ Run it again after each new snapshot until ingestion is scheduled.
 
 A failed migration stops a deploy before any new machine takes traffic: the old
 version keeps serving, and the failing step's log says why.
+
+A `DATABASE_URL` that cannot work (no user, no password, no host, no database,
+quotes around it, or Neon's pooled `-pooler` host) is refused before anything
+connects, by every command and by the deploy's first step on the GitHub
+secret. The message names what is wrong and never prints the value, since it
+holds the password. The Fly secret is checked by `fpl-migrate` in the release
+step. To check a string yourself without it appearing on screen, copy it and
+run:
+
+```bash
+DATABASE_URL="$(pbpaste)" python3 tools/check_database_url.py
+```

@@ -58,6 +58,11 @@ jobs:
             echo "::error::Not set in the production environment:$missing. See docs/deploy.md."
             exit 1
           fi
+          # Its shape, before Fly is touched: a malformed URL stops here with
+          # the reason, not later with a DNS error from the release machine
+          # (#94). Prints nothing from the URL.
+          python3 tools/check_database_url.py \
+            || { echo "::error::The production DATABASE_URL cannot be used. See the message above and docs/deploy.md."; exit 1; }
           app=$(sed -n 's/^app = "\(.*\)"$/\1/p' fly.toml)
           echo "APP_URL=https://$app.fly.dev" >> "$GITHUB_ENV"
 
