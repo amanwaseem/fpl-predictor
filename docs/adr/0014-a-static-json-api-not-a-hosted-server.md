@@ -1,6 +1,6 @@
 # 0014. A static JSON API, not a hosted server
 
-- **Status:** Proposed
+- **Status:** Superseded by 0015
 - **Date:** 2026-10-21
 - **Issues:** #9, #56, #72
 

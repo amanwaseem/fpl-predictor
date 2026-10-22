@@ -132,8 +132,8 @@ stale copy from before the last `git pull`.
 
 Run every command from the repository root, with the virtualenv active. Paths resolve against
 the working directory, so the commands refuse to run anywhere else rather than start a second
-`data/raw/` or a `predictions/` that is not the log. `fpl-serve` is the exception: it reads only the database, so it
-runs anywhere.
+`data/raw/` or a `predictions/` that is not the log. `fpl-serve` and `fpl-migrate` are the exceptions: they read only the
+database, so they run anywhere, including the deployed image.
 
 ### Commands
 
@@ -149,6 +149,7 @@ runs anywhere.
 | `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
 | `fpl-project` | Rebuild the database's copy of the log from `predictions/` and `scores/` |
 | `fpl-reconcile` | Check the database's copy of the log against git, row by row; non-zero on any difference |
+| `fpl-migrate` | Bring the database's schema to the latest migration; the deploy's release command |
 | `fpl-serve` | The read API over the database, at `http://127.0.0.1:8000`, with interactive docs at `/docs` |
 
 Every `fpl-*` command is also `python -m fpl.<module>`; the two run the same function.
@@ -187,6 +188,7 @@ nothing can be corrected.
 | `tools/` | CI and scheduled checks: rule 1, the deadline watchdog |
 | `docs/adr/` | Why the project is built the way it is |
 | `docs/openapi.json` | The API's contract, generated from the code and committed |
+| `docs/deploy.md`, `fly.toml` | Deploying the API: the one-time setup, and Fly's configuration |
 | [`RUNBOOK.md`](RUNBOOK.md) | The procedure for one entry, step by step |
 | [`SPEC.md`](SPEC.md) | The full requirements |
 
@@ -241,6 +243,10 @@ details, and reads carry an `ETag`, so an unchanged response costs a `304`.
 docker compose up        # Postgres and the API; docs at http://localhost:8000/docs
 make serve               # or the API from the checkout, reloading on changes
 ```
+
+Every merge to `main` that passes CI deploys the API to Fly.io over Postgres on Neon: migrations
+first, then the committed log projected and reconciled, then a smoke test of the live URL. The
+one-time setup is in [`docs/deploy.md`](docs/deploy.md).
 
 The contract is [`docs/openapi.json`](docs/openapi.json), committed and checked against the code
 by the tests: regenerate it with `make openapi` after changing a route. CI serves the API over the

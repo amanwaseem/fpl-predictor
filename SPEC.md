@@ -337,11 +337,15 @@ way, so nothing here has to exist before a gameweek can be scored.
 
 ## 8. Delivery
 
-- **API**: versioned static JSON on GitHub Pages, built from the committed log and
-  scores: gameweeks, predictions and results under `/api/v1/` (#9,
-  [ADR 0014](docs/adr/0014-a-static-json-api-not-a-hosted-server.md))
-- **Frontend** — squad suggestions plus the public scorecard
-- **CI** — tests and lint on every PR
+- **API**: a read-only HTTP API under `/v1/` (#81), on Fly.io over Postgres on
+  Neon (#82). The database's copy of the log is rebuilt from `predictions/` and
+  `scores/` on every deploy and reconciled against them, so it is a projection
+  of the record and never a second one
+  ([ADR 0015](docs/adr/0015-a-hosted-service-over-a-rebuildable-projection.md),
+  superseding 0014). The contract is `docs/openapi.json`.
+- **Frontend**: squad suggestions plus the public scorecard (#10)
+- **CI**: lint, tests, the database and API against a real Postgres, the API
+  fuzzed from its OpenAPI, and the deploy image built, on every PR
 
 ## 9. Milestones
 

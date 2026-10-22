@@ -1,0 +1,104 @@
+# Deploys the API to Fly.io after CI passes on main (#82). docs/deploy.md has
+# the one-time setup: the Fly app, the Neon database, and the secrets below.
+#
+#   1. Deploy the image. fly.toml's release command, fpl-migrate, brings the
+#      schema to head first; a failed migration stops the deploy, and the
+#      running version keeps serving.
+#   2. Project the committed log into the production database and reconcile
+#      it, so the API serves exactly what is in git at this commit.
+#   3. Smoke-test the live URL: /readyz, then the scorecard.
+#
+# Secrets, in the `production` environment: FLY_API_TOKEN (a deploy token for
+# the app) and DATABASE_URL (Neon's direct connection string). The same
+# DATABASE_URL is set on the Fly app with `fly secrets set`.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, and never cancelled part-way: a cancelled deploy can
+# leave the schema migrated under the previous version's code.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only a CI run for a push to main, and only a green one. A PR's CI run on
+    # a branch named main does not count.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      # The commit CI tested, not whatever main has moved to since.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Check the deploy is configured
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          missing=""
+          [ -n "$FLY_API_TOKEN" ] || missing="$missing FLY_API_TOKEN"
+          [ -n "$DATABASE_URL" ] || missing="$missing DATABASE_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Not set in the production environment:$missing. See docs/deploy.md."
+            exit 1
+          fi
+          app=$(sed -n 's/^app = "\(.*\)"$/\1/p' fly.toml)
+          echo "APP_URL=https://$app.fly.dev" >> "$GITHUB_ENV"
+
+      # 1.6, pinned by commit rather than by a tag that can be moved.
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+
+      - name: Deploy, migrating first
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --remote-only --wait-timeout 300
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+            pyproject.toml
+      - run: pip install -r requirements-db.txt
+
+      - name: Project the committed log into production, and reconcile it
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          fpl-project
+          fpl-reconcile
+
+      - name: Smoke-test the live API
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf "$APP_URL/readyz" > /dev/null && break
+            sleep 3
+          done
+          curl -sf "$APP_URL/readyz"
+          echo
+          curl -sf "$APP_URL/v1/scorecard" | python -c '
+          import json, sys
+          card = json.load(sys.stdin)
+          assert card["models"], "the scorecard lists no models"
+          for model in card["models"]:
+              print(model["model_version"], "scored", model["gameweeks_scored"],
+                    "missed", model["gameweeks_missed"])
+          '
+          echo "Live at $APP_URL/docs" >> "$GITHUB_STEP_SUMMARY"
