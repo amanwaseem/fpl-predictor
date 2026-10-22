@@ -11,6 +11,7 @@ from alembic import command
 from alembic.config import Config
 
 from fpl.db.session import database_url, normalise_url
+from fpl.db.url import DatabaseURLError
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -31,7 +32,7 @@ class TestUrl(unittest.TestCase):
         self.assertEqual(url, "postgresql+psycopg://u:p@host/db")
 
     def test_a_missing_url_says_how_to_get_one(self):
-        with self.assertRaises(SystemExit) as raised:
+        with self.assertRaises(DatabaseURLError) as raised:
             database_url({})
         self.assertIn("make up", str(raised.exception))
 

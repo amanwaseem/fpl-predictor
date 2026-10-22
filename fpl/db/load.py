@@ -40,7 +40,7 @@ from fpl.db.models import (
     Snapshot,
     Team,
 )
-from fpl.db.session import make_engine
+from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.paths import require_project_root
 from fpl.snapshot import load_snapshot
 
@@ -240,10 +240,12 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
     return report
 
 
+@exits_on_bad_url
 def main(snapshot_id=None):
-    snap, bootstrap, fixtures, players_dir = load_snapshot(snapshot_id)
+    # The URL first: a bad one is refused before the snapshot's files are read.
     engine = make_engine()
     try:
+        snap, bootstrap, fixtures, players_dir = load_snapshot(snapshot_id)
         print(load(engine, snap, bootstrap, fixtures, players_dir))
     finally:
         engine.dispose()

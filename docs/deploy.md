@@ -99,13 +99,20 @@ Run it again after each new snapshot until ingestion is scheduled.
 A failed migration stops a deploy before any new machine takes traffic: the old
 version keeps serving, and the failing step's log says why.
 
-A `DATABASE_URL` that cannot work (no user, no password, no host, no database,
-quotes around it, or Neon's pooled `-pooler` host) is refused before anything
-connects, by every command and by the deploy's first step on the GitHub
-secret. The message names what is wrong and never prints the value, since it
-holds the password. The Fly secret is checked by `fpl-migrate` in the release
-step. To check a string yourself without it appearing on screen, copy it and
-run:
+A `DATABASE_URL` that cannot work is refused before anything connects, and
+the message names what is wrong without ever printing the value, since it
+holds the password. Two levels:
+
+- **Anywhere**, only what cannot connect: no scheme or not Postgres, a URL that
+  cannot be read, a bad port, quotes or spaces around it. A missing user,
+  password, host or database is allowed, since libpq can fill those in.
+- **For the hosted database**, all four must be given: by the deploy's first
+  step on the GitHub secret, and on Fly, where `fly.toml` sets `FPL_HOSTED`, by
+  `fpl-migrate` in the release step and `fpl-serve` at startup.
+
+Neon's pooled `-pooler` host is fine for the API, but `fpl-migrate` and the
+deploy's check refuse it: migrations need the direct connection. To check a
+string yourself without it appearing on screen, copy it and run:
 
 ```bash
 DATABASE_URL="$(pbpaste)" python3 tools/check_database_url.py

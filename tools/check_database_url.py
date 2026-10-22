@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fpl.db.url import describe_problems, url_problems  # noqa: E402
+from fpl.db.url import POOLED, describe_problems, pooled, url_problems  # noqa: E402
 
 
 def main(environ=None):
@@ -24,7 +24,9 @@ def main(environ=None):
     if not url:
         print("DATABASE_URL is not set.")
         return 1
-    found = url_problems(url)
+    # The deploy's secret is the hosted database's, and it runs the migrations
+    # and the projection: complete, and direct rather than pooled.
+    found = url_problems(url, complete=True) + ([POOLED] if pooled(url) else [])
     if found:
         print(describe_problems(found))
         return 1

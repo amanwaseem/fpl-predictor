@@ -21,7 +21,8 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 
 import fpl.db.migrations
-from fpl.db.session import database_url, make_engine
+from fpl.db.session import database_url, exits_on_bad_url, make_engine
+from fpl.db.url import POOLED, DatabaseURLError, describe_problems, pooled
 
 MIGRATIONS = Path(fpl.db.migrations.__file__).parent
 
@@ -44,8 +45,12 @@ def config(url):
     return config
 
 
+@exits_on_bad_url
 def main():
     url = database_url()
+    # Neon's pooled endpoint suits the API, but not schema changes.
+    if pooled(url):
+        raise DatabaseURLError(describe_problems([POOLED]))
     engine = make_engine(url)
     try:
         with engine.connect() as connection:

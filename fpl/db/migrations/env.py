@@ -10,6 +10,7 @@ from alembic import context
 
 from fpl.db.models import Base
 from fpl.db.session import database_url, make_engine
+from fpl.db.url import DatabaseURLError
 
 config = context.config
 if config.config_file_name is not None and config.attributes.get("configure_logger", True):
@@ -19,7 +20,11 @@ target_metadata = Base.metadata
 
 
 def url():
-    return config.get_main_option("sqlalchemy.url") or database_url()
+    try:
+        return config.get_main_option("sqlalchemy.url") or database_url()
+    except DatabaseURLError as e:
+        # `alembic` on the command line: its message, not a traceback.
+        raise SystemExit(str(e)) from None
 
 
 def run_migrations_offline():

@@ -12,6 +12,12 @@ primary_region = "sjc"
 [build]
   dockerfile = "Dockerfile"
 
+# Every command here talks to the hosted database, so DATABASE_URL must give a
+# user, password, host and database itself (fpl/db/url.py). Checked by
+# fpl-migrate in the release step and by fpl-serve at startup.
+[env]
+  FPL_HOSTED = "1"
+
 # Runs in a one-off machine from the new image before any new machine takes
 # traffic. If a migration fails, the deploy stops and the old version keeps
 # serving.
