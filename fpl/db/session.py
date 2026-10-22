@@ -1,8 +1,15 @@
-"""Connecting to the database named by DATABASE_URL."""
+"""Connecting to the database named by DATABASE_URL.
+
+Every command that touches the database gets its URL through here, so each
+refuses one that cannot work, naming what is wrong without printing it
+(fpl/db/url.py, #94).
+"""
 
 import os
 
 from sqlalchemy import Engine, create_engine
+
+from fpl.db.url import describe_problems, url_problems
 
 LOCAL_URL = "postgresql+psycopg://fpl:fpl@localhost:5432/fpl"
 
@@ -19,6 +26,14 @@ def normalise_url(url):
     return url
 
 
+def checked(url, name="DATABASE_URL"):
+    """`url` with the psycopg driver named, or SystemExit saying why it cannot work."""
+    found = url_problems(url)
+    if found:
+        raise SystemExit(describe_problems(found, name))
+    return normalise_url(url)
+
+
 def database_url(environ=None):
     environ = os.environ if environ is None else environ
     url = environ.get("DATABASE_URL")
@@ -27,8 +42,9 @@ def database_url(environ=None):
             "DATABASE_URL is not set.\n"
             f"For the local database: make up, then export DATABASE_URL={LOCAL_URL}"
         )
-    return normalise_url(url)
+    return checked(url)
 
 
 def make_engine(url=None) -> Engine:
-    return create_engine(normalise_url(url) if url else database_url(), pool_pre_ping=True)
+    return create_engine(checked(url, "The database URL") if url else database_url(),
+                         pool_pre_ping=True)
