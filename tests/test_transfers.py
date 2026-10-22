@@ -15,16 +15,25 @@ import random
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
+import highspy
+
+from fpl import optimise
 from fpl.log import read_entry
 from fpl.optimise import (
     HIT,
+    MAX_FREE_TRANSFERS,
     SQUAD,
     best_squad,
     best_transfers,
+    check_current,
     cli,
+    describe,
     describe_plan,
     points,
+    read_squad,
     tenths,
     violations,
 )
@@ -250,6 +259,198 @@ class TestAgainstExhaustiveSearch(unittest.TestCase):
                     self.assertEqual(violations(plan.squad), [])
                     compared += 1
         self.assertEqual(compared, 24)
+
+
+class TestOverTheClubCap(unittest.TestCase):
+    """A player moving clubs can leave an owned squad over the cap. FPL lets it be
+    kept as it is, but no transfer may be made until it is fixed."""
+
+    def setUp(self):
+        # Four of the squad at one club; each sells for 5.0.
+        self.squad = even_squad()
+        for p in self.squad[2:6]:
+            p["team"] = "CX"
+        self.current = owned(self.squad)
+
+    def test_the_plan_fixes_the_cap_and_says_so(self):
+        pool = self.squad + [player(100, "DEF", 3.0)]
+        plan = plan_for(pool, self.current, free=1)
+        self.assertEqual(plan.over_cap, {"CX": 4})
+        self.assertEqual(ins(plan), [100])
+        self.assertEqual(plan.transfers[0].out.team, "CX")
+        self.assertEqual(violations(plan.squad), [])
+        self.assertIn("over the 3-per-club cap", describe_plan(plan))
+
+    def test_fixing_it_is_measured_against_keeping_it_even_at_a_loss(self):
+        """The only fix is a worse player, for a hit. The cheapest way is to sell a
+        CX defender off the bench, so the XI is unchanged and the loss is the hit."""
+        pool = self.squad + [player(100, "DEF", 1.0)]
+        plan = plan_for(pool, self.current, free=0)
+        self.assertEqual((ins(plan), plan.hits), ([100], 1))
+        self.assertNotIn(100, [p.player_id for p in plan.squad.xi])
+        self.assertAlmostEqual(plan.xi_gain, -HIT)
+        self.assertLess(plan.gain, 0)
+
+    def test_when_nothing_affordable_fixes_it_the_cap_is_named(self):
+        pool = self.squad + [player(100, "DEF", 3.0, price=9.0)]
+        with self.assertRaises(ValueError) as raised:
+            plan_for(pool, self.current, free=1)
+        self.assertIn("4 from CX", str(raised.exception))
+        self.assertIn("Keep the squad", str(raised.exception))
+
+
+class TestWhatTheGainCounts(unittest.TestCase):
+
+    def test_a_bench_only_upgrade_gains_nothing_in_the_xi(self):
+        """A 0.00 bench player swapped for a 2.00 who still would not start."""
+        squad = even_squad()
+        squad[8]["predicted_points"] = 0.0
+        pool = squad + [player(100, "MID", 2.0)]
+        plan = plan_for(pool, owned(squad), free=1, bench_weight=0.1)
+        self.assertEqual(ins(plan), [100])
+        self.assertEqual(plan.xi_gain, 0.0)
+        self.assertAlmostEqual(plan.gain, 0.2)
+        text = describe_plan(plan)
+        self.assertIn("+0.00 points in the XI", text)
+        self.assertIn("+0.20 counting the bench at 0.1", text)
+
+    def test_a_starter_upgrade_counts_in_both(self):
+        squad = even_squad()
+        plan = plan_for(squad + [player(100, "MID", 4.0)], owned(squad), free=1)
+        self.assertAlmostEqual(plan.xi_gain, 1.0)
+        self.assertAlmostEqual(plan.gain, 1.0)
+
+
+class TestRollingFreeTransfers(unittest.TestCase):
+
+    def message(self, free):
+        squad = even_squad()
+        return describe_plan(plan_for(squad, owned(squad), free=free))
+
+    def test_unused_free_transfers_roll_until_the_most_fpl_banks(self):
+        self.assertIn("roll the free transfer.", self.message(1))
+        self.assertIn("roll the free transfers.", self.message(2))
+        self.assertNotIn("roll", self.message(0))
+
+    def test_at_the_most_fpl_banks_an_unused_one_is_lost(self):
+        text = self.message(MAX_FREE_TRANSFERS)
+        self.assertNotIn("roll", text)
+        self.assertIn("one not used this week is lost", text)
+
+
+class TestPricesAddUp(unittest.TestCase):
+
+    def test_owned_players_are_shown_at_their_selling_price(self):
+        """A player risen from 7.5 to 8.0 sells for 7.7: shown and counted at 7.7."""
+        squad = even_squad()
+        squad[4]["price"] = 8.0
+        current = owned(squad, {squad[4]["player_id"]: 7.7})
+        plan = plan_for(squad + [player(100, "MID", 4.0)], current, free=1, bank=1.0)
+        everyone = plan.squad.xi + plan.squad.bench
+        shown = sum(tenths(p.selling_price if p.selling_price is not None else p.price)
+                    for p in everyone)
+        self.assertEqual(shown, tenths(plan.squad.cost))
+        risen = next(p for p in everyone if p.player_id == squad[4]["player_id"])
+        self.assertEqual((risen.price, risen.selling_price), (8.0, 7.7))
+        self.assertIn("£  7.7m*", describe(plan.squad))
+        bought = next(p for p in everyone if p.player_id == 100)
+        self.assertIsNone(bought.selling_price)
+
+
+class CountingHighs(highspy.Highs):
+    """highspy.Highs that counts minimize calls, and can pretend the second solve
+    did not finish."""
+
+    minimizes = 0
+
+    def __init__(self, stall=False):
+        super().__init__()
+        self.stall = stall
+        self.stalled = False
+
+    def minimize(self, *args):
+        CountingHighs.minimizes += 1
+        self.stalled = self.stall
+        return super().minimize(*args)
+
+    def getModelStatus(self):
+        if self.stalled:
+            return highspy.HighsModelStatus.kTimeLimit
+        return super().getModelStatus()
+
+
+def solver_with(**kwargs):
+    return SimpleNamespace(Highs=lambda: CountingHighs(**kwargs),
+                           HighsModelStatus=highspy.HighsModelStatus)
+
+
+class TestSolves(unittest.TestCase):
+
+    def test_keeping_the_squad_is_valued_without_a_tie_break_solve(self):
+        squad = even_squad()
+        CountingHighs.minimizes = 0
+        with mock.patch.object(optimise, "_solver", lambda: solver_with()):
+            plan_for(squad + [player(100, "MID", 4.0)], owned(squad), free=1)
+        self.assertEqual(CountingHighs.minimizes, 1)
+
+    def test_a_tie_break_that_does_not_finish_leaves_the_first_answer(self):
+        rows, _ = read_entry(ENTRY)
+        expected = best_squad(rows).expected_points
+        with mock.patch.object(optimise, "_solver", lambda: solver_with(stall=True)):
+            squad = best_squad(rows)
+        self.assertEqual(violations(squad), [])
+        self.assertEqual(squad.expected_points, expected)
+
+
+class TestSquadFiles(unittest.TestCase):
+
+    def write(self, data):
+        path = Path(tempfile.mkdtemp()) / "squad.json"
+        path.write_text(json.dumps(data))
+        return path
+
+    def squad_file(self, **changes):
+        players = [{"player_id": p["player_id"], "selling_price": p["price"]}
+                   for p in even_squad()]
+        return {"bank": 0.5, "free_transfers": 1, "players": players} | changes
+
+    def test_a_well_formed_file_reads(self):
+        current, bank, free = read_squad(self.write(self.squad_file()))
+        self.assertEqual((len(current), bank, free), (15, 0.5, 1))
+
+    def test_a_player_listed_twice_is_named(self):
+        data = self.squad_file()
+        data["players"][1]["player_id"] = data["players"][0]["player_id"]
+        with self.assertRaises(SystemExit) as raised:
+            read_squad(self.write(data))
+        self.assertIn("more than once: [1]", str(raised.exception))
+
+    def test_free_transfers_must_be_a_whole_number_not_a_bool_or_float(self):
+        for value in (True, 2.0, "1"):
+            with self.subTest(value=value), self.assertRaises(SystemExit) as raised:
+                read_squad(self.write(self.squad_file(free_transfers=value)))
+            self.assertIn("not a whole number", str(raised.exception))
+
+    def test_a_bool_is_refused_through_the_api_too(self):
+        squad = even_squad()
+        self.assertTrue(check_current(squad, owned(squad), 0.0, True))
+
+
+class TestOnePositionCheck(unittest.TestCase):
+
+    def test_every_selector_refuses_an_unknown_position_alike(self):
+        from fpl.xi import best_xi
+        squad = even_squad()
+        pool = squad + [player(100, "MGR", 0.0)]
+        calls = {
+            "best_xi": lambda: best_xi(pool, lambda p: p["predicted_points"]),
+            "best_squad": lambda: best_squad(pool),
+            "best_transfers": lambda: plan_for(pool, owned(squad)),
+        }
+        for name, call in calls.items():
+            with self.subTest(selector=name), self.assertRaises(ValueError) as raised:
+                call()
+            self.assertEqual(str(raised.exception), "unknown position(s) in pool: ['MGR']")
 
 
 class TestCommand(unittest.TestCase):

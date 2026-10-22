@@ -129,6 +129,18 @@ def _best_for_formation(pool, scaled, quotas, clubs):
     return cost, chosen
 
 
+def check_positions(players):
+    """Refuse a pool holding a position that is not one of POSITIONS.
+
+    One check for every selector here and in fpl.optimise. A player in a
+    position FPL added (managers, in 2024/25) would otherwise be silently
+    unpickable, or picked into a slot that does not exist.
+    """
+    unknown = sorted({p["position"] for p in players} - set(POSITIONS))
+    if unknown:
+        raise ValueError(f"unknown position(s) in pool: {unknown}")
+
+
 def order_xi(players, value):
     """An XI in display order: by position, then `value` down, then player id.
 
@@ -157,10 +169,7 @@ def best_xi(players, value):
     legal XI is refused rather than filled with whatever is available, because
     an illegal XI's total would be compared against legal ones.
     """
-    unknown = sorted({p["position"] for p in players} - set(POSITIONS))
-    if unknown:
-        raise ValueError(f"unknown position(s) in pool: {unknown}")
-
+    check_positions(players)
     pool = sorted(players, key=lambda p: p["player_id"])
     scaled = [round(value(p) * SCALE) for p in pool]
     clubs = sorted({p["team"] for p in pool})
