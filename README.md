@@ -97,19 +97,24 @@ replaces it; any model that doesn't, doesn't ship.
 - Backtest bench (`fpl-backtest`): replays settled gameweeks without leaking the future, and
   judges each candidate held out before it can be logged
 - Deadline watchdog: a scheduled check that warns when a deadline is near with no entry
+- Postgres: the schema under Alembic migrations, snapshots loaded into it (`fpl-load`), and the
+  log projected into it and reconciled against git in CI (`fpl-project`, `fpl-reconcile`)
+- A read API under `/v1`, live at [fpl-predictor-aman.fly.dev](https://fpl-predictor-aman.fly.dev/docs),
+  deployed on every green merge to `main` and fuzzed from its OpenAPI in CI
+- Squad optimiser (`fpl-optimise`): the best legal squad, XI and captain for one gameweek, by
+  integer programming, checked against an exhaustive search
 
-**In progress** (to 3 Nov)
+**In progress**
 
 - Automated entries: a scheduled workflow that makes each entry and opens its PR before the
   deadline (#68)
-- A static scorecard and JSON API on GitHub Pages (#56, #9)
-- Squad optimiser, first slice: the best legal squad and captain for one gameweek (#53)
+- Past seasons as training data, for a learned model (#79, #84, #85)
 
-**Planned**
+**Planned** (tracked in #75)
 
-- Further component models: minutes, saves, defensive contribution and bonus (see Approach)
-- Optimiser transfers and a multi-gameweek horizon (#54, #55)
-- Web frontend (#10)
+- Optimiser transfers, a multi-gameweek horizon, and "optimise my team" on the API (#54, #55, #83)
+- Scheduled ingest of snapshots into production (#93)
+- Web frontend (#10), and observability (#86)
 
 ## Usage
 
@@ -145,6 +150,7 @@ database, so they run anywhere, including the deployed image.
 | `fpl-verify` | Check an entry against the snapshot named in its own rows; non-zero on any disagreement |
 | `fpl-summarise` | A readable digest of an entry, into `reports/` |
 | `fpl-score` | Score every committed entry against actual results, into `scores/` |
+| `fpl-optimise` | The best legal squad, XI and captain for one entry's predictions, under the £100m budget, by integer programming |
 | `fpl-backtest` | Replay settled gameweeks offline, without leaking the future (`--held-out`: the gate for a new factor) |
 | `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
 | `fpl-project` | Rebuild the database's copy of the log from `predictions/` and `scores/` |

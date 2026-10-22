@@ -1,16 +1,16 @@
 # 0010. Squad selection by integer programming, reusing the legal-XI selector
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-06
-- **Issues:** #7
+- **Issues:** #7, #53
 
 ## Context
 
 Given predicted points, the optimiser picks a 15-player squad: £100.0m budget;
 2 GKP, 5 DEF, 5 MID, 3 FWD; at most 3 per club; a valid starting XI (1 GKP,
 3–5 DEF, 2–5 MID, 1–3 FWD); a captain scoring double; and −4 points per
-transfer beyond the free allowance. Not built yet — this records the approach
-decided for #7.
+transfer beyond the free allowance. This recorded the approach decided for #7;
+the first slice, without transfers, is built in #53 (`fpl/optimise.py`).
 
 ## Decision
 
@@ -23,11 +23,26 @@ decided for #7.
   scoring's points-captured metric, and is verified against brute force. The
   optimiser reuses it; scoring never depends on the optimiser, so a gameweek can
   always be scored without it.
-- The solver is the project's first dependency beyond `requests`, so it is
-  pinned deliberately and chosen in #7.
+- **The solver is HiGHS, called through `highspy`**, pinned in
+  `requirements-optimise.txt`, apart from what a prediction needs (#53).
+  - *Rejected:* scipy's `milp`. It wraps the same HiGHS, at about 25 MB with
+    numpy against highspy's 9.5 MB.
+  - *Rejected:* PuLP. Since 4.0 it bundles no solver and needs highspy or CBC
+    installed beside it, so it would be a modelling layer over the same thing.
+- **Squad, XI and captain are one model**, not chosen in turn, because the best
+  squad depends on who would start. The formations and the club cap are
+  derived from `fpl/xi.py`'s constants rather than restated, so the optimiser
+  and the scoring harness cannot disagree about what is legal.
+- **Exact and deterministic.** Points in hundredths and prices in tenths make
+  every coefficient an integer, and the solver's gap is set to zero rather
+  than left at its default. Ties go to lower player ids through a term too
+  small to trade away a hundredth of a point.
 - The optimiser reads committed entries and never writes to `predictions/`.
 
 ## Consequences
+
+- The solution is checked against an exhaustive search on small random pools,
+  and against `fpl/xi.py` on every committed entry.
 
 - Selections are provably optimal for the stated objective, and every
   constraint is checkable in a test.
@@ -37,6 +52,8 @@ decided for #7.
 
 ## Revisit if
 
-Status moves to Accepted when #7 lands. Revisit if the chosen solver is slow
-enough to matter at a deadline, or if multi-gameweek planning (a transfer
-horizon) changes the formulation enough to need its own record.
+- The solver is slow enough to matter. A full gameweek's pool of about 670
+  players solves in a fraction of a second today; a multi-gameweek horizon
+  (#55) multiplies the model's size.
+- Multi-gameweek planning changes the formulation enough to need its own
+  record.

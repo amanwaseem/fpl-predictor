@@ -28,6 +28,8 @@ dependencies = ["requests>=2.34,<3"]
 db = ["sqlalchemy>=2.0,<2.1", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
 # The read API (#81), installed by requirements-api.txt.
 api = ["fpl-predictor[db]", "fastapi>=0.159,<1", "uvicorn>=0.54,<1"]
+# The squad optimiser (#53), installed by requirements-optimise.txt.
+optimise = ["highspy>=1.15,<2"]
 
 # One command per module, each the module's cli(). `python -m fpl.<module>`
 # runs exactly the same function, so the two spellings cannot drift apart.
@@ -42,6 +44,7 @@ fpl-backtest = "fpl.backtest:cli"
 fpl-entry = "fpl.entry:cli"
 fpl-load = "fpl.db.load:cli"
 fpl-migrate = "fpl.db.migrate:cli"
+fpl-optimise = "fpl.optimise:cli"
 fpl-project = "fpl.db.project:cli"
 fpl-reconcile = "fpl.db.reconcile:cli"
 fpl-serve = "fpl.api.serve:cli"
