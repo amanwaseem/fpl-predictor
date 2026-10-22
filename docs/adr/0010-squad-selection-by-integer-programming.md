@@ -33,6 +33,15 @@ the first slice, without transfers, is built in #53 (`fpl/optimise.py`).
   squad depends on who would start. The formations and the club cap are
   derived from `fpl/xi.py`'s constants rather than restated, so the optimiser
   and the scoring harness cannot disagree about what is legal.
+- **Transfers are the same model with more in it** (#54), not a second one:
+  - a player already owned costs his selling price, and the money to spend is
+    the bank plus what the squad sells for, which is FPL's rule written as one
+    budget constraint;
+  - an integer `hits` variable is at least the transfers beyond the free ones,
+    and each costs 4 points;
+  - the tie-break prefers fewer transfers before lower ids, so a transfer that
+    only breaks even is never suggested.
+  Selling prices are an input, because reading them needs the manager's login.
 - **Exact and deterministic.** Points in hundredths and prices in tenths make
   every coefficient an integer, and the solver's gap is set to zero rather
   than left at its default. Ties go to lower player ids through a term too
