@@ -50,7 +50,11 @@ provisional until `data_checked` is true.
 
 ## Conventions
 
-- Python 3.13. Add dependencies when they're useful, and pin them.
+- Python 3.13. Add dependencies when they're useful, and pin them, by purpose:
+  `requirements.txt` for what a prediction runs, `requirements-db.txt`,
+  `requirements-api.txt` and `requirements-optimise.txt` for the rest, and
+  `requirements-dev.txt` for all of it plus tooling. Each pins its transitive
+  dependencies too. These fold into uv groups in #76.
 - Timestamps are in UTC. Gameweek filenames are zero-padded (`gw04`).
 - `scratch/` is gitignored and holds exploratory runs.
 - Prefer explicit, readable code over clever code.

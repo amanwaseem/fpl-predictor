@@ -18,11 +18,14 @@ the first slice, without transfers, is built in #53 (`fpl/optimise.py`).
   merely inelegant: the budget and per-club constraints interact, so a locally
   best pick can leave the remaining budget unspendable, and transfer costs make
   the best move this week frequently not the best over a horizon.
-- **Built on the legal-XI selector, not the reverse.** `fpl/xi.py:best_xi`
+- **Built on the legal-XI selector's rules, not the reverse.** `fpl/xi.py`
   already picks the exact best legal XI (formation and club cap, no budget) for
-  scoring's points-captured metric, and is verified against brute force. The
-  optimiser reuses it; scoring never depends on the optimiser, so a gameweek can
-  always be scored without it.
+  scoring's points-captured metric, verified against brute force. The optimiser
+  cannot call `best_xi`, which has no budget, so it takes the rules instead:
+  formations, the club cap, the point scale, the position check and the XI's
+  order, all from `fpl/xi.py`. Its tests check its XI against `best_xi`.
+  Scoring never depends on the optimiser, so a gameweek can always be scored
+  without it.
 - **The solver is HiGHS, called through `highspy`**, pinned in
   `requirements-optimise.txt`, apart from what a prediction needs (#53).
   - *Rejected:* scipy's `milp`. It wraps the same HiGHS, at about 25 MB with

@@ -332,8 +332,11 @@ make the locally optimal move frequently wrong.
 
 The formation and per-club constraints are shared with the legal-XI metric in
 section 6, which is built first because scoring needs it and it has no budget
-term. The optimiser reuses that selector; the dependency does not run the other
-way, so nothing here has to exist before a gameweek can be scored.
+term. The optimiser takes its rules from `fpl/xi.py` (the formations, the club
+cap, the point scale, the position check and the XI's order) rather than
+restating them, and its tests check its XI against `best_xi`. It does not call
+`best_xi`, which has no budget; and the dependency does not run the other way,
+so nothing here has to exist before a gameweek can be scored.
 
 The first slice is built (#53, `fpl-optimise`): the best squad, XI and captain
 for one gameweek from one entry's predictions, with each bench player counted
