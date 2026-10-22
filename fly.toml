@@ -4,9 +4,10 @@
 # `app` is the one setting to change: Fly app names are global, so pick one
 # that is free. The deploy workflow reads it from here.
 app = "fpl-predictor"
-# Seattle: near the maintainer in western Canada, and beside Neon's AWS
-# us-west-2 (Oregon), so the API and its database are a few milliseconds apart.
-primary_region = "sea"
+# San Jose: Fly's nearest region to the maintainer in western Canada (it has
+# no Seattle), and about 20ms from Neon's AWS us-west-2 (Oregon), the nearest
+# Neon region to it.
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"
