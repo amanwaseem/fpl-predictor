@@ -129,6 +129,21 @@ def _best_for_formation(pool, scaled, quotas, clubs):
     return cost, chosen
 
 
+def order_xi(players, value):
+    """An XI in display order: by position, then `value` down, then player id.
+
+    Shared with fpl.optimise, so both commands print an XI the same way.
+    """
+    order = {pos: i for i, pos in enumerate(POSITIONS)}
+    return sorted(players, key=lambda p: (order[p["position"]], -value(p), p["player_id"]))
+
+
+def formation_of(players):
+    """An XI's formation as its defenders, midfielders and forwards: "4-4-2"."""
+    return "-".join(str(sum(p["position"] == pos for p in players))
+                    for pos in ("DEF", "MID", "FWD"))
+
+
 def best_xi(players, value):
     """The legal XI maximising `value`, as (total, players, formation).
 
@@ -158,7 +173,7 @@ def best_xi(players, value):
             continue
         cost, chosen = result
         if best is None or cost < best[0]:
-            best = (cost, chosen, f"{defenders}-{midfielders}-{forwards}")
+            best = (cost, chosen)
 
     if best is None:
         counts = {pos: sum(p["position"] == pos for p in pool) for pos in POSITIONS}
@@ -168,7 +183,5 @@ def best_xi(players, value):
             "2 MID, 1 FWD at minimum and at most three per club."
         )
 
-    _, chosen, formation = best
-    order = {pos: i for i, pos in enumerate(POSITIONS)}
-    chosen.sort(key=lambda p: (order[p["position"]], -value(p), p["player_id"]))
-    return sum(value(p) for p in chosen), chosen, formation
+    chosen = order_xi(best[1], value)
+    return sum(value(p) for p in chosen), chosen, formation_of(chosen)

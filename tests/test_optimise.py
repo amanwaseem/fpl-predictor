@@ -11,8 +11,11 @@ import itertools
 import json
 import os
 import random
+import subprocess
+import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fpl.log import read_entry
 from fpl.optimise import (
@@ -21,19 +24,19 @@ from fpl.optimise import (
     XI_BOUNDS,
     best_squad,
     cli,
-    hundredths,
+    points,
     tenths,
     violations,
 )
-from fpl.xi import FORMATIONS, MAX_PER_CLUB, best_xi
+from fpl.xi import FORMATIONS, MAX_PER_CLUB, best_xi, formation_of, order_xi
 
 ROOT = Path(__file__).resolve().parent.parent
 ENTRIES = sorted((ROOT / "predictions").glob("gw*_*.csv"))
 
 
-def player(pid, position, team, price, points):
+def player(pid, position, team, price, predicted, status="a"):
     return {"player_id": pid, "web_name": f"p{pid}", "team": team, "position": position,
-            "price": price, "predicted_points": points}
+            "price": price, "predicted_points": predicted, "status": status}
 
 
 def random_pool(seed, *, clubs=8):
@@ -50,9 +53,9 @@ def random_pool(seed, *, clubs=8):
 
 def objective(squad, bench_weight):
     """The model's objective for a Squad, in hundredths."""
-    starters = sum(hundredths(p.predicted_points) for p in squad.xi)
-    bench = sum(round(hundredths(p.predicted_points) * bench_weight) for p in squad.bench)
-    return starters + hundredths(squad.captain.predicted_points) + bench
+    starters = sum(points(p.predicted_points) for p in squad.xi)
+    bench = sum(round(points(p.predicted_points) * bench_weight) for p in squad.bench)
+    return starters + points(squad.captain.predicted_points) + bench
 
 
 def exhaustive_best(pool, budget, bench_weight):
@@ -71,7 +74,7 @@ def exhaustive_best(pool, budget, bench_weight):
             continue
         if sum(tenths(p["price"]) for p in squad) > tenths(budget):
             continue
-        ranked = {pos: sorted((hundredths(p["predicted_points"]) for p in squad
+        ranked = {pos: sorted((points(p["predicted_points"]) for p in squad
                                if p["position"] == pos), reverse=True) for pos in SQUAD}
         for d, m, f in FORMATIONS:
             starting = {"GKP": 1, "DEF": d, "MID": m, "FWD": f}
@@ -136,9 +139,9 @@ class TestOnCommittedEntries(unittest.TestCase):
                 squad = best_squad(rows, bench_weight=0.0)
                 self.assertEqual(violations(squad), [])
                 chosen = [vars(p) for p in squad.xi + squad.bench]
-                total, xi, _ = best_xi(chosen, lambda p: hundredths(p["predicted_points"]))
-                with_captain = total + max(hundredths(p["predicted_points"]) for p in xi)
-                self.assertGreaterEqual(hundredths(squad.expected_points), with_captain)
+                total, xi, _ = best_xi(chosen, lambda p: points(p["predicted_points"]))
+                with_captain = total + max(points(p["predicted_points"]) for p in xi)
+                self.assertGreaterEqual(points(squad.expected_points), with_captain)
 
     def test_the_captain_is_the_best_starter_and_the_vice_the_next(self):
         rows, _ = read_entry(ENTRIES[-1])
@@ -173,11 +176,30 @@ class TestDeterminism(unittest.TestCase):
 
 
 class TestRefusals(unittest.TestCase):
+    """No legal squad is refused with its cause, not a solver status or a crash."""
+
+    def assertRefused(self, pool, *words, **kwargs):
+        with self.assertRaises(ValueError) as raised:
+            best_squad(pool, **kwargs)
+        for word in words:
+            self.assertIn(word, str(raised.exception))
+        return str(raised.exception)
 
     def test_a_budget_nothing_fits_is_refused_with_the_cheapest_cost(self):
-        with self.assertRaises(ValueError) as raised:
-            best_squad(random_pool(0), budget=20.0)
-        self.assertIn("cheapest", str(raised.exception))
+        message = self.assertRefused(random_pool(0), "cheapest 2 GKP, 5 DEF", budget=20.0)
+        self.assertNotIn("club", message)
+
+    def test_a_position_with_no_players_is_refused_naming_it(self):
+        pool = [p for p in random_pool(0) if p["position"] != "GKP"]
+        self.assertRefused(pool, "0 GKP to choose from")
+
+    def test_too_few_clubs_is_refused_naming_the_club_cap(self):
+        pool = [p | {"team": f"C{p['player_id'] % 4}"} for p in random_pool(0)]
+        self.assertRefused(pool, "4 club(s)", "12 players", budget=500.0)
+
+    def test_a_pool_of_fewer_than_fifteen_names_the_short_positions(self):
+        message = self.assertRefused(random_pool(0)[:12], "to choose from")
+        self.assertNotIn("fifteen", message)
 
     def test_an_unknown_position_is_refused(self):
         pool = random_pool(0) + [player(500, "MGR", "C1", 0.5, 0.0)]
@@ -188,11 +210,74 @@ class TestRefusals(unittest.TestCase):
         rows, _ = read_entry(ENTRIES[-1])
         squad = best_squad(rows)
         squad.captain = squad.bench[0]
+        squad.vice_captain = squad.bench[1]
         squad.cost = 100.5
         squad.xi = squad.xi[:10]
         found = " ".join(violations(squad))
-        for words in ("captain does not start", "over £100.0m", "10 starters", "distinct"):
+        for words in ("captain does not start", "vice-captain does not start",
+                      "over £100.0m", "10 starters", "distinct"):
             self.assertIn(words, found)
+
+
+class TestAvailability(unittest.TestCase):
+    """The entry's status column decides who may be picked."""
+
+    def pool_with(self, status):
+        # The best and cheapest midfielder by far, so he is picked if allowed.
+        return random_pool(0) + [player(900, "MID", "C9", 4.0, 9.99, status)]
+
+    def picked(self, pool, **kwargs):
+        squad = best_squad(pool, budget=200.0, **kwargs)
+        return 900 in [p.player_id for p in squad.xi + squad.bench]
+
+    def test_available_and_doubtful_players_are_picked(self):
+        for status in "ad":
+            with self.subTest(status=status):
+                self.assertTrue(self.picked(self.pool_with(status)))
+
+    def test_injured_suspended_and_not_available_only_when_asked(self):
+        for status in "isn":
+            with self.subTest(status=status):
+                self.assertFalse(self.picked(self.pool_with(status)))
+                self.assertTrue(self.picked(self.pool_with(status), include_unavailable=True))
+
+    def test_a_player_gone_from_the_league_never(self):
+        self.assertFalse(self.picked(self.pool_with("u"), include_unavailable=True))
+
+    def test_committed_entries_pick_only_available_or_doubtful_players(self):
+        for path in ENTRIES:
+            with self.subTest(entry=path.name):
+                rows, _ = read_entry(path)
+                status = {r["player_id"]: r["status"] for r in rows}
+                squad = best_squad(rows)
+                self.assertTrue(all(status[p.player_id] in "ad"
+                                    for p in squad.xi + squad.bench))
+
+
+class TestTheSolverIsOptional(unittest.TestCase):
+
+    def test_importing_the_module_does_not_import_the_solver(self):
+        """So `fpl-optimise --help` works on an install without highspy."""
+        code = "import sys, fpl.optimise; print('highspy' in sys.modules)"
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                             check=True, cwd=ROOT).stdout.strip()
+        self.assertEqual(out, "False")
+
+    def test_without_it_a_solve_says_how_to_install_it(self):
+        with mock.patch.dict(sys.modules, {"highspy": None}), \
+                self.assertRaises(ImportError) as raised:
+            best_squad(random_pool(0), budget=200.0)
+        self.assertIn("requirements-optimise.txt", str(raised.exception))
+
+
+class TestXiHelpersAreShared(unittest.TestCase):
+
+    def test_the_optimisers_xi_is_ordered_and_labelled_as_fpl_xi_does(self):
+        rows, _ = read_entry(ENTRIES[-1])
+        squad = best_squad(rows)
+        xi = [vars(p) for p in squad.xi]
+        self.assertEqual(xi, order_xi(xi, lambda p: p["predicted_points"]))
+        self.assertEqual(squad.formation, formation_of(xi))
 
 
 class TestCommand(unittest.TestCase):
@@ -227,6 +312,11 @@ class TestCommand(unittest.TestCase):
         with self.assertRaises(SystemExit) as raised, contextlib.redirect_stdout(io.StringIO()):
             self.run_cli("--budget", "10")
         self.assertIn("no legal squad", str(raised.exception))
+
+    def test_include_unavailable_is_accepted(self):
+        code, out = self.run_cli("--include-unavailable", "--json")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(json.loads(out)["xi"]), 11)
 
     def test_a_bench_weight_outside_zero_to_one_is_a_usage_error(self):
         with self.assertRaises(SystemExit) as raised, \
