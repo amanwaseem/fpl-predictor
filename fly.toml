@@ -3,7 +3,7 @@
 #
 # `app` is the one setting to change: Fly app names are global, so pick one
 # that is free. The deploy workflow reads it from here.
-app = "fpl-predictor"
+app = "fpl-predictor-aman"
 # San Jose: Fly's nearest region to the maintainer in western Canada (it has
 # no Seattle), and about 20ms from Neon's AWS us-west-2 (Oregon), the nearest
 # Neon region to it.
