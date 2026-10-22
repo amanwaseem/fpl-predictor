@@ -1,18 +1,15 @@
 """The routes: /v1 for the data, /healthz and /readyz for whoever runs the service."""
 
-from pathlib import Path
 from typing import Annotated, Literal
 
-from alembic.runtime.migration import MigrationContext
-from alembic.script import ScriptDirectory
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi import Path as PathParam
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-import fpl.db.migrations
 from fpl.api import queries, schemas
 from fpl.api.problems import responses
+from fpl.db import migrate
 
 # Patterns as well as types: a value Postgres cannot hold, like a NUL byte,
 # is refused here as a 422 rather than reaching the database as a 500.
@@ -25,9 +22,6 @@ GameweekParam = Annotated[int, PathParam(ge=1, le=38, examples=[6])]
 ModelParam = Annotated[str, Query(pattern=r"^[A-Za-z0-9.-]{1,40}$",
                                   examples=["baseline-v1", "form-fixture-v1"],
                                   description="A model_version.")]
-
-MIGRATIONS = ScriptDirectory(str(Path(fpl.db.migrations.__file__).parent))
-
 
 def database(request: Request) -> Engine:
     """The engine, not a connection: each route connects only once its parameters
@@ -112,11 +106,11 @@ def healthz():
 @health.get("/readyz", response_model=schemas.Readiness, responses=responses(503))
 def readyz(db: Database):
     """The database answers and its schema is at the latest migration."""
-    head = MIGRATIONS.get_current_head()
+    head = migrate.head()
     try:
         with db.connect() as conn:
             conn.execute(text("SELECT 1"))
-            current = MigrationContext.configure(conn).get_current_revision()
+            current = migrate.current(conn)
     except SQLAlchemyError:
         raise HTTPException(503, "The database is not reachable.") from None
     if current != head:

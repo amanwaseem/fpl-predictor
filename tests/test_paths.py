@@ -74,8 +74,8 @@ class TestRequireProjectRoot(InDirectory):
 
 
 # Commands that read and write no paths, only the database, and so must run
-# anywhere: fpl-serve runs in a container image with no checkout at all.
-PATHLESS = {"fpl-serve"}
+# anywhere: the deployed image has no checkout at all.
+PATHLESS = {"fpl-serve", "fpl-migrate"}
 
 
 class TestEveryCommandChecks(unittest.TestCase):

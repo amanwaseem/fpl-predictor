@@ -184,12 +184,28 @@ jobs:
           schemathesis run http://127.0.0.1:8000/openapi.json --checks all --max-examples 50 \
             || { echo "--- API log ---"; cat api.log; exit 1; }
 
+  # The image the deploy ships (#82), built on every PR so a broken Dockerfile
+  # fails here rather than on Fly after merge. It must run both of the
+  # commands the deploy uses, and not as root.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t fpl-api:ci .
+      - name: The image runs the deploy's commands, unprivileged
+        run: |
+          docker run --rm fpl-api:ci fpl-migrate --help > /dev/null
+          docker run --rm fpl-api:ci fpl-serve --help > /dev/null
+          uid=$(docker run --rm fpl-api:ci id -u)
+          [ "$uid" != "0" ] || { echo "the image runs as root"; exit 1; }
+
   # The one required check. `always()` makes it run, and fail, when a job it
   # needs failed or was cancelled — without it a failed dependency would skip
   # this job, and a skipped required check counts as passing.
   ci:
     if: always()
-    needs: [lint, test, log-immutable, db]
+    needs: [lint, test, log-immutable, db, image]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
