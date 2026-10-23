@@ -4,7 +4,7 @@
 
 668 players across 20 teams. 388 are predicted to score; 280 are on zero — injured, suspended, out of the squad, or not expected to play enough to matter.
 
-Generated from the committed entry by `python -m fpl.summarise`. The entry is the record; this is a reading of it.
+Generated from the committed entry by `python -m fpl.log.summarise`. The entry is the record; this is a reading of it.
 
 ## Top 20
 

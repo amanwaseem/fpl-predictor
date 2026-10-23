@@ -30,7 +30,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fpl.ingest.snapshot import fixture_counts, load_snapshot
+from fpl.ingest.snapshot import availability, fixture_counts, load_snapshot
 from fpl.log.contract import (
     MAX_REPORTED,
     PROVENANCE,
@@ -39,7 +39,6 @@ from fpl.log.contract import (
     read_entry,
     validate_rows,
 )
-from fpl.models.features import availability
 from fpl.paths import require_project_root
 
 # The Premier League is twenty clubs. An entry representing fewer has lost a

@@ -17,6 +17,20 @@ from pathlib import Path
 SNAPSHOT_ID = re.compile(r"^\d{8}T\d{6}Z$")
 
 
+def availability(player):
+    """Fraction of normal minutes expected, from injury/suspension flags.
+
+    A reading of the snapshot rather than a model feature: the verifier
+    checks entries against it, and every model scales minutes by it.
+
+    status: a=available, d=doubtful, i=injured, s=suspended, u=unavailable
+    """
+    chance = player.get("chance_of_playing_next_round")
+    if chance is not None:
+        return chance / 100.0
+    return 1.0 if player.get("status") == "a" else 0.0
+
+
 def load_snapshot(snapshot_id=None):
     """Load a raw snapshot written by fpl/ingest/fetch.py, most recent by default.
 

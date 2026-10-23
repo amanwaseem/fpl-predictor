@@ -5,9 +5,12 @@ build/
 dist/
 *.egg-info/
 
-# Environment
+# Environment, and anything that may hold a credential such as DATABASE_URL
 .venv/
+venv/
+env/
 .env
+.envrc
 
 # Tooling: coverage, lint, test caches
 .coverage
@@ -16,6 +19,8 @@ htmlcov/
 .ruff_cache/
 .pytest_cache/
 .hypothesis/
+.mypy_cache/
+*.log
 
 # Raw API snapshots — large, regenerable via fpl/ingest/fetch.py (hard rule 3)
 data/raw/

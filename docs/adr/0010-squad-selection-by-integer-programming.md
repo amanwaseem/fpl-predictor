@@ -23,7 +23,7 @@ the first slice, without transfers, is built in #53 (`fpl/optimise.py`).
   scoring's points-captured metric, verified against brute force. The optimiser
   cannot call `best_xi`, which has no budget, so it takes the rules instead:
   formations, the club cap, the point scale, the position check and the XI's
-  order, all from `fpl/xi.py`. Its tests check its XI against `best_xi`.
+  order, all from `fpl/evaluation/xi.py`. Its tests check its XI against `best_xi`.
   Scoring never depends on the optimiser, so a gameweek can always be scored
   without it.
 - **The solver is HiGHS, called through `highspy`**, pinned in
@@ -34,7 +34,7 @@ the first slice, without transfers, is built in #53 (`fpl/optimise.py`).
     installed beside it, so it would be a modelling layer over the same thing.
 - **Squad, XI and captain are one model**, not chosen in turn, because the best
   squad depends on who would start. The formations and the club cap are
-  derived from `fpl/xi.py`'s constants rather than restated, so the optimiser
+  derived from `fpl/evaluation/xi.py`'s constants rather than restated, so the optimiser
   and the scoring harness cannot disagree about what is legal.
 - **Transfers are the same model with more in it** (#54), not a second one:
   - a player already owned costs his selling price, and the money to spend is
@@ -54,7 +54,7 @@ the first slice, without transfers, is built in #53 (`fpl/optimise.py`).
 ## Consequences
 
 - The solution is checked against an exhaustive search on small random pools,
-  and against `fpl/xi.py` on every committed entry.
+  and against `fpl/evaluation/xi.py` on every committed entry.
 
 - Selections are provably optimal for the stated objective, and every
   constraint is checkable in a test.

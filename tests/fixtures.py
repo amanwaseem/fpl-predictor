@@ -19,9 +19,8 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fpl.ingest.snapshot import fixture_counts
+from fpl.ingest.snapshot import availability, fixture_counts
 from fpl.log.contract import FIELDS, TIMESTAMP
-from fpl.models.features import availability
 from fpl.paths import PROJECT_NAME
 
 # Distinguishes "derive a sensible default" from an explicit None, which for
