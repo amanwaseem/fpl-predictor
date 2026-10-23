@@ -8,6 +8,8 @@ log's whole value is that entries can be compared.
 
 import math
 
+from fpl.ingest.snapshot import availability
+
 # Exponential decay over recent gameweeks, most recent first.
 # Roughly a half-life of two gameweeks.
 DECAY = 0.7
@@ -62,17 +64,6 @@ def weighted(values):
         total += v * w
         weight_sum += w
     return total / weight_sum, weight_sum
-
-
-def availability(player):
-    """Fraction of normal minutes expected, from injury/suspension flags.
-
-    status: a=available, d=doubtful, i=injured, s=suspended, u=unavailable
-    """
-    chance = player.get("chance_of_playing_next_round")
-    if chance is not None:
-        return chance / 100.0
-    return 1.0 if player.get("status") == "a" else 0.0
 
 
 # Priors: what a player's scoring rate is shrunk toward before this season has

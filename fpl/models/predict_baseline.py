@@ -24,13 +24,14 @@ import json
 import sys
 
 from fpl.ingest.snapshot import (
+    availability,
     fixture_counts,
     load_snapshot,
     resolve_target_gw,
     usable_rounds,
 )
 from fpl.log.contract import write_entry
-from fpl.models.features import availability, recent_history, weighted
+from fpl.models.features import recent_history, weighted
 from fpl.paths import require_project_root
 
 MODEL_VERSION = "baseline-v1"

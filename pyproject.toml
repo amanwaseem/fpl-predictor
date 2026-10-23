@@ -31,7 +31,7 @@ api = ["fpl-predictor[db]", "fastapi>=0.159,<1", "uvicorn>=0.54,<1"]
 # The squad optimiser (#53), installed by requirements-optimise.txt.
 optimise = ["highspy>=1.15,<2"]
 
-# One command per module, each the module's cli(). `python -m fpl.<module>`
+# One command per module, each the module's cli(). `python -m fpl.<package>.<module>`
 # runs exactly the same function, so the two spellings cannot drift apart.
 [project.scripts]
 fpl-fetch = "fpl.ingest.fetch:cli"
