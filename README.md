@@ -68,8 +68,9 @@ the points cost of transfers.
 
 ## Current status
 
-Logging predictions for the 2026/27 season. Entries are on `main` for GW4 and GW6; GW5 and GW7
-were missed and stay missed, recorded as missed in `scores/`.
+Logging predictions for the 2026/27 season. Entries are on `main` for GW4, GW6 and GW8; GW4 and
+GW6 are scored, and GW8 is scored once it settles. GW5 and GW7 were missed and stay missed,
+recorded as missed in `scores/`.
 
 **Logged models**
 
@@ -81,6 +82,21 @@ were missed and stay missed, recorded as missed in `scores/`.
 The rolling-form baseline exists so that the pipeline, optimiser and frontend can be built and
 validated end to end without waiting on model accuracy. Any model that beats the baseline
 replaces it; any model that doesn't, doesn't ship.
+
+**Results so far**
+
+Mean absolute error per player, against FPL's own `form` as a naive comparator, and the actual
+points of each one's best predicted XI. Lower MAE is better. From `scores/gw*_*.json`, harness-v1.
+
+| Gameweek | Model | MAE | Spearman | `form` MAE | XI points | `form` XI points |
+|---|---|---|---|---|---|---|
+| GW4 | `baseline-v1` | 1.153 | 0.713 | 1.277 | 56 | 32 |
+| GW6 | `baseline-v1` | 1.031 | 0.747 | 1.228 | 49 | 38 |
+| GW6 | `form-fixture-v1` | 1.028 | 0.744 | 1.228 | 30 | 38 |
+
+Both models beat `form` on per-player error every gameweek so far. The XI is another matter:
+`form-fixture-v1`'s GW6 XI scored less than `form`'s. Two gameweeks are too few to tell the
+two models apart; the cumulative record is `scores/cumulative.json`.
 
 **Working**
 
@@ -102,7 +118,8 @@ replaces it; any model that doesn't, doesn't ship.
 - A read API under `/v1`, live at [fpl-predictor-aman.fly.dev](https://fpl-predictor-aman.fly.dev/docs),
   deployed on every green merge to `main` and fuzzed from its OpenAPI in CI
 - Squad optimiser (`fpl-optimise`): the best legal squad, XI and captain for one gameweek, by
-  integer programming, checked against an exhaustive search
+  integer programming, checked against an exhaustive search; and from a squad already owned,
+  the transfers that pay for themselves after free transfers and hits
 
 **In progress**
 
@@ -112,7 +129,7 @@ replaces it; any model that doesn't, doesn't ship.
 
 **Planned** (tracked in #75)
 
-- Optimiser transfers, a multi-gameweek horizon, and "optimise my team" on the API (#54, #55, #83)
+- "Optimise my team" on the API, and a multi-gameweek horizon for the optimiser (#83, #55)
 - Scheduled ingest of snapshots into production (#93)
 - Web frontend (#10), and observability (#86)
 
@@ -189,7 +206,7 @@ nothing can be corrected.
 
 | Path | What it holds |
 |---|---|
-| `fpl/` | The package: ingestion, models, the prediction log, scoring and backtesting |
+| `fpl/` | The package: `ingest`, `models`, `log`, `evaluation` (scoring and backtesting), `db`, `api`, and the optimiser |
 | `predictions/` | **The log.** Append-only; never rewritten |
 | `scores/` | Scored results, derived from the log; rewritten whenever scoring changes |
 | `reports/` | Readable digests of each entry, also derived |
