@@ -461,8 +461,10 @@ class TestCommand(unittest.TestCase):
         rows, _ = read_entry(ENTRY)
         squad = best_squad(rows)
         self.file = Path(tempfile.mkdtemp()) / "squad.json"
+        # What is left of the budget slice 1 spent, so the file describes exactly
+        # the squad it chose. A larger bank could afford an upgrade it could not.
         self.file.write_text(json.dumps({
-            "bank": 0.5, "free_transfers": 1,
+            "bank": round(squad.budget - squad.cost, 1), "free_transfers": 1,
             "players": [{"player_id": p.player_id, "selling_price": p.price}
                         for p in squad.xi + squad.bench]}))
 
