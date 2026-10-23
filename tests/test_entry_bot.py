@@ -459,7 +459,7 @@ class TestCheckChanges(unittest.TestCase):
                                       "A\tpredictions/gw10_baseline-v1.csv"))
 
     def test_anything_outside_the_entry_is_refused(self):
-        for path in ("scores/cumulative.json", "fpl/entry.py", ".github/workflows/ci.yml",
+        for path in ("scores/cumulative.json", "fpl/log/entry.py", ".github/workflows/ci.yml",
                      "predictions/gw09_baseline-v1.csv.tmp", "predictions/sub/gw09_x.csv",
                      "data/raw/LATEST"):
             with self.subTest(path=path):
