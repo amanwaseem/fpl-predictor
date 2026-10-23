@@ -75,8 +75,8 @@ from check_deadline import (
     season_of,
 )
 
-from fpl.log import LOG_DIR_NAME, TIMESTAMP, parse_entry_filename
-from fpl.snapshot import SNAPSHOT_ID, load_snapshot, resolve_target_gw
+from fpl.ingest.snapshot import SNAPSHOT_ID, load_snapshot, resolve_target_gw
+from fpl.log.contract import LOG_DIR_NAME, TIMESTAMP, parse_entry_filename
 
 # Late enough for the final press conferences before most deadlines, early
 # enough that a failed run is retried a dozen times before the deadline. The
