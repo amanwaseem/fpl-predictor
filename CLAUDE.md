@@ -46,7 +46,10 @@ The unofficial FPL API at `https://fantasy.premierleague.com/api/`. It is
 undocumented and can change without notice, which is why ingestion works from
 snapshots. Take snapshots between gameweeks: mid-gameweek ones contain
 zeroed rows for fixtures that haven't kicked off yet, and bonus points are
-provisional until `data_checked` is true.
+provisional until `data_checked` is true. That applies to snapshots that feed
+predictions or scoring. The daily ingest (`ingest.yml`) loads mid-gameweek ones
+into the database on purpose: the loader keeps only finished fixtures and lets
+the next snapshot overwrite bonus.
 
 ## Conventions
 

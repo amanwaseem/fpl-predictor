@@ -79,9 +79,19 @@ From then on, every green CI run on `main` deploys.
 Snapshots are not in git, so the deploy cannot load them. Fixtures, players and
 which gameweeks have settled (which the scorecard needs to show missed weeks)
 are loaded by the Ingest workflow (`.github/workflows/ingest.yml`) every day at
-05:41 UTC, from a snapshot it takes in the runner, with the same `production`
-secret. For the first load, or to catch up straight away, run **Actions →
-Ingest → Run workflow**.
+05:41 UTC, with the same `production` secret. It first compares a bootstrap-only
+snapshot with the database (`fpl-stale`), and takes the full snapshot and loads
+it only when something differs. To catch up straight away, run **Actions →
+Ingest → Run workflow**; tick **force** to load even when nothing differs.
+
+A run that stops at "The database schema is at ..." means a merge changed the
+schema and the deploy has not migrated production yet. It succeeds again once
+the deploy has run.
+
+GitHub turns off scheduled workflows in a public repository after 60 days with
+no activity, which the summer break can exceed. Before each season, check
+**Actions** for a "disabled" banner on Ingest, Entry and Deadline watchdog, and
+re-enable them.
 
 ## Day to day
 
