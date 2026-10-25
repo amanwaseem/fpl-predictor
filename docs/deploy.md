@@ -78,13 +78,10 @@ From then on, every green CI run on `main` deploys.
 
 Snapshots are not in git, so the deploy cannot load them. Fixtures, players and
 which gameweeks have settled (which the scorecard needs to show missed weeks)
-are loaded from a machine that has a snapshot:
-
-```bash
-DATABASE_URL='<the Neon connection string>' fpl-load
-```
-
-Run it again after each new snapshot until ingestion is scheduled.
+are loaded by the Ingest workflow (`.github/workflows/ingest.yml`) every day at
+05:41 UTC, from a snapshot it takes in the runner, with the same `production`
+secret. For the first load, or to catch up straight away, run **Actions →
+Ingest → Run workflow**.
 
 ## Day to day
 

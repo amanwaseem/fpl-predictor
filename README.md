@@ -117,6 +117,8 @@ two models apart; the cumulative record is `scores/cumulative.json`.
   log projected into it and reconciled against git in CI (`fpl-project`, `fpl-reconcile`)
 - A read API under `/v1`, live at [fpl-predictor-aman.fly.dev](https://fpl-predictor-aman.fly.dev/docs),
   deployed on every green merge to `main` and fuzzed from its OpenAPI in CI
+- Scheduled ingest: a daily workflow snapshots the API and loads it into production, so
+  results and settled gameweeks reach the live API without anyone running `fpl-load`
 - Squad optimiser (`fpl-optimise`): the best legal squad, XI and captain for one gameweek, by
   integer programming, checked against an exhaustive search; and from a squad already owned,
   the transfers that pay for themselves after free transfers and hits
@@ -130,7 +132,6 @@ two models apart; the cumulative record is `scores/cumulative.json`.
 **Planned** (tracked in #75)
 
 - "Optimise my team" on the API, and a multi-gameweek horizon for the optimiser (#83, #55)
-- Scheduled ingest of snapshots into production (#93)
 - Web frontend (#10), and observability (#86)
 
 ## Usage
