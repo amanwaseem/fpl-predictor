@@ -100,6 +100,42 @@ def upsert(connection, model, rows, newest):
     return len(rows)
 
 
+def player_elements(bootstrap):
+    """(elements that are players, ids of those that are not: managers in 2024/25)."""
+    players = [e for e in bootstrap["elements"] if e["element_type"] in POSITIONS]
+    skipped = [e["id"] for e in bootstrap["elements"] if e["element_type"] not in POSITIONS]
+    return players, skipped
+
+
+# The rows for the tables loaded straight from the bootstrap and fixtures.
+# fpl.db.stale compares the same rows with the database, so they are built
+# once, here.
+
+def team_rows(season, bootstrap):
+    return [{"season": season, "team_id": t["id"], "code": t["code"], "name": t["name"],
+             "short_name": t["short_name"]} for t in bootstrap["teams"]]
+
+
+def season_player_rows(season, elements):
+    return [{"season": season, "element_id": e["id"], "player_code": e["code"],
+             "web_name": e["web_name"], "position": POSITIONS[e["element_type"]]}
+            for e in elements]
+
+
+def gameweek_rows(season, bootstrap):
+    return [{"season": season, "gameweek": e["id"], "deadline_utc": timestamp(e["deadline_time"]),
+             "finished": e["finished"], "data_checked": e["data_checked"]}
+            for e in bootstrap["events"]]
+
+
+def fixture_rows(season, fixtures):
+    return [{"season": season, "fixture_id": f["id"], "gameweek": f["event"],
+             "kickoff_utc": timestamp(f["kickoff_time"]), "team_h": f["team_h"],
+             "team_a": f["team_a"], "team_h_score": f["team_h_score"],
+             "team_a_score": f["team_a_score"], "finished": f["finished"]}
+            for f in fixtures]
+
+
 def club_spells(history, fixtures_by_id, current_team, next_gameweek):
     """A player's clubs this season, as (team_id, gameweeks) ranges.
 
@@ -183,34 +219,18 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
             live_gameweeks=manifest.get("live_gameweeks", [])))
 
         rows = report.rows
-        rows["teams"] = upsert(connection, Team, [
-            {"season": season, "team_id": t["id"], "code": t["code"], "name": t["name"],
-             "short_name": t["short_name"]} for t in bootstrap["teams"]], report.newest)
+        rows["teams"] = upsert(connection, Team, team_rows(season, bootstrap), report.newest)
 
-        elements = []
-        for e in bootstrap["elements"]:
-            if e["element_type"] in POSITIONS:
-                elements.append(e)
-            else:
-                report.skipped_elements.append(e["id"])
+        elements, report.skipped_elements = player_elements(bootstrap)
         rows["players"] = upsert(connection, Player, [
             {"code": e["code"], "first_name": e["first_name"], "second_name": e["second_name"]}
             for e in elements], newest_overall)
-        rows["season_players"] = upsert(connection, SeasonPlayer, [
-            {"season": season, "element_id": e["id"], "player_code": e["code"],
-             "web_name": e["web_name"], "position": POSITIONS[e["element_type"]]}
-            for e in elements], report.newest)
-
-        rows["gameweeks"] = upsert(connection, Gameweek, [
-            {"season": season, "gameweek": e["id"], "deadline_utc": timestamp(e["deadline_time"]),
-             "finished": e["finished"], "data_checked": e["data_checked"]}
-            for e in bootstrap["events"]], report.newest)
-        rows["fixtures"] = upsert(connection, Fixture, [
-            {"season": season, "fixture_id": f["id"], "gameweek": f["event"],
-             "kickoff_utc": timestamp(f["kickoff_time"]), "team_h": f["team_h"],
-             "team_a": f["team_a"], "team_h_score": f["team_h_score"],
-             "team_a_score": f["team_a_score"], "finished": f["finished"]}
-            for f in fixtures], report.newest)
+        rows["season_players"] = upsert(connection, SeasonPlayer,
+                                        season_player_rows(season, elements), report.newest)
+        rows["gameweeks"] = upsert(connection, Gameweek, gameweek_rows(season, bootstrap),
+                                   report.newest)
+        rows["fixtures"] = upsert(connection, Fixture, fixture_rows(season, fixtures),
+                                  report.newest)
 
         fixtures_by_id = {f["id"]: f for f in fixtures}
         unfinished = [e["id"] for e in bootstrap["events"] if not e["finished"]]

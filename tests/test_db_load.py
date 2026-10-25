@@ -159,7 +159,16 @@ class TestLoad(TempCwd):
 
     def test_before_any_load_everything_differs(self):
         self.write(FIRST)
-        self.assertEqual(len(self.compare(FIRST)), 4)
+        self.assertEqual(len(self.compare(FIRST)), 5)
+
+    def test_a_transfer_since_the_last_load_is_a_difference(self):
+        self.write(FIRST)
+        self.load(FIRST)
+        moved = [full_element(1, team=2, web_name="Stays"),
+                 full_element(2, team=3, web_name="Moved"),
+                 full_element(3, team=1, web_name="Leaving", element_type=2)]
+        self.write(SECOND, elements=moved)
+        self.assertEqual(self.compare(SECOND), ["clubs: 1 differ (1)"])
 
     def test_a_snapshot_fills_the_football_tables(self):
         self.write(FIRST)

@@ -6,16 +6,18 @@
 
 The scheduled ingest (#93) runs this before the six-minute full fetch, so a
 day when nothing has happened costs a few requests instead of one per player.
-A full load is needed when the database disagrees with the API about any
-gameweek (deadline, finished, data_checked), any fixture (gameweek, kickoff,
-finished, score), any team, or which players there are, their names and
-positions. Player stats change only when a fixture finishes or a gameweek's
-bonus is confirmed, so the first two cover them.
+A full load is needed when the database disagrees with the API about any row
+the load writes straight from the bootstrap and fixtures (gameweeks, fixtures,
+teams, players), built by the load's own row builders so the two cannot
+drift, or about any player's current club. Player stats change only when a
+fixture finishes or a gameweek's bonus is confirmed, so gameweeks and fixtures
+cover them.
 
-It also refuses to go on while the schema is behind this code: the ingest
-runs from `main`, but the production schema is migrated only by the deploy,
-which may not have run yet. Exits 1 then; otherwise prints what differs and,
-under GitHub Actions, writes `needed=true|false` to its step outputs.
+It also refuses to go on unless the schema is at this code's head: the
+ingest runs from `main`, but the production schema is migrated only by the
+deploy, which may be behind it or, if main moved on mid-run, ahead. Exits 1
+then; otherwise prints what differs and, under GitHub Actions, writes
+`needed=true|false` to its step outputs.
 
 Run from the repository root, with DATABASE_URL set.
 """
@@ -26,63 +28,109 @@ import os
 import sys
 from pathlib import Path
 
-from sqlalchemy import select
+from alembic.script import ScriptDirectory
+from alembic.util import CommandError
+from sqlalchemy import func, select
 
-from fpl.db.load import POSITIONS, season_of, timestamp
-from fpl.db.migrate import current, head
-from fpl.db.models import Fixture, Gameweek, SeasonPlayer, Snapshot, Team
+from fpl.db.load import (
+    fixture_rows,
+    gameweek_rows,
+    player_elements,
+    season_of,
+    season_player_rows,
+    team_rows,
+)
+from fpl.db.migrate import MIGRATIONS, current, head
+from fpl.db.models import Fixture, Gameweek, PlayerClub, SeasonPlayer, Snapshot, Team
 from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.paths import require_project_root
 
 RAW = Path("data/raw")
 SHOWN = 5
+TABLES = {"gameweeks": Gameweek, "fixtures": Fixture, "teams": Team, "players": SeasonPlayer}
+
+
+def _split(model):
+    """A table's key columns and the rest, without the season, in the table's order."""
+    columns = [c for c in model.__table__.columns if c.name != "season"]
+    return [c for c in columns if c.primary_key], [c for c in columns if not c.primary_key]
+
+
+def _keyed(model, rows):
+    """Rows as {key: every other column}. A column the row lacks is None, as loaded."""
+    keys, values = _split(model)
+    return {tuple(r[c.name] for c in keys): tuple(r.get(c.name) for c in values)
+            for r in rows}
 
 
 def from_api(bootstrap, fixtures):
-    """What the load would write for the compared tables, keyed as the database keys it."""
-    return {
-        "gameweeks": {e["id"]: (timestamp(e["deadline_time"]), e["finished"], e["data_checked"])
-                      for e in bootstrap["events"]},
-        "fixtures": {f["id"]: (f["event"], timestamp(f["kickoff_time"]), f["finished"],
-                               f["team_h_score"], f["team_a_score"])
-                     for f in fixtures},
-        "teams": {t["id"]: (t["code"], t["name"], t["short_name"]) for t in bootstrap["teams"]},
-        "players": {e["id"]: (e["web_name"], POSITIONS[e["element_type"]])
-                    for e in bootstrap["elements"] if e["element_type"] in POSITIONS},
+    """What the load would write for the compared tables, built as the load builds it.
+
+    `clubs` is each player's current club, which the load turns into a club
+    spell from the next gameweek on. Once the season is over there is no next
+    gameweek and the load starts no spell, so clubs are not compared then: a
+    summer transfer would otherwise ask for a load every day until August.
+    """
+    elements, _ = player_elements(bootstrap)
+    api = {
+        "gameweeks": _keyed(Gameweek, gameweek_rows("", bootstrap)),
+        "fixtures": _keyed(Fixture, fixture_rows("", fixtures)),
+        "teams": _keyed(Team, team_rows("", bootstrap)),
+        "players": _keyed(SeasonPlayer, season_player_rows("", elements)),
     }
+    if any(not e["finished"] for e in bootstrap["events"]):
+        api["clubs"] = {(e["id"],): (e["team"],) for e in elements}
+    return api
 
 
 def from_database(connection, season):
     """The same tables as from_api, as the database has them for `season`."""
-    def rows(*columns, where):
-        return connection.execute(select(*columns).where(where)).all()
-
-    return {
-        "gameweeks": {r[0]: tuple(r[1:]) for r in rows(
-            Gameweek.gameweek, Gameweek.deadline_utc, Gameweek.finished, Gameweek.data_checked,
-            where=Gameweek.season == season)},
-        "fixtures": {r[0]: tuple(r[1:]) for r in rows(
-            Fixture.fixture_id, Fixture.gameweek, Fixture.kickoff_utc, Fixture.finished,
-            Fixture.team_h_score, Fixture.team_a_score, where=Fixture.season == season)},
-        "teams": {r[0]: tuple(r[1:]) for r in rows(
-            Team.team_id, Team.code, Team.name, Team.short_name, where=Team.season == season)},
-        "players": {r[0]: tuple(r[1:]) for r in rows(
-            SeasonPlayer.element_id, SeasonPlayer.web_name, SeasonPlayer.position,
-            where=SeasonPlayer.season == season)},
-    }
+    found = {}
+    for table, model in TABLES.items():
+        keys, values = _split(model)
+        rows = connection.execute(select(*keys, *values).where(model.season == season))
+        found[table] = {tuple(r[:len(keys)]): tuple(r[len(keys):]) for r in rows}
+    # The latest spell is the current club: the load ends every spell at the
+    # next one and gives the current club the last.
+    latest = (select(PlayerClub.element_id, PlayerClub.team_id)
+              .where(PlayerClub.season == season)
+              .order_by(PlayerClub.element_id, func.lower(PlayerClub.gameweeks).desc())
+              .distinct(PlayerClub.element_id))
+    found["clubs"] = {(r[0],): (r[1],) for r in connection.execute(latest)}
+    return found
 
 
 def differences(api, database):
-    """One line per table that differs, naming up to SHOWN of its keys."""
+    """One line per table where the database disagrees with the API, naming up to SHOWN keys.
+
+    Only keys the API has: the load never deletes, so a row the API has dropped
+    stays in the database, and counting it would ask for a load every day.
+    """
     found = []
     for table, wanted in api.items():
         have = database.get(table, {})
-        keys = sorted(k for k in wanted.keys() | have.keys() if wanted.get(k) != have.get(k))
+        keys = sorted(k for k in wanted if wanted[k] != have.get(k))
         if keys:
-            shown = ", ".join(str(k) for k in keys[:SHOWN])
+            shown = ", ".join(str(k[0]) if len(k) == 1 else str(k) for k in keys[:SHOWN])
             more = f" and {len(keys) - SHOWN} more" if len(keys) > SHOWN else ""
             found.append(f"{table}: {len(keys)} differ ({shown}{more})")
     return found
+
+
+def schema_problem(at, latest):
+    """Why loading with this code against a schema at `at` is unsafe, or None."""
+    if at == latest:
+        return None
+    try:
+        known = at is not None and ScriptDirectory(str(MIGRATIONS)).get_revision(at)
+    except CommandError:
+        known = False
+    if at is None or known:
+        return (f"The database schema is at {at or 'nothing'}, and this code needs {latest}. "
+                "The deploy migrates it; loading now could fail part-way, so this waits "
+                "for the deploy rather than racing it. The next run loads.")
+    return (f"The database schema is at {at}, newer than this code knows ({latest}): main "
+            "has moved on since this run checked it out. The next run loads, with that code.")
 
 
 def newest_snapshot():
@@ -112,11 +160,10 @@ def main(schema_only=False):
     try:
         with engine.connect() as connection:
             at, latest = current(connection), head()
-            if at != latest:
-                raise SystemExit(
-                    f"The database schema is at {at or 'nothing'}, and this code needs {latest}. "
-                    "The deploy migrates it; loading now could fail part-way, so this waits "
-                    "for the deploy rather than racing it.")
+            problem = schema_problem(at, latest)
+            if problem:
+                print(problem)
+                return 1
             print(f"The schema is at {latest}, as this code expects.")
             if schema_only:
                 return 0
@@ -129,8 +176,8 @@ def main(schema_only=False):
             if loaded is None:
                 found = [f"nothing is loaded for {season}"]
             else:
-                found = differences(from_api(bootstrap, fixtures),
-                                    from_database(connection, season))
+                api = from_api(bootstrap, fixtures)
+                found = differences(api, from_database(connection, season))
     finally:
         engine.dispose()
 

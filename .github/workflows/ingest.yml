@@ -4,15 +4,16 @@
 # from snapshots, which are not in git (rule 3), so this is the only way they
 # reach the production database.
 #
-#   1. Check the production DATABASE_URL, as the deploy does, before anything
-#      else happens.
+#   1. Wait out any deploy on its way (CI on main, or Deploy running), then
+#      check out main and check the production DATABASE_URL, as the deploy
+#      does.
 #   2. Take a bootstrap-only snapshot (seconds) and compare it with the
 #      database (fpl-stale). Most days nothing has changed, and the run
 #      stops here, without one request per player to an undocumented API.
 #      It stops with an error if the schema is behind this code, which
 #      happens while a deploy is still to migrate it.
-#   3. Otherwise take a full snapshot (about six minutes), wait out any deploy
-#      in progress, check the schema again, and load it (fpl-load).
+#   3. Otherwise take a full snapshot (about six minutes), check the schema
+#      again, and load it (fpl-load).
 #
 # The loader is idempotent and newest-wins (#78): a snapshot already loaded
 # changes nothing, and an older one only fills gaps. A mid-gameweek snapshot is
@@ -27,7 +28,7 @@
 #
 # It does not share the deploy's concurrency group: GitHub keeps one pending
 # run per group and cancels the older, so a queued ingest could cancel a queued
-# deploy. It waits for a running deploy in step 3 instead.
+# deploy. It waits for a deploy on its way in step 1 instead.
 #
 # Secret, in the `production` environment: DATABASE_URL, the same one the
 # deploy uses (docs/deploy.md).
@@ -67,6 +68,26 @@ jobs:
     timeout-minutes: 45
     environment: production
     steps:
+      # Before the checkout, so the code checked out is what the finished
+      # deploy migrated the schema for. A deploy starts when CI on main
+      # passes, so CI on main counts as a deploy on its way.
+      - name: Wait for any deploy in progress
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 40); do
+            ci=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main \
+                   --event push --limit 10 --json status \
+                   --jq '[.[] | select(.status != "completed")] | length') || ci=unknown
+            deploy=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --limit 10 \
+                   --json status --jq '[.[] | select(.status != "completed")] | length') || deploy=unknown
+            [ "$ci" = "0" ] && [ "$deploy" = "0" ] && exit 0
+            echo "CI on main: $ci running, deploys: $deploy running; waiting ($i/40)."
+            sleep 30
+          done
+          echo "::error::A deploy has been on its way for 20 minutes. Not loading beside it."
+          exit 1
+
       - uses: actions/checkout@v7
         with:
           ref: main
@@ -96,35 +117,25 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          fpl-stale | tee "$RUNNER_TEMP/stale.txt"
+          # The summary gets the reason even when it refuses.
+          status=0
+          fpl-stale > "$RUNNER_TEMP/stale.txt" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/stale.txt"
           { echo '```'; cat "$RUNNER_TEMP/stale.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
 
       - name: Snapshot the FPL API in full
         if: steps.stale.outputs.needed == 'true' || inputs.force
         run: fpl-fetch
-
-      - name: Wait for any deploy in progress
-        if: steps.stale.outputs.needed == 'true' || inputs.force
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # A deploy migrates the schema and projects the log; loading beside
-          # it could take a lock its release step is waiting on.
-          for i in $(seq 1 40); do
-            running=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --limit 20 \
-              --json status --jq '[.[] | select(.status != "completed")] | length')
-            [ "$running" = "0" ] && exit 0
-            echo "A deploy is in progress; waiting ($i/40)."
-            sleep 30
-          done
-          echo "::error::A deploy has been in progress for 20 minutes. Not loading beside it."
-          exit 1
 
       - name: Load the snapshot into production
         if: steps.stale.outputs.needed == 'true' || inputs.force
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          fpl-stale --schema-only
-          fpl-load | tee "$RUNNER_TEMP/load.txt"
+          # Again: the full fetch took minutes, and main may have moved.
+          status=0
+          { fpl-stale --schema-only && fpl-load; } > "$RUNNER_TEMP/load.txt" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/load.txt"
           { echo '```'; cat "$RUNNER_TEMP/load.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
