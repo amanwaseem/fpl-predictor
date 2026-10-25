@@ -1,0 +1,84 @@
+# Loads the football data into production every day, so nobody has to run
+# fpl-load by hand after each gameweek (#93). The deploy copies the committed
+# log; teams, players, fixtures, results and which gameweeks have settled come
+# from snapshots, which are not in git (rule 3), so this is the only way they
+# reach the production database.
+#
+#   1. Check the production DATABASE_URL, as the deploy does, before anything
+#      slow happens.
+#   2. Take a full snapshot in the runner (fpl-fetch, about six minutes).
+#   3. Load it (fpl-load).
+#
+# It can run as often as it likes. The loader is idempotent and newest-wins
+# (#78): a snapshot already loaded changes nothing, and an older one only fills
+# gaps. A mid-gameweek snapshot is safe for the same reason: stats come only
+# from finished fixtures, and bonus is overwritten by the next load once
+# data_checked is true.
+#
+# It writes nothing to the repository; the snapshot stays in the runner and is
+# discarded with it. It is independent of the entry workflow (entry.yml), whose
+# snapshot is evidence for a log entry and is released beside it. Sharing one
+# would tie the ingest to entry days and the entry to a database it does not
+# need; a second fetch a day costs a few minutes of runner time.
+#
+# Secret, in the `production` environment: DATABASE_URL, the same one the
+# deploy uses (docs/deploy.md).
+name: Ingest
+
+on:
+  schedule:
+    # Daily, early UTC: data_checked usually flips overnight after a gameweek's
+    # last match. Off the top of the hour, when scheduled runs queue longest.
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One load at a time. A second run waits rather than cancelling the first: a
+# cancelled load rolls back cleanly (one transaction), but there is no reason
+# to throw away six minutes of fetching.
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Check the database URL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # Prints nothing from the URL (#94).
+          python3 tools/check_database_url.py \
+            || { echo "::error::The production DATABASE_URL cannot be used. See the message above and docs/deploy.md."; exit 1; }
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements*.txt
+            pyproject.toml
+      - run: pip install -r requirements-db.txt
+
+      - name: Snapshot the FPL API
+        run: fpl-fetch
+
+      - name: Load the snapshot into production
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          fpl-load | tee "$RUNNER_TEMP/load.txt"
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/load.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
