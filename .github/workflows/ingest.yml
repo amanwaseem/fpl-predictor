@@ -5,21 +5,29 @@
 # reach the production database.
 #
 #   1. Check the production DATABASE_URL, as the deploy does, before anything
-#      slow happens.
-#   2. Take a full snapshot in the runner (fpl-fetch, about six minutes).
-#   3. Load it (fpl-load).
+#      else happens.
+#   2. Take a bootstrap-only snapshot (seconds) and compare it with the
+#      database (fpl-stale). Most days nothing has changed, and the run
+#      stops here, without one request per player to an undocumented API.
+#      It stops with an error if the schema is behind this code, which
+#      happens while a deploy is still to migrate it.
+#   3. Otherwise take a full snapshot (about six minutes), wait out any deploy
+#      in progress, check the schema again, and load it (fpl-load).
 #
-# It can run as often as it likes. The loader is idempotent and newest-wins
-# (#78): a snapshot already loaded changes nothing, and an older one only fills
-# gaps. A mid-gameweek snapshot is safe for the same reason: stats come only
-# from finished fixtures, and bonus is overwritten by the next load once
-# data_checked is true.
+# The loader is idempotent and newest-wins (#78): a snapshot already loaded
+# changes nothing, and an older one only fills gaps. A mid-gameweek snapshot is
+# safe for the same reason: stats come only from finished fixtures, and bonus
+# is overwritten by the next load once data_checked is true.
 #
 # It writes nothing to the repository; the snapshot stays in the runner and is
 # discarded with it. It is independent of the entry workflow (entry.yml), whose
 # snapshot is evidence for a log entry and is released beside it. Sharing one
 # would tie the ingest to entry days and the entry to a database it does not
-# need; a second fetch a day costs a few minutes of runner time.
+# need.
+#
+# It does not share the deploy's concurrency group: GitHub keeps one pending
+# run per group and cancels the older, so a queued ingest could cancel a queued
+# deploy. It waits for a running deploy in step 3 instead.
 #
 # Secret, in the `production` environment: DATABASE_URL, the same one the
 # deploy uses (docs/deploy.md).
@@ -31,8 +39,14 @@ on:
     # last match. Off the top of the hour, when scheduled runs queue longest.
     - cron: "41 5 * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Load even if the database already agrees with the API"
+        type: boolean
+        default: false
 
 permissions:
+  actions: read   # whether a deploy is running
   contents: read
 
 # One load at a time. A second run waits rather than cancelling the first: a
@@ -42,10 +56,15 @@ concurrency:
   group: ingest
   cancel-in-progress: false
 
+# bash -eo pipefail, so a failing command in a pipe fails its step.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: production
     steps:
       - uses: actions/checkout@v7
@@ -69,16 +88,43 @@ jobs:
             pyproject.toml
       - run: pip install -r requirements-db.txt
 
-      - name: Snapshot the FPL API
-        run: fpl-fetch
+      - name: Snapshot the bootstrap and fixtures
+        run: fpl-fetch --skip-players
 
-      - name: Load the snapshot into production
+      - name: Compare them with the database
+        id: stale
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          fpl-stale | tee "$RUNNER_TEMP/stale.txt"
+          { echo '```'; cat "$RUNNER_TEMP/stale.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Snapshot the FPL API in full
+        if: steps.stale.outputs.needed == 'true' || inputs.force
+        run: fpl-fetch
+
+      - name: Wait for any deploy in progress
+        if: steps.stale.outputs.needed == 'true' || inputs.force
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A deploy migrates the schema and projects the log; loading beside
+          # it could take a lock its release step is waiting on.
+          for i in $(seq 1 40); do
+            running=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --limit 20 \
+              --json status --jq '[.[] | select(.status != "completed")] | length')
+            [ "$running" = "0" ] && exit 0
+            echo "A deploy is in progress; waiting ($i/40)."
+            sleep 30
+          done
+          echo "::error::A deploy has been in progress for 20 minutes. Not loading beside it."
+          exit 1
+
+      - name: Load the snapshot into production
+        if: steps.stale.outputs.needed == 'true' || inputs.force
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          fpl-stale --schema-only
           fpl-load | tee "$RUNNER_TEMP/load.txt"
-          {
-            echo '```'
-            cat "$RUNNER_TEMP/load.txt"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          { echo '```'; cat "$RUNNER_TEMP/load.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

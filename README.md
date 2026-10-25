@@ -177,6 +177,7 @@ so they run anywhere, including the deployed image.
 | `fpl-optimise` | The best legal squad, XI and captain for one entry's predictions, under the £100m budget, by integer programming (`--squad FILE`: the best transfers from a squad you own, net of hits) |
 | `fpl-backtest` | Replay settled gameweeks offline, without leaking the future (`--held-out`: the gate for a new factor) |
 | `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
+| `fpl-stale` | Whether the database is behind a bootstrap-only snapshot, and whether its schema is at this code's head; the scheduled ingest's first check |
 | `fpl-project` | Rebuild the database's copy of the log from `predictions/` and `scores/` |
 | `fpl-reconcile` | Check the database's copy of the log against git, row by row; non-zero on any difference |
 | `fpl-migrate` | Bring the database's schema to the latest migration; the deploy's release command |
