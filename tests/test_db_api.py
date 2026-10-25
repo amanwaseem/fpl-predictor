@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import Range
 
 from fpl.api.app import create_app
 from fpl.api.problems import MEDIA_TYPE
+from fpl.db import migrate
 from fpl.db.models import (
     Fixture,
     Gameweek,
@@ -241,7 +242,7 @@ class TestRoutes(APICase):
         self.assertEqual(again.content, b"")
 
     def test_readyz_is_ok_at_the_latest_migration(self):
-        self.assertEqual(self.get("/readyz")["migration"], "0001")
+        self.assertEqual(self.get("/readyz")["migration"], migrate.head())
 
 
 class TestTheCommittedScorecard(APICase):

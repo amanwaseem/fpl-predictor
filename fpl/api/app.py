@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 
 from fpl.api import problems
-from fpl.api.routes import health, v1
+from fpl.api.routes import health, optimiser, v1
 from fpl.db.session import make_engine
 
 API_VERSION = "1"
@@ -84,12 +84,14 @@ def create_app(engine=None):
     app = FastAPI(
         title="fpl-predictor",
         version=API_VERSION,
-        description="Committed FPL predictions, their scores, and the data behind them. "
-                    "Read-only. Errors are RFC 9457 problem details.",
+        description="Committed FPL predictions, their scores, and the data behind them, "
+                    "and a squad optimiser over them. The log is read-only. Errors are "
+                    "RFC 9457 problem details.",
         lifespan=lifespan,
         redoc_url=None,
     )
     app.include_router(v1, prefix="/v1")
+    app.include_router(optimiser, prefix="/v1")
     app.include_router(health)
     problems.install(app)
     app.middleware("http")(http_caching)

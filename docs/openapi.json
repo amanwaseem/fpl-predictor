@@ -1,6 +1,74 @@
 {
   "components": {
     "schemas": {
+      "Advice": {
+        "properties": {
+          "cached": {
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "deadline_passed": {
+            "title": "Deadline Passed",
+            "type": "boolean"
+          },
+          "deadline_utc": {
+            "format": "date-time",
+            "title": "Deadline Utc",
+            "type": "string"
+          },
+          "estimates": {
+            "$ref": "#/components/schemas/Estimates"
+          },
+          "fpl_team_id": {
+            "title": "Fpl Team Id",
+            "type": "integer"
+          },
+          "gameweek": {
+            "title": "Gameweek",
+            "type": "integer"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "picks_gameweek": {
+            "title": "Picks Gameweek",
+            "type": "integer"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Plan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "squad": {
+            "$ref": "#/components/schemas/Squad"
+          }
+        },
+        "required": [
+          "season",
+          "gameweek",
+          "model_version",
+          "deadline_utc",
+          "deadline_passed",
+          "cached",
+          "squad",
+          "plan",
+          "fpl_team_id",
+          "picks_gameweek",
+          "estimates"
+        ],
+        "title": "Advice",
+        "type": "object"
+      },
       "Club": {
         "properties": {
           "first_gameweek": {
@@ -71,6 +139,25 @@
           "score"
         ],
         "title": "Entry",
+        "type": "object"
+      },
+      "Estimates": {
+        "description": "What the public FPL API does not give, and how it was filled in.",
+        "properties": {
+          "free_transfers": {
+            "title": "Free Transfers",
+            "type": "string"
+          },
+          "selling_prices": {
+            "title": "Selling Prices",
+            "type": "string"
+          }
+        },
+        "required": [
+          "selling_prices",
+          "free_transfers"
+        ],
+        "title": "Estimates",
         "type": "object"
       },
       "Fixture": {
@@ -413,6 +500,303 @@
           "models"
         ],
         "title": "ModelList",
+        "type": "object"
+      },
+      "OptimiseRequest": {
+        "additionalProperties": false,
+        "description": "A squad to plan transfers from, or none for the best squad from scratch.",
+        "properties": {
+          "bank": {
+            "default": 0.0,
+            "description": "\u00a3m; with a squad",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Bank",
+            "type": "number"
+          },
+          "budget": {
+            "default": 100.0,
+            "description": "\u00a3m; without a squad",
+            "maximum": 200.0,
+            "minimum": 50.0,
+            "title": "Budget",
+            "type": "number"
+          },
+          "free_transfers": {
+            "default": 1,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Free Transfers",
+            "type": "integer"
+          },
+          "gameweek": {
+            "anyOf": [
+              {
+                "maximum": 38.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Defaults to the model's latest entry.",
+            "title": "Gameweek"
+          },
+          "horizon": {
+            "default": 1,
+            "description": "Gameweeks to plan over. One, until #55.",
+            "maximum": 1.0,
+            "minimum": 1.0,
+            "title": "Horizon",
+            "type": "integer"
+          },
+          "include_unavailable": {
+            "default": false,
+            "title": "Include Unavailable",
+            "type": "boolean"
+          },
+          "model": {
+            "default": "baseline-v1",
+            "examples": [
+              "baseline-v1"
+            ],
+            "pattern": "^[A-Za-z0-9.-]{1,40}$",
+            "title": "Model",
+            "type": "string"
+          },
+          "season": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}/\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "2026/27"
+            ],
+            "title": "Season"
+          },
+          "squad": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OwnedPlayer"
+                },
+                "maxItems": 15,
+                "minItems": 15,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The fifteen owned. Without it, the best squad from scratch.",
+            "title": "Squad"
+          }
+        },
+        "title": "OptimiseRequest",
+        "type": "object"
+      },
+      "OptimiseResult": {
+        "properties": {
+          "cached": {
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "deadline_passed": {
+            "title": "Deadline Passed",
+            "type": "boolean"
+          },
+          "deadline_utc": {
+            "format": "date-time",
+            "title": "Deadline Utc",
+            "type": "string"
+          },
+          "gameweek": {
+            "title": "Gameweek",
+            "type": "integer"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Plan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "squad": {
+            "$ref": "#/components/schemas/Squad"
+          }
+        },
+        "required": [
+          "season",
+          "gameweek",
+          "model_version",
+          "deadline_utc",
+          "deadline_passed",
+          "cached",
+          "squad",
+          "plan"
+        ],
+        "title": "OptimiseResult",
+        "type": "object"
+      },
+      "OwnedPlayer": {
+        "additionalProperties": false,
+        "properties": {
+          "player_id": {
+            "examples": [
+              411
+            ],
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "selling_price": {
+            "description": "\u00a3m",
+            "examples": [
+              7.6
+            ],
+            "exclusiveMinimum": 0.0,
+            "maximum": 20.0,
+            "title": "Selling Price",
+            "type": "number"
+          }
+        },
+        "required": [
+          "player_id",
+          "selling_price"
+        ],
+        "title": "OwnedPlayer",
+        "type": "object"
+      },
+      "Pick": {
+        "properties": {
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "position": {
+            "title": "Position",
+            "type": "string"
+          },
+          "predicted_points": {
+            "title": "Predicted Points",
+            "type": "number"
+          },
+          "price": {
+            "title": "Price",
+            "type": "number"
+          },
+          "selling_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selling Price"
+          },
+          "team": {
+            "title": "Team",
+            "type": "string"
+          },
+          "web_name": {
+            "title": "Web Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "player_id",
+          "web_name",
+          "team",
+          "position",
+          "price",
+          "predicted_points",
+          "selling_price"
+        ],
+        "title": "Pick",
+        "type": "object"
+      },
+      "Plan": {
+        "properties": {
+          "bank": {
+            "title": "Bank",
+            "type": "number"
+          },
+          "bank_after": {
+            "title": "Bank After",
+            "type": "number"
+          },
+          "bench_weight": {
+            "title": "Bench Weight",
+            "type": "number"
+          },
+          "free_transfers": {
+            "title": "Free Transfers",
+            "type": "integer"
+          },
+          "gain": {
+            "title": "Gain",
+            "type": "number"
+          },
+          "hit_points": {
+            "title": "Hit Points",
+            "type": "integer"
+          },
+          "hits": {
+            "title": "Hits",
+            "type": "integer"
+          },
+          "over_cap": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Over Cap",
+            "type": "object"
+          },
+          "transfers": {
+            "items": {
+              "$ref": "#/components/schemas/Transfer"
+            },
+            "title": "Transfers",
+            "type": "array"
+          },
+          "xi_gain": {
+            "title": "Xi Gain",
+            "type": "number"
+          }
+        },
+        "required": [
+          "transfers",
+          "free_transfers",
+          "hits",
+          "hit_points",
+          "bank",
+          "bank_after",
+          "xi_gain",
+          "gain",
+          "bench_weight",
+          "over_cap"
+        ],
+        "title": "Plan",
         "type": "object"
       },
       "PlayedFixture": {
@@ -968,11 +1352,89 @@
         ],
         "title": "ScorecardModel",
         "type": "object"
+      },
+      "Squad": {
+        "properties": {
+          "bench": {
+            "items": {
+              "$ref": "#/components/schemas/Pick"
+            },
+            "title": "Bench",
+            "type": "array"
+          },
+          "bench_points": {
+            "title": "Bench Points",
+            "type": "number"
+          },
+          "budget": {
+            "title": "Budget",
+            "type": "number"
+          },
+          "captain": {
+            "$ref": "#/components/schemas/Pick"
+          },
+          "cost": {
+            "title": "Cost",
+            "type": "number"
+          },
+          "expected_points": {
+            "title": "Expected Points",
+            "type": "number"
+          },
+          "formation": {
+            "title": "Formation",
+            "type": "string"
+          },
+          "vice_captain": {
+            "$ref": "#/components/schemas/Pick"
+          },
+          "xi": {
+            "items": {
+              "$ref": "#/components/schemas/Pick"
+            },
+            "title": "Xi",
+            "type": "array"
+          }
+        },
+        "required": [
+          "xi",
+          "bench",
+          "captain",
+          "vice_captain",
+          "formation",
+          "cost",
+          "budget",
+          "expected_points",
+          "bench_points"
+        ],
+        "title": "Squad",
+        "type": "object"
+      },
+      "Transfer": {
+        "properties": {
+          "into": {
+            "$ref": "#/components/schemas/Pick"
+          },
+          "out": {
+            "$ref": "#/components/schemas/Pick"
+          },
+          "selling_price": {
+            "title": "Selling Price",
+            "type": "number"
+          }
+        },
+        "required": [
+          "out",
+          "selling_price",
+          "into"
+        ],
+        "title": "Transfer",
+        "type": "object"
       }
     }
   },
   "info": {
-    "description": "Committed FPL predictions, their scores, and the data behind them. Read-only. Errors are RFC 9457 problem details.",
+    "description": "Committed FPL predictions, their scores, and the data behind them, and a squad optimiser over them. The log is read-only. Errors are RFC 9457 problem details.",
     "title": "fpl-predictor",
     "version": "1"
   },
@@ -1029,6 +1491,200 @@
         "summary": "Readyz",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/entries/{fpl_team_id}/advice": {
+      "get": {
+        "description": "Optimise my team: an FPL team's squad, read from the FPL API, then optimised.\n\nThe squad, bank and transfers are public; selling prices and free transfers\nare not, so they are estimated, and `estimates` says how.",
+        "operationId": "get_advice_v1_entries__fpl_team_id__advice_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fpl_team_id",
+            "required": true,
+            "schema": {
+              "examples": [
+                1
+              ],
+              "maximum": 100000000,
+              "minimum": 1,
+              "title": "Fpl Team Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model",
+            "required": false,
+            "schema": {
+              "default": "baseline-v1",
+              "examples": [
+                "baseline-v1"
+              ],
+              "pattern": "^[A-Za-z0-9.-]{1,40}$",
+              "title": "Model",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Defaults to the model's latest entry.",
+            "in": "query",
+            "name": "gameweek",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 38,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the model's latest entry.",
+              "title": "Gameweek"
+            }
+          },
+          {
+            "description": "Defaults to the latest season.",
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}/\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the latest season.",
+              "examples": [
+                "2026/27"
+              ],
+              "title": "Season"
+            }
+          },
+          {
+            "description": "Overrides the estimate from the manager's history.",
+            "in": "query",
+            "name": "free_transfers",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides the estimate from the manager's history.",
+              "title": "Free Transfers"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_unavailable",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Unavailable",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Advice"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Advice",
+        "tags": [
+          "optimise"
         ]
       }
     },
@@ -1433,6 +2089,88 @@
         "summary": "List Models",
         "tags": [
           "models"
+        ]
+      }
+    },
+    "/v1/optimise": {
+      "post": {
+        "description": "The best transfers from a squad, or with no squad the best squad from scratch.\n\nPredictions are one committed entry's: the model's latest unless a gameweek\nis given. Transfers beyond the free ones cost four points each, and one is\nsuggested only if it pays for itself.",
+        "operationId": "post_optimise_v1_optimise_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimiseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimiseResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Post Optimise",
+        "tags": [
+          "optimise"
         ]
       }
     },

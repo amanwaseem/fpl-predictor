@@ -122,6 +122,8 @@ two models apart; the cumulative record is `scores/cumulative.json`.
 - Squad optimiser (`fpl-optimise`): the best legal squad, XI and captain for one gameweek, by
   integer programming, checked against an exhaustive search; and from a squad already owned,
   the transfers that pay for themselves after free transfers and hits
+- "Optimise my team" on the API: `POST /v1/optimise` for a squad sent in, and
+  `GET /v1/entries/{id}/advice`, which reads an FPL team's squad from the FPL API first
 
 **In progress**
 
@@ -131,7 +133,7 @@ two models apart; the cumulative record is `scores/cumulative.json`.
 
 **Planned** (tracked in #75)
 
-- "Optimise my team" on the API, and a multi-gameweek horizon for the optimiser (#83, #55)
+- A multi-gameweek horizon for the optimiser (#55)
 - Web frontend (#10), and observability (#86)
 
 ## Usage
@@ -150,7 +152,7 @@ pip install -r requirements.txt      # pinned dependencies, then this package, e
 
 That is everything a prediction needs. The other commands need more, pinned in files of their
 own: `requirements-optimise.txt` for `fpl-optimise` (the HiGHS solver), `requirements-db.txt`
-for the database commands, and `requirements-api.txt` for `fpl-serve`.
+for the database commands, and `requirements-api.txt` for `fpl-serve`, which runs the solver too.
 `requirements-dev.txt` installs all of them, with the test tools.
 
 Dependencies are pinned, transitive ones included. Every entry in the prediction log claims
@@ -216,6 +218,7 @@ nothing can be corrected.
 | `scratch/` | Exploratory runs, gitignored. Never a real prediction |
 | `tests/` | The test suite |
 | `tools/` | CI and scheduled checks: rule 1, the deadline watchdog |
+| `loadtest/` | The k6 load test of `/v1/optimise` |
 | `docs/adr/` | Why the project is built the way it is |
 | `docs/openapi.json` | The API's contract, generated from the code and committed |
 | `docs/deploy.md`, `fly.toml` | Deploying the API: the one-time setup, and Fly's configuration |
@@ -264,10 +267,34 @@ PR and runs `fpl-reconcile`, which fails on any row that differs from git.
 
 ### API
 
-A read-only HTTP API over the database, under `/v1`: gameweeks with their fixtures and entries,
+An HTTP API over the database, under `/v1`: gameweeks with their fixtures and entries,
 each entry's predictions (filtered by position, club and price, and paged), players with their
 clubs, matches and predictions, the logged models, and the scorecard. Errors are RFC 9457 problem
 details, and reads carry an `ETag`, so an unchanged response costs a `304`.
+
+Two routes run the optimiser over a committed entry's predictions:
+
+- `POST /v1/optimise`: the best transfers from the fifteen players in the body, with their
+  selling prices, the bank and the free transfers; or, with no squad, the best squad from scratch.
+- `GET /v1/entries/{fpl_team_id}/advice`: the same for an FPL team, read from the public FPL
+  API. Selling prices and free transfers are not public, so they are estimated, and the response's
+  `estimates` says how; `?free_transfers=` overrides the estimate.
+
+Each request's solves share a ten-second limit (`FPL_SOLVER_TIME_LIMIT`; a `503` when it runs
+out), and the two routes allow ten requests a minute per client (`FPL_SOLVER_RATE`, `off` to
+disable). Results are cached in Postgres until the next deploy, and FPL API responses for ten
+minutes ([ADR 0016](docs/adr/0016-optimise-my-team-caches-beside-the-projection.md)).
+
+**Load test.** [`loadtest/optimise.js`](loadtest/optimise.js), with k6, on 25 October 2026: one
+`fpl-serve` process on an Apple Silicon laptop over Postgres in Docker, four virtual users, a
+transfer plan for a real GW8 squad. 14,045 requests, none failed.
+
+| `POST /v1/optimise` | Median | p95 | p99 |
+|---|---|---|---|
+| Solved (three solves each) | 147 ms | 209 ms | 239 ms |
+| From the cache | 9 ms | 11 ms | 12 ms |
+
+The deployed machine is a shared vCPU, so expect the solved numbers to be slower there.
 
 ```bash
 docker compose up        # Postgres and the API; docs at http://localhost:8000/docs

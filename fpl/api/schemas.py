@@ -5,8 +5,9 @@ log writes at most two decimal places, which a float carries exactly enough.
 """
 
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Gameweek(BaseModel):
@@ -172,3 +173,108 @@ class Readiness(BaseModel):
     status: str
     database: str
     migration: str
+
+
+# --- The optimiser (#83) -----------------------------------------------------
+
+
+class OwnedPlayer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    player_id: Annotated[int, Field(ge=1, le=100_000, examples=[411])]
+    # What FPL pays for him: purchase price plus half of any rise, rounded
+    # down. On the transfers page, or GET /v1/entries/{id}/advice estimates it.
+    selling_price: Annotated[float, Field(gt=0, le=20, examples=[7.6], description="£m")]
+
+
+class OptimiseRequest(BaseModel):
+    """A squad to plan transfers from, or none for the best squad from scratch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    season: Annotated[str | None, Field(pattern=r"^\d{4}/\d{2}$", examples=["2026/27"])] = None
+    gameweek: Annotated[int | None, Field(
+        ge=1, le=38, description="Defaults to the model's latest entry.")] = None
+    model: Annotated[str, Field(pattern=r"^[A-Za-z0-9.-]{1,40}$",
+                                examples=["baseline-v1"])] = "baseline-v1"
+    squad: Annotated[list[OwnedPlayer] | None, Field(
+        min_length=15, max_length=15,
+        description="The fifteen owned. Without it, the best squad from scratch.")] = None
+    bank: Annotated[float, Field(ge=0, le=100, description="£m; with a squad")] = 0.0
+    free_transfers: Annotated[int, Field(ge=0, le=5)] = 1
+    budget: Annotated[float, Field(
+        ge=50, le=200, description="£m; without a squad")] = 100.0
+    include_unavailable: bool = False
+    horizon: Annotated[int, Field(
+        ge=1, le=1, description="Gameweeks to plan over. One, until #55.")] = 1
+
+
+class Pick(BaseModel):
+    player_id: int
+    web_name: str
+    team: str
+    position: str
+    price: float
+    predicted_points: float
+    selling_price: float | None
+
+
+class Squad(BaseModel):
+    xi: list[Pick]
+    bench: list[Pick]
+    captain: Pick
+    vice_captain: Pick
+    formation: str
+    cost: float
+    budget: float
+    # The XI's predicted points, the captain's counted twice.
+    expected_points: float
+    bench_points: float
+
+
+class Transfer(BaseModel):
+    out: Pick
+    selling_price: float
+    into: Pick
+
+
+class Plan(BaseModel):
+    transfers: list[Transfer]
+    free_transfers: int
+    hits: int
+    hit_points: int
+    bank: float
+    bank_after: float
+    # Over keeping the squad, net of hits: in the XI, captain included; and as
+    # the optimiser counts it, with the bench at bench_weight.
+    xi_gain: float
+    gain: float
+    bench_weight: float
+    over_cap: dict[str, int]
+
+
+class OptimiseResult(BaseModel):
+    season: str
+    gameweek: int
+    model_version: str
+    deadline_utc: datetime
+    # The plan is for a deadline already gone: useful to look at, too late to act on.
+    deadline_passed: bool
+    cached: bool
+    squad: Squad
+    # Null for a squad from scratch.
+    plan: Plan | None
+
+
+class Estimates(BaseModel):
+    """What the public FPL API does not give, and how it was filled in."""
+
+    selling_prices: str
+    free_transfers: str
+
+
+class Advice(OptimiseResult):
+    fpl_team_id: int
+    # The gameweek whose picks are the squad planned from.
+    picks_gameweek: int
+    estimates: Estimates

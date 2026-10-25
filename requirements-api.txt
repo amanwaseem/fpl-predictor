@@ -1,10 +1,12 @@
-# The read API (#81): FastAPI and the uvicorn server, pinned with their
+# The API (#81): FastAPI and the uvicorn server, pinned with their
 # transitive dependencies like requirements.txt. On top of the database layer,
-# which the API reads. Folds into uv dependency groups in #76.
+# which the API reads, and the solver, which /v1/optimise runs (#83). Folds
+# into uv dependency groups in #76.
 #
 #   pip install -r requirements-api.txt
 
 -r requirements-db.txt
+-r requirements-optimise.txt
 
 fastapi==0.159.1
 uvicorn==0.54.0

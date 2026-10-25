@@ -1,0 +1,68 @@
+{
+ "gameweek": 8,
+ "model": "baseline-v1",
+ "squad": [
+  {
+   "player_id": 1,
+   "selling_price": 6.1
+  },
+  {
+   "player_id": 504,
+   "selling_price": 5.1
+  },
+  {
+   "player_id": 115,
+   "selling_price": 5.3
+  },
+  {
+   "player_id": 330,
+   "selling_price": 4.7
+  },
+  {
+   "player_id": 112,
+   "selling_price": 4.9
+  },
+  {
+   "player_id": 124,
+   "selling_price": 6.2
+  },
+  {
+   "player_id": 68,
+   "selling_price": 6.2
+  },
+  {
+   "player_id": 13,
+   "selling_price": 7.3
+  },
+  {
+   "player_id": 427,
+   "selling_price": 7.9
+  },
+  {
+   "player_id": 411,
+   "selling_price": 15.7
+  },
+  {
+   "player_id": 79,
+   "selling_price": 6.1
+  },
+  {
+   "player_id": 350,
+   "selling_price": 5.5
+  },
+  {
+   "player_id": 204,
+   "selling_price": 4.5
+  },
+  {
+   "player_id": 286,
+   "selling_price": 5.2
+  },
+  {
+   "player_id": 346,
+   "selling_price": 6.1
+  }
+ ],
+ "bank": 3.0,
+ "free_transfers": 1
+}
