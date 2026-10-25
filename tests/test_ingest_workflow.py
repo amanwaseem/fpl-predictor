@@ -48,17 +48,33 @@ class TestIngestWorkflow(unittest.TestCase):
 
     def test_the_order_of_the_steps(self):
         body = steps()
-        order = ["tools/check_database_url.py", "fpl-fetch --skip-players",
-                 "fpl-stale |", "run: fpl-fetch\n", "--workflow deploy.yml",
-                 "--schema-only", "fpl-load"]
+        order = ["--workflow deploy.yml", "actions/checkout", "tools/check_database_url.py",
+                 "fpl-fetch --skip-players", "fpl-stale >", "run: fpl-fetch\n",
+                 "fpl-stale --schema-only && fpl-load"]
         positions = [body.index(marker) for marker in order]
         self.assertEqual(positions, sorted(positions))
 
     def test_the_full_fetch_and_load_only_run_when_needed(self):
-        for name in ("Snapshot the FPL API in full", "Wait for any deploy in progress",
-                     "Load the snapshot into production"):
+        for name in ("Snapshot the FPL API in full", "Load the snapshot into production"):
             with self.subTest(step=name):
                 self.assertIn("steps.stale.outputs.needed == 'true'", step(name))
+
+    def test_the_wait_counts_ci_on_main_as_a_deploy_on_its_way(self):
+        wait = step("Wait for any deploy in progress")
+        self.assertIn("--workflow ci.yml --branch main", wait)
+        self.assertIn("--workflow deploy.yml", wait)
+
+    def test_a_failed_poll_is_retried_not_fatal(self):
+        """Under -e, a failed `gh` in an assignment would end the step at once."""
+        self.assertEqual(step("Wait for any deploy in progress").count("|| "), 2)
+
+    def test_the_summary_gets_the_reason_when_a_check_refuses(self):
+        for name in ("Compare them with the database", "Load the snapshot into production"):
+            with self.subTest(step=name):
+                body = step(name)
+                self.assertIn("2>&1 || status=$?", body)
+                self.assertIn("GITHUB_STEP_SUMMARY", body)
+                self.assertTrue(body.rstrip().endswith("exit $status"))
 
     def test_the_database_url_reaches_only_the_steps_that_need_it(self):
         """Not the fetches, which talk to the FPL API and nothing else."""
