@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.exc import IntegrityError
 
+from fpl.db import stale
 from fpl.db.load import load
 from fpl.db.models import (
     Base,
@@ -136,6 +137,29 @@ class TestLoad(TempCwd):
 
     def counts(self):
         return {name: self.count(table) for name, table in Base.metadata.tables.items()}
+
+    def compare(self, name):
+        """fpl.db.stale's differences between a snapshot and the database (#93)."""
+        _, bootstrap, fixtures, _ = load_snapshot(name)
+        with self.engine.connect() as connection:
+            return stale.differences(stale.from_api(bootstrap, fixtures),
+                                     stale.from_database(connection, "2026/27"))
+
+    def test_a_loaded_snapshot_agrees_with_the_database(self):
+        self.write(FIRST)
+        self.load(FIRST)
+        self.assertEqual(self.compare(FIRST), [])
+
+    def test_a_result_since_the_last_load_is_a_difference(self):
+        self.write(FIRST)
+        self.load(FIRST)
+        played = FIXTURES[:2] + [full_fixture(3, 3, 1, 3, finished=True)]
+        self.write(SECOND, fixtures=played)
+        self.assertEqual(self.compare(SECOND), ["fixtures: 1 differ (3)"])
+
+    def test_before_any_load_everything_differs(self):
+        self.write(FIRST)
+        self.assertEqual(len(self.compare(FIRST)), 4)
 
     def test_a_snapshot_fills_the_football_tables(self):
         self.write(FIRST)
