@@ -63,6 +63,7 @@ Needs the HiGHS solver: pip install -r requirements-optimise.txt.
 import argparse
 import json
 import sys
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -134,6 +135,15 @@ class Squad:
     bench_points: float
 
 
+class SolverTimeout(Exception):
+    """The solver ran out of time before it proved an optimum."""
+
+
+def _deadline(time_limit):
+    """A monotonic deadline `time_limit` seconds away, or None for no limit."""
+    return None if time_limit is None else time.monotonic() + time_limit
+
+
 def tenths(value):
     """A price in tenths of a million, as the API counts it: 10.0 is 100."""
     return round(value * 10)
@@ -187,12 +197,14 @@ def shortfalls(pool, budget):
     return found
 
 
-def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavailable=False):
+def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavailable=False,
+               time_limit=None):
     """The squad, XI and captain maximising expected points, as a Squad.
 
     `players` are dicts with player_id, web_name, team, position, price and
     predicted_points, and optionally status, as fpl.log.contract.read_entry returns
-    them. Raises ValueError, naming the cause, if no legal squad fits.
+    them. Raises ValueError, naming the cause, if no legal squad fits, and
+    SolverTimeout if no optimum is proved within `time_limit` seconds.
     """
     check_positions(players)
     pool = sorted(eligible(players, include_unavailable), key=lambda p: p["player_id"])
@@ -200,11 +212,13 @@ def best_squad(players, budget=BUDGET, bench_weight=BENCH_WEIGHT, include_unavai
     if reasons:
         raise ValueError("no legal squad: " + "; ".join(reasons))
     cost = {p["player_id"]: tenths(p["price"]) for p in pool}
-    squad, starters, captain, _ = _solve(pool, cost, tenths(budget), bench_weight)
+    squad, starters, captain, _ = _solve(pool, cost, tenths(budget), bench_weight,
+                                         deadline=_deadline(time_limit))
     return _squad(squad, starters, captain, cost, budget)
 
 
-def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=False):
+def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=False,
+           deadline=None):
     """Build the model and solve it: (squad, starters, captain, value).
 
     `cost` maps player id to tenths of a million and `budget` is in tenths.
@@ -226,6 +240,10 @@ def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=
     With `keep` the squad is fixed and only its value is wanted, so the second
     solve is skipped. If the second solve does not finish optimal, the first
     solve's answer stands: just as good in points, only not tie-broken.
+
+    `deadline` is a time.monotonic() value both solves must finish by. A first
+    solve that reaches it raises SolverTimeout: an answer not proved optimal is
+    not given.
     """
     highspy = _solver()
     n = len(pool)
@@ -234,6 +252,13 @@ def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=
     # The objectives are integral, so a gap below one unit is optimality.
     model.setOptionValue("mip_rel_gap", 0.0)
     model.setOptionValue("mip_abs_gap", 0.5)
+
+    def limit_time():
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SolverTimeout("the solver's time limit was reached")
+            model.setOptionValue("time_limit", remaining)
     squad = model.addBinaries(n)
     start = model.addBinaries(n)
     captain = model.addBinaries(n)
@@ -274,7 +299,10 @@ def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=
         model.addConstr(hits >= transfers - free_transfers)
         value = value - HIT * SCALE * hits
 
+    limit_time()
     model.maximize(value)
+    if model.getModelStatus() == highspy.HighsModelStatus.kTimeLimit:
+        raise SolverTimeout("the solver's time limit was reached before it proved an optimum")
     if model.getModelStatus() != highspy.HighsModelStatus.kOptimal:
         raise ValueError(
             f"no legal squad within £{budget / 10:.1f}m: each rule can be met alone, but not "
@@ -290,8 +318,13 @@ def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=
         rank = model.qsum(i * (squad[i] + start[i] + captain[i]) for i in range(n))
         # Fewer transfers first: one transfer outweighs any difference in
         # rank, which is at most 27 chosen variables each ranked below n.
-        model.minimize(rank if transfers is None else (27 * n + 1) * transfers + rank)
-        if model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
+        try:
+            limit_time()
+            model.minimize(rank if transfers is None else (27 * n + 1) * transfers + rank)
+            tie_broken = model.getModelStatus() == highspy.HighsModelStatus.kOptimal
+        except SolverTimeout:
+            tie_broken = False
+        if tie_broken:
             solution = [model.vals(variables) for variables in (squad, start, captain)]
 
     chosen_squad, starters, captains = ([pool[i] for i, v in enumerate(values) if v > 0.5]
@@ -396,7 +429,7 @@ def check_current(players, current, bank, free_transfers):
 
 
 def best_transfers(players, current, bank, free_transfers, bench_weight=BENCH_WEIGHT,
-                   include_unavailable=False):
+                   include_unavailable=False, time_limit=None):
     """The transfers from `current` that maximise expected points net of hits.
 
     `current` maps each of the fifteen owned players' ids to his selling
@@ -404,6 +437,7 @@ def best_transfers(players, current, bank, free_transfers, bench_weight=BENCH_WE
     bank plus what the squad sells for, and a player kept costs his selling
     price: that is FPL's rule, as one budget constraint. Owned players stay
     eligible whatever their status, since a manager may keep anyone.
+    `time_limit` is in seconds, for all the solves together (SolverTimeout).
     """
     check_positions(players)
     problems = check_current(players, current, bank, free_transfers)
@@ -422,13 +456,14 @@ def best_transfers(players, current, bank, free_transfers, bench_weight=BENCH_WE
     over_cap = {club: clubs.count(club) for club in sorted(set(clubs))
                 if clubs.count(club) > MAX_PER_CLUB}
 
+    deadline = _deadline(time_limit)
     kept_squad, kept_starters, kept_captain, kept = _solve(
-        pool, cost, budget, bench_weight, owned, free_transfers, keep=True)
+        pool, cost, budget, bench_weight, owned, free_transfers, keep=True, deadline=deadline)
     kept_result = _squad(kept_squad, kept_starters, kept_captain, cost, budget / 10,
                          current, verify=False)
     try:
         squad, starters, captain, value = _solve(pool, cost, budget, bench_weight, owned,
-                                                 free_transfers)
+                                                 free_transfers, deadline=deadline)
     except ValueError:
         if not over_cap:
             raise

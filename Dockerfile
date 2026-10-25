@@ -8,7 +8,7 @@
 FROM python:3.13.7-slim AS build
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
 WORKDIR /src
-COPY requirements.txt requirements-db.txt requirements-api.txt pyproject.toml README.md ./
+COPY requirements.txt requirements-db.txt requirements-optimise.txt requirements-api.txt pyproject.toml README.md ./
 COPY fpl ./fpl
 # requirements.txt ends in `-e .`, the editable install for development. The
 # image installs the package itself instead, so drop that line first.

@@ -6,5 +6,6 @@
 !README.md
 !requirements.txt
 !requirements-db.txt
+!requirements-optimise.txt
 !requirements-api.txt
 **/__pycache__

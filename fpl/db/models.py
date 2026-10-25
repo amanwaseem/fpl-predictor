@@ -9,6 +9,9 @@ Three groups of tables:
 - **The log**: prediction entries and scores, a projection of `predictions/`
   and `scores/` (#80). These copy what was committed, as it was written, so
   they hold names and clubs as text rather than keys into the football tables.
+- **Caches** (#83): the optimiser's results and the FPL API's responses, kept
+  by the API so a repeated request is cheap. Disposable: nothing is lost if
+  they are emptied, and a deploy's projection of the log empties the results.
 
 Keys are FPL's own ids, qualified by season wherever FPL reuses them: element
 and team ids restart every season, and fixture ids restart with them. The
@@ -402,3 +405,45 @@ class PlayerScore(Base):
     error: Mapped[Decimal] = mapped_column(
         Numeric, Computed("predicted_points - actual_points", persisted=True)
     )
+
+
+# --- Caches -----------------------------------------------------------------
+
+
+class OptimiseResult(Base):
+    """One optimiser result, keyed by a hash of everything that decides it (#83).
+
+    Tied to the entry it was solved from, so the projection, which replaces
+    every entry on each deploy, empties this too: a result can never outlive
+    the predictions it came from, or the code that solved it.
+    """
+
+    __tablename__ = "optimise_results"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["season", "gameweek", "model_version"],
+            ["prediction_entries.season", "prediction_entries.gameweek",
+             "prediction_entries.model_version"],
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(r"request_hash ~ '^[0-9a-f]{64}$'", name="request_hash"),
+    )
+
+    request_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    season: Mapped[str] = mapped_column(Text)
+    gameweek: Mapped[int] = mapped_column(SmallInteger)
+    model_version: Mapped[str] = mapped_column(Text)
+    result: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class UpstreamResponse(Base):
+    """A response from the FPL API, kept for a few minutes (#83)."""
+
+    __tablename__ = "upstream_responses"
+
+    path: Mapped[str] = mapped_column(Text, primary_key=True)
+    body: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    fetched_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))

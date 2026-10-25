@@ -1,0 +1,17 @@
+# The CI fuzz of the API (#81), and how two routes depart from it (#83).
+
+# A random squad that fits the schema is still almost never fifteen distinct
+# players in legal positions, which no JSON schema can say, so most are refused
+# with a 422 that names why. So a 422 counts as accepting it; every other
+# check still applies. (`enabled = false` here is overridden by the CLI's
+# --checks all.)
+[[operations]]
+include-path = "/v1/optimise"
+checks.positive_data_acceptance.expected-statuses = ["2xx", "404", "422", "429", "5xx"]
+
+# Reads a manager's squad from the FPL API: not fuzzed from CI, which would
+# send the real API a request for every random team id. Tested against canned
+# responses in tests/test_db_optimise.py.
+[[operations]]
+include-path = "/v1/entries/{fpl_team_id}/advice"
+enabled = false
