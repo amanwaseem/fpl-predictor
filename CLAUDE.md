@@ -30,7 +30,7 @@ works if the following hold:
 - Work on a branch per issue, off `main`, and open a PR.
 - During a gameweek week, the next entry comes first.
 - Run the `fpl-*` commands from the repository root with `.venv` active
-  (`uv sync --frozen` makes it).
+  (`uv sync --locked` makes it).
 
 ## Database
 

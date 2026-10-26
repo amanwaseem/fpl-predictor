@@ -296,7 +296,7 @@ class TestTheSolverIsOptional(unittest.TestCase):
             self.assertRaises(ImportError) as raised,
         ):
             best_squad(random_pool(0), budget=200.0)
-        self.assertIn("uv sync --group optimise", str(raised.exception))
+        self.assertIn("uv sync --inexact --group optimise", str(raised.exception))
 
 
 class TestXiHelpersAreShared(unittest.TestCase):

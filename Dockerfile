@@ -10,15 +10,18 @@ FROM python:3.13.7-slim AS build
 COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /usr/local/bin/uv
 # The interpreter is the image's, and the virtualenv lives where the second
 # stage expects it.
-ENV UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT=/venv UV_COMPILE_BYTECODE=0 \
+ENV UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT=/venv UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 WORKDIR /src
+# Exactly the lock's versions (--locked), the api group and nothing for
+# development. The dependencies first, in a layer of their own, so a change to
+# fpl/ reinstalls only the package; then the package itself, installed rather
+# than editable: the image has no checkout to point an editable install at
+# (ADR 0015).
 COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --locked --no-dev --group api --no-install-project
 COPY fpl ./fpl
-# Exactly the lock's versions (--frozen), the api group and nothing for
-# development, and the package itself installed rather than editable: the
-# image has no checkout to point an editable install at (ADR 0015).
-RUN uv sync --frozen --no-dev --group api --no-editable
+RUN uv sync --locked --no-dev --group api --no-editable
 
 FROM python:3.13.7-slim
 RUN useradd --system --uid 10001 --no-create-home fpl

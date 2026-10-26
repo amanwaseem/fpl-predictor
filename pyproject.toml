@@ -1,8 +1,8 @@
 # The package and its tooling config. Exact versions, transitive ones
 # included, are in uv.lock, which every log entry's reproducibility claim
-# rests on: `uv sync --frozen` installs exactly what the lock says, and fails
-# rather than resolve anew. The project itself is installed editable, the only
-# supported install (ADR 0011).
+# rests on: `uv sync --locked` installs exactly what the lock says, and fails
+# if the lock no longer matches this file. The project itself is installed
+# editable, the only supported install (ADR 0011).
 
 [build-system]
 requires = ["setuptools>=77"]
@@ -29,6 +29,9 @@ dependencies = ["requests>=2.34,<3"]
 #   uv sync --no-dev                 # a prediction
 #   uv sync --no-dev --group db      # the database commands
 #   uv sync --no-dev --group api     # the API, with the solver it runs
+#
+# `uv sync` is exact: it removes what the groups named do not include. To add
+# one group to an environment, name every group it needs, or pass --inexact.
 [dependency-groups]
 # The database layer (#77).
 db = ["sqlalchemy>=2.0,<2.1", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
@@ -54,8 +57,8 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
-# The version CI and the image install (setup-uv, Dockerfile); a newer uv
-# reads the same lock.
+# The version CI and the image install (.github/actions/uv, Dockerfile); a
+# newer uv reads the same lock.
 required-version = ">=0.13.0"
 
 # One command per module, each the module's cli(). `python -m fpl.<package>.<module>`
@@ -125,6 +128,10 @@ skip_empty = true
 # Types (#76): checked in CI and by pre-commit. Non-strict to start, on fpl/
 # only; a module that is fully annotated can opt in to stricter checks below,
 # one at a time, rather than the whole package at once.
+[tool.pytest.ini_options]
+# Only the suite: not scratch/, data/raw/ or anything else that matches test_*.
+testpaths = ["tests"]
+
 [tool.mypy]
 python_version = "3.13"
 files = ["fpl"]

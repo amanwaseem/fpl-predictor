@@ -100,15 +100,9 @@ jobs:
           python3 tools/check_database_url.py \
             || { echo "::error::The production DATABASE_URL cannot be used. See the message above and docs/deploy.md."; exit 1; }
 
-      # uv.lock, exactly (#76); .venv/bin on PATH so the commands run as before.
-      - uses: astral-sh/setup-uv@v10
+      - uses: ./.github/actions/uv
         with:
-          version: "0.13.0"
-          python-version: "3.13"
-          enable-cache: true
-      - run: |
-          uv sync --frozen --no-dev --group db
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          args: "--no-dev --group db"
 
       - name: Snapshot the bootstrap and fixtures
         run: fpl-fetch --skip-players
