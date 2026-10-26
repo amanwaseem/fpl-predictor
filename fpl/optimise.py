@@ -57,7 +57,7 @@ squad exists is refused with the reason, before the solver is asked.
 
 Every solution is checked against the rules, by code that shares nothing with
 the model, before it is returned. Writes nothing; reads the entry it is given.
-Needs the HiGHS solver: pip install -r requirements-optimise.txt.
+Needs the HiGHS solver: uv sync --group optimise.
 """
 
 import argparse
@@ -164,7 +164,7 @@ def _solver():
         import highspy
     except ImportError:
         raise ImportError("fpl-optimise needs the HiGHS solver, which is not installed. "
-                          "Install it with: pip install -r requirements-optimise.txt") from None
+                          "Install it with: uv sync --group optimise") from None
     return highspy
 
 

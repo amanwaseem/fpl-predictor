@@ -1,0 +1,24 @@
+# pre-commit (#76): `uv run pre-commit install` once, then these run on each
+# commit. Local hooks through uv, so they use the versions in uv.lock, the
+# same ones CI runs, rather than a second set pinned here.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --frozen ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --frozen ruff format
+        language: system
+        types: [python]
+      # mypy reads its files from pyproject.toml, so it checks fpl/ whole
+      # rather than only the files staged.
+      - id: mypy
+        name: mypy
+        entry: uv run --frozen mypy
+        language: system
+        types: [python]
+        pass_filenames: false
