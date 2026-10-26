@@ -25,7 +25,7 @@ def step(name):
 class TestIngestWorkflow(unittest.TestCase):
     def test_every_command_it_runs_exists(self):
         called = set(re.findall(r"\b(fpl-[a-z]+)\b", steps()))
-        self.assertEqual(called, {"fpl-fetch", "fpl-stale", "fpl-load"})
+        self.assertEqual(called, {"fpl-fetch", "fpl-stale", "fpl-load", "fpl-features"})
         for command in called:
             with self.subTest(command=command):
                 self.assertIn(command, SCRIPTS)
@@ -54,7 +54,7 @@ class TestIngestWorkflow(unittest.TestCase):
             "fpl-fetch --skip-players",
             "fpl-stale >",
             "run: fpl-fetch\n",
-            "fpl-stale --schema-only && fpl-load",
+            "fpl-stale --schema-only && fpl-load && fpl-features",
         ]
         positions = [body.index(marker) for marker in order]
         self.assertEqual(positions, sorted(positions))

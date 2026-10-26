@@ -9,6 +9,8 @@ Three groups of tables:
 - **The log**: prediction entries and scores, a projection of `predictions/`
   and `scores/` (#80). These copy what was committed, as it was written, so
   they hold names and clubs as text rather than keys into the football tables.
+- **Features** (#84): one row of model inputs per player per gameweek,
+  derived from the football tables and rebuilt from them at any time.
 - **Caches** (#83): the optimiser's results and the FPL API's responses, kept
   by the API so a repeated request is cheap. Disposable: nothing is lost if
   they are emptied, and a deploy's projection of the log empties the results.
@@ -407,6 +409,67 @@ class PlayerScore(Base):
     error: Mapped[Decimal] = mapped_column(
         Numeric, Computed("predicted_points - actual_points", persisted=True)
     )
+
+
+# --- Features ---------------------------------------------------------------
+
+
+class PlayerGameweekFeatures(Base):
+    """A player's model inputs for one gameweek, from before its deadline (#84).
+
+    Built by fpl.db.features from the football tables, by
+    fpl.models.feature_table's rules: derived, and rebuilt whenever they or the
+    data change. Nullable wherever a season or a gameweek cannot know a value
+    (GW1 has no form or price; expected goals start in 2022/23).
+    """
+
+    __tablename__ = "player_gameweek_features"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["season", "element_id"], ["season_players.season", "season_players.element_id"]
+        ),
+        ForeignKeyConstraint(["season", "gameweek"], ["gameweeks.season", "gameweeks.gameweek"]),
+        CheckConstraint(one_of("position", POSITIONS), name="position"),
+        Index("ix_player_gameweek_features_player", "player_code"),
+    )
+
+    season: Mapped[str] = mapped_column(Text, primary_key=True)
+    gameweek: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    element_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    feature_version: Mapped[str] = mapped_column(Text)
+    player_code: Mapped[int] = mapped_column(Integer)
+    position: Mapped[str] = mapped_column(Text)
+    team_id: Mapped[int] = mapped_column(SmallInteger)
+    n_fixtures: Mapped[int] = mapped_column(SmallInteger)
+    n_home: Mapped[int] = mapped_column(SmallInteger)
+    # Tenths of a million, the last value before the gameweek.
+    price: Mapped[int | None] = mapped_column(SmallInteger)
+    # As a committed entry recorded it; the live season only.
+    status: Mapped[str | None] = mapped_column(Text)
+    minutes_last1: Mapped[int | None] = mapped_column(SmallInteger)
+    minutes_mean3: Mapped[float | None] = mapped_column(Float)
+    minutes_mean5: Mapped[float | None] = mapped_column(Float)
+    appearances_last5: Mapped[int] = mapped_column(SmallInteger)
+    sixty_last5: Mapped[int] = mapped_column(SmallInteger)
+    season_rounds: Mapped[int] = mapped_column(SmallInteger)
+    season_minutes: Mapped[int] = mapped_column(Integer)
+    season_points: Mapped[int] = mapped_column(Integer)
+    points_per90_3: Mapped[float | None] = mapped_column(Float)
+    points_per90_5: Mapped[float | None] = mapped_column(Float)
+    points_per90_season: Mapped[float | None] = mapped_column(Float)
+    xg_per90_5: Mapped[float | None] = mapped_column(Float)
+    xa_per90_5: Mapped[float | None] = mapped_column(Float)
+    xgi_per90_season: Mapped[float | None] = mapped_column(Float)
+    bonus_per90_season: Mapped[float | None] = mapped_column(Float)
+    last_season_minutes: Mapped[int | None] = mapped_column(Integer)
+    last_season_points_per90: Mapped[float | None] = mapped_column(Float)
+    team_attack: Mapped[float | None] = mapped_column(Float)
+    team_defence: Mapped[float | None] = mapped_column(Float)
+    opponent_attack: Mapped[float | None] = mapped_column(Float)
+    opponent_defence: Mapped[float | None] = mapped_column(Float)
+    expected_goals_for: Mapped[float | None] = mapped_column(Float)
+    expected_goals_against: Mapped[float | None] = mapped_column(Float)
+    expected_clean_sheets: Mapped[float | None] = mapped_column(Float)
 
 
 # --- Caches -----------------------------------------------------------------

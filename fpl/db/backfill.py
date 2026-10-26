@@ -29,6 +29,7 @@ from fpl.db.models import (
     Player,
     PlayerClub,
     PlayerFixtureStats,
+    PlayerGameweekFeatures,
     Season,
     SeasonPlayer,
     Snapshot,
@@ -59,9 +60,18 @@ EXPECTED: dict[str, dict[str, int]] = {
     }.items()
 }
 
-# Children before parents, so a season can be deleted in this order.
-TABLES = [PlayerFixtureStats, PlayerClub, Fixture, Gameweek, SeasonPlayer, Team]
-COUNTED = {model.__tablename__: model for model in reversed(TABLES)}
+# Children before parents, so a season can be deleted in this order. The
+# features (#84) are derived from the rest, and rebuilt by fpl-features.
+TABLES = [
+    PlayerGameweekFeatures,
+    PlayerFixtureStats,
+    PlayerClub,
+    Fixture,
+    Gameweek,
+    SeasonPlayer,
+    Team,
+]
+COUNTED = {model.__tablename__: model for model in reversed(TABLES[1:])}
 
 
 def load_season(connection, parsed):
