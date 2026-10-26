@@ -29,7 +29,8 @@ works if the following hold:
 
 - Work on a branch per issue, off `main`, and open a PR.
 - During a gameweek week, the next entry comes first.
-- Run the `fpl-*` commands from the repository root with `.venv` active.
+- Run the `fpl-*` commands from the repository root with `.venv` active
+  (`uv sync --frozen` makes it).
 
 ## Database
 
@@ -53,11 +54,12 @@ the next snapshot overwrite bonus.
 
 ## Conventions
 
-- Python 3.13. Add dependencies when they're useful, and pin them, by purpose:
-  `requirements.txt` for what a prediction runs, `requirements-db.txt`,
-  `requirements-api.txt` and `requirements-optimise.txt` for the rest, and
-  `requirements-dev.txt` for all of it plus tooling. Each pins its transitive
-  dependencies too. These fold into uv groups in #76.
+- Python 3.13, with uv. Add dependencies when they're useful, by purpose:
+  `[project] dependencies` only for what a prediction runs (`requests`), and a
+  dependency group (`db`, `optimise`, `api`, `dev`) for the rest. `uv add` or
+  an edit to `pyproject.toml`, then `uv lock`; `uv.lock` pins every version,
+  transitive ones too, and is committed.
+- Tests run under pytest; `make lint` runs ruff, ruff format and mypy.
 - Timestamps are in UTC. Gameweek filenames are zero-padded (`gw04`).
 - `scratch/` is gitignored and holds exploratory runs.
 - Prefer explicit, readable code over clever code.

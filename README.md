@@ -145,19 +145,20 @@ two models apart; the cumulative record is `scores/cumulative.json`.
 
 ### Setup
 
+With [uv](https://docs.astral.sh/uv/):
+
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt      # pinned dependencies, then this package, editable
+uv sync --frozen && source .venv/bin/activate    # everything, with the test tools
 ```
 
-That is everything a prediction needs. The other commands need more, pinned in files of their
-own: `requirements-optimise.txt` for `fpl-optimise` (the HiGHS solver), `requirements-db.txt`
-for the database commands, and `requirements-api.txt` for `fpl-serve`, which runs the solver too.
-`requirements-dev.txt` installs all of them, with the test tools.
+`uv sync --frozen --no-dev` installs what a prediction needs and nothing else: `requests`. The
+other commands need more, in dependency groups in `pyproject.toml`: `--group db` for the database
+commands, `--group optimise` for `fpl-optimise` (the HiGHS solver), and `--group api` for
+`fpl-serve`, which runs the solver too. The default, `dev`, is all of them with the test tools.
 
-Dependencies are pinned, transitive ones included. Every entry in the prediction log claims
-reproducibility from its `snapshot_id`; that claim covers the data, and the pin covers the code
-around it. The package is installed editable, so the commands always run the checkout, never a
+Every version, transitive ones included, is in `uv.lock`, and `--frozen` installs exactly those.
+Every entry in the prediction log claims reproducibility from its `snapshot_id`; that claim covers
+the data, and the lock covers the code around it. The package is installed editable, so the commands always run the checkout, never a
 stale copy from before the last `git pull`.
 
 Every `fpl-*` command is also `python -m fpl.<package>.<module>`; the two run the same function. Run them
@@ -228,20 +229,19 @@ nothing can be corrected.
 ## Development
 
 ```bash
-python -m unittest discover tests
+uv run pytest                    # the suite
+make lint                        # ruff check, ruff format --check and mypy, as CI's lint job
+uv run pre-commit install        # once: ruff, ruff format and mypy before each commit
 ```
 
-No third-party test runner. `python -m unittest discover -s tests -t .` and a bare
-`python -m unittest` from the repository root work too, and all three run the same suite.
-
-CI also lints and measures coverage. Those tools are pinned apart from the runtime, in
-`requirements-dev.txt`, so the environment that produces a log entry stays `requests` alone:
+The suite is written with `unittest` and runs under pytest unchanged; `python -m unittest
+discover tests` still works. mypy checks `fpl/`, non-strict to start ([tool.mypy] in
+`pyproject.toml`). The tools are in the `dev` group, apart from the runtime, so the environment
+that produces a log entry stays `requests` alone.
 
 ```bash
-pip install -r requirements-dev.txt
-ruff check .                              # lint; [tool.ruff] in pyproject.toml says which rules and why
-coverage run -m unittest discover tests   # [tool.coverage] measures subprocesses too
-coverage combine && coverage report
+uv run coverage run -m pytest    # [tool.coverage] measures subprocesses too
+uv run coverage combine && uv run coverage report
 ```
 
 ### Database

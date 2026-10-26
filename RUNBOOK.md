@@ -34,8 +34,9 @@ source .venv/bin/activate
 (Or prefix every command with `.venv/bin/`.) Each `fpl-<name>` is the same
 function as `python -m fpl.<package>.<module>`, so either spelling works.
 
-After pulling a change to `pyproject.toml` — the commands are declared there —
-re-run `pip install -r requirements.txt` once, or a new command will not exist.
+After pulling a change to `pyproject.toml` or `uv.lock` — the commands are
+declared in one, the versions in the other — run `uv sync --frozen` once, or a
+new command will not exist.
 
 Work out three things and write them down:
 
@@ -462,7 +463,7 @@ Before merging:
 
 ```
 python tools/check_log_immutable.py --ref origin/main
-python -m unittest discover tests
+pytest
 ```
 
 `check_log_immutable.py` is the mechanical enforcement of rule 1: it compares
@@ -566,7 +567,7 @@ fpl-predict-fixture --gw N
 fpl-verify predictions/gwNN_<model>.csv                    # gate: non-zero means do not commit
 fpl-summarise predictions/gwNN_<model>.csv --out reports/
 python tools/check_log_immutable.py --ref origin/main      # rule 1, mechanically
-python -m unittest discover tests
+pytest
 fpl-score                                                  # after GW N settles, not before
 python tools/entry_bot.py decide --prs F --branches F       # what the entry workflow would decide
 ```

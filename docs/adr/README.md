@@ -23,3 +23,4 @@ answer.
 | [0014](0014-a-static-json-api-not-a-hosted-server.md) | A static JSON API, not a hosted server | Superseded by [0015](0015-a-hosted-service-over-a-rebuildable-projection.md) |
 | [0015](0015-a-hosted-service-over-a-rebuildable-projection.md) | A hosted service over a rebuildable projection | Accepted |
 | [0016](0016-optimise-my-team-caches-beside-the-projection.md) | Optimise my team: caches beside the projection, estimates said aloud | Accepted |
+| [0017](0017-uv-lock-replaces-hand-pinned-requirements.md) | A uv lockfile replaces the hand-pinned requirements files | Accepted |

@@ -1,11 +1,8 @@
-# The image needs fpl/, pyproject.toml, README.md and the requirements files.
+# The image needs fpl/, pyproject.toml, uv.lock and README.md.
 # Everything else stays out of the build context, data/raw above all.
 *
 !fpl/
 !pyproject.toml
 !README.md
-!requirements.txt
-!requirements-db.txt
-!requirements-optimise.txt
-!requirements-api.txt
+!uv.lock
 **/__pycache__

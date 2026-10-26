@@ -21,8 +21,8 @@ Beside the stages, and outside the order:
     fpl/paths.py      where the commands may run
 
 Each command is a module in this package with a console script, declared in
-pyproject.toml. A prediction needs only `pip install -r requirements.txt`; the
-database, the API and the optimiser have requirements files of their own:
+pyproject.toml. A prediction needs only `uv sync --no-dev`; the database, the
+API and the optimiser have dependency groups of their own:
 
     fpl-fetch              # snapshot the FPL API to data/raw/
     fpl-predict-baseline   # write a prediction log entry

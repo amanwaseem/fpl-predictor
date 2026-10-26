@@ -267,7 +267,7 @@ class TestTheSolverIsOptional(unittest.TestCase):
         with mock.patch.dict(sys.modules, {"highspy": None}), \
                 self.assertRaises(ImportError) as raised:
             best_squad(random_pool(0), budget=200.0)
-        self.assertIn("requirements-optimise.txt", str(raised.exception))
+        self.assertIn("uv sync --group optimise", str(raised.exception))
 
 
 class TestXiHelpersAreShared(unittest.TestCase):

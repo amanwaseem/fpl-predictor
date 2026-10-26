@@ -1,21 +1,24 @@
 # The API's image: `docker compose up` runs it beside Postgres (#81), and #82
 # deploys it.
 #
-# Two stages: the first installs the pinned dependencies and the package into
+# Two stages: the first installs uv.lock's dependencies and the package into
 # a virtualenv; the second copies only that virtualenv into a slim image that
 # runs as an unprivileged user. No compilers, no source tree, no data.
 
 FROM python:3.13.7-slim AS build
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1
+# uv, pinned like CI's, copied from its release image rather than installed.
+COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /usr/local/bin/uv
+# The interpreter is the image's, and the virtualenv lives where the second
+# stage expects it.
+ENV UV_PYTHON_DOWNLOADS=never UV_PROJECT_ENVIRONMENT=/venv UV_COMPILE_BYTECODE=0 \
+    UV_LINK_MODE=copy
 WORKDIR /src
-COPY requirements.txt requirements-db.txt requirements-optimise.txt requirements-api.txt pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY fpl ./fpl
-# requirements.txt ends in `-e .`, the editable install for development. The
-# image installs the package itself instead, so drop that line first.
-RUN python -m venv /venv \
- && sed -i '/^-e \.$/d' requirements.txt \
- && /venv/bin/pip install -r requirements-api.txt \
- && /venv/bin/pip install --no-deps .
+# Exactly the lock's versions (--frozen), the api group and nothing for
+# development, and the package itself installed rather than editable: the
+# image has no checkout to point an editable install at (ADR 0015).
+RUN uv sync --frozen --no-dev --group api --no-editable
 
 FROM python:3.13.7-slim
 RUN useradd --system --uid 10001 --no-create-home fpl

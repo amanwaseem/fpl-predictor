@@ -52,8 +52,10 @@ async def server_error(request: Request, exc: Exception):
 
 
 def install(app: FastAPI):
-    app.add_exception_handler(HTTPException, http_error)
-    app.add_exception_handler(RequestValidationError, validation_error)
+    # Starlette types a handler as taking any Exception, though it calls each
+    # with the class it is registered for; these take that class.
+    app.add_exception_handler(HTTPException, http_error)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, validation_error)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, server_error)
 
 

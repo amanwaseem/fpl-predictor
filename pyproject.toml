@@ -1,9 +1,8 @@
-# The package and its tooling config. What this file does not hold is the lock:
-# exact versions, transitive ones included, live in requirements.txt, because
-# pyproject has no lockfile and every log entry's reproducibility claim needs
-# one. Install with `pip install -r requirements.txt`, which installs those
-# pins and then this package, editable — see the comment there for why
-# editable is the only supported install.
+# The package and its tooling config. Exact versions, transitive ones
+# included, are in uv.lock, which every log entry's reproducibility claim
+# rests on: `uv sync --frozen` installs exactly what the lock says, and fails
+# rather than resolve anew. The project itself is installed editable, the only
+# supported install (ADR 0011).
 
 [build-system]
 requires = ["setuptools>=77"]
@@ -22,15 +21,42 @@ license = "MIT"
 requires-python = "==3.13.*"
 dependencies = ["requests>=2.34,<3"]
 
-# The database layer (#77), installed by requirements-db.txt. Optional so the
-# runtime that makes a log entry stays requests alone.
-[project.optional-dependencies]
+# Dependency groups (#76). A prediction needs only `dependencies` above:
+# `uv sync --no-dev` installs requests and nothing else, so the runtime that
+# makes a log entry stays as small as it was. Everything else is a group:
+#
+#   uv sync                          # dev: everything, with the test tools
+#   uv sync --no-dev                 # a prediction
+#   uv sync --no-dev --group db      # the database commands
+#   uv sync --no-dev --group api     # the API, with the solver it runs
+[dependency-groups]
+# The database layer (#77).
 db = ["sqlalchemy>=2.0,<2.1", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
-# The API (#81), with the solver /v1/optimise runs (#83), installed by
-# requirements-api.txt.
-api = ["fpl-predictor[db,optimise]", "fastapi>=0.159,<1", "uvicorn>=0.54,<1"]
-# The squad optimiser (#53), installed by requirements-optimise.txt.
+# The squad optimiser (#53).
 optimise = ["highspy>=1.15,<2"]
+# The API (#81), with the solver /v1/optimise runs (#83).
+api = [{include-group = "db"}, {include-group = "optimise"},
+       "fastapi>=0.159,<1", "uvicorn>=0.54,<1"]
+dev = [
+    {include-group = "api"},
+    "coverage>=7.16,<8",
+    "ruff==0.16.10",
+    "mypy==2.4.0",
+    "pre-commit>=4.6,<5",
+    "pytest>=9.1,<10",
+    # Starlette's TestClient, for the API's tests. httpx2 rather than httpx,
+    # which starlette.testclient now warns about.
+    "httpx2>=2.16,<3",
+    # Fuzzes the API from its OpenAPI document in CI's db job (#81), and
+    # brings Hypothesis, which the optimiser's property tests use (#83).
+    "schemathesis>=4.32,<5",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+# The version CI and the image install (setup-uv, Dockerfile); a newer uv
+# reads the same lock.
+required-version = ">=0.13.0"
 
 # One command per module, each the module's cli(). `python -m fpl.<package>.<module>`
 # runs exactly the same function, so the two spellings cannot drift apart.
@@ -95,3 +121,17 @@ parallel = true
 
 [tool.coverage.report]
 skip_empty = true
+
+# Types (#76): checked in CI and by pre-commit. Non-strict to start, on fpl/
+# only; a module that is fully annotated can opt in to stricter checks below,
+# one at a time, rather than the whole package at once.
+[tool.mypy]
+python_version = "3.13"
+files = ["fpl"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+# highspy ships no type information.
+[[tool.mypy.overrides]]
+module = ["highspy"]
+ignore_missing_imports = true
