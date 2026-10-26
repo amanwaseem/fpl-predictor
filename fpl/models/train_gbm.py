@@ -37,6 +37,7 @@ from pathlib import Path
 
 from fpl.evaluation import metrics
 from fpl.ingest.history import SEASONS
+from fpl.models.feature_table import season_after
 from fpl.models.gbm import FEATURES, MODEL_VERSION, REGISTRY, Bundle, vector
 from fpl.paths import require_project_root
 
@@ -102,8 +103,13 @@ def training_rows(engine, seasons):
             )
         }
         rows = []
+        # In a fixed order: bagging samples rows by position, so the artifact is
+        # reproducible only if the rows always arrive in the same order.
+        features = PlayerGameweekFeatures
         for r in c.execute(
-            select(PlayerGameweekFeatures).where(PlayerGameweekFeatures.season.in_(seasons))
+            select(features)
+            .where(features.season.in_(seasons))
+            .order_by(features.season, features.gameweek, features.element_id)
         ):
             row = dict(r._mapping)
             label = labels.get((row["season"], row["gameweek"], row["element_id"]))
@@ -165,20 +171,26 @@ def naive(row):
     return pp90 * min(minutes, 90.0) / 90.0 * row["n_fixtures"]
 
 
-def bootstrap(by_gameweek, statistic, draws=BOOTSTRAP, seed=SEED):
-    """A 95% interval for `statistic` over gameweeks resampled with replacement."""
+def bootstrap(by_gameweek, statistics, draws=BOOTSTRAP, seed=SEED):
+    """A 95% interval for each of `statistics` ({name: f(sample)}), over gameweeks
+    resampled with replacement: one set of draws, every statistic on each."""
     rng = random.Random(seed)
     keys = sorted(by_gameweek)
-    values = []
+    values = {name: [] for name in statistics}
     for _ in range(draws):
         sample = [p for k in (rng.choice(keys) for _ in keys) for p in by_gameweek[k]]
-        values.append(statistic(sample))
-    values.sort()
-    return values[int(0.025 * draws)], values[int(0.975 * draws) - 1]
+        for name, statistic in statistics.items():
+            values[name].append(statistic(sample))
+    tail = int(0.025 * draws)
+    return {name: (sorted(v)[tail], sorted(v)[draws - 1 - tail]) for name, v in values.items()}
 
 
 def evaluate(bundle, rows):
-    """Held-out figures for `bundle` on `rows`, with the naive comparator and intervals."""
+    """Held-out figures for `bundle` on `rows`, with the naive comparator and intervals.
+
+    Predicted by fpl.models.trees, as entries will be, rather than by LightGBM:
+    the figures are the evaluator's, not only the library's.
+    """
     by_gw = defaultdict(list)
     for row, label in rows:
         points, _ = bundle.predict(row)
@@ -191,18 +203,26 @@ def evaluate(bundle, rows):
         return metrics.summary([(s[i], s[2]) for s in sample])["spearman"]
 
     every = [s for v in by_gw.values() for s in v]
+    ci = bootstrap(
+        by_gw,
+        {
+            "mae": lambda s: mae(s, 0),
+            "spearman": lambda s: rho(s, 0),
+            "gain": lambda s: mae(s, 1) - mae(s, 0),
+        },
+    )
     return {
         "n": len(every),
         "gameweeks": len(by_gw),
         "gbm": {
             "mae": mae(every, 0),
-            "mae_ci": bootstrap(by_gw, lambda s: mae(s, 0)),
+            "mae_ci": ci["mae"],
             "spearman": rho(every, 0),
-            "spearman_ci": bootstrap(by_gw, lambda s: rho(s, 0)),
+            "spearman_ci": ci["spearman"],
         },
         "naive": {"mae": mae(every, 1), "spearman": rho(every, 1)},
         "mae_gain": mae(every, 1) - mae(every, 0),
-        "mae_gain_ci": bootstrap(by_gw, lambda s: mae(s, 1) - mae(s, 0)),
+        "mae_gain_ci": ci["gain"],
     }
 
 
@@ -261,8 +281,7 @@ def main(cv_only=False):
     engine = make_engine()
     try:
         rows = training_rows(engine, SEASONS)
-        live_season = max(SEASONS)
-        live_season = f"{int(live_season[:4]) + 1}/{(int(live_season[:4]) + 2) % 100:02d}"
+        live_season = season_after(max(SEASONS))
         live = training_rows(engine, [live_season])
     finally:
         engine.dispose()

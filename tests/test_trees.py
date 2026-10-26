@@ -100,6 +100,41 @@ class TestRefusals(unittest.TestCase):
         with self.assertRaises(ValueError):
             trees.Model(text)
 
+    def test_a_bare_objective_option_is_refused(self):
+        text = "\n".join(
+            [
+                "tree",
+                "num_class=1",
+                "objective=regression sqrt",
+                "feature_names=a",
+                "",
+                "Tree=0",
+                "num_leaves=1",
+                "leaf_value=0",
+                "",
+            ]
+        )
+        with self.assertRaises(ValueError):
+            trees.Model(text)
+
+    def test_a_linear_tree_is_refused(self):
+        text = "\n".join(
+            [
+                "tree",
+                "num_class=1",
+                "objective=regression",
+                "feature_names=a",
+                "",
+                "Tree=0",
+                "num_leaves=1",
+                "leaf_value=0",
+                "is_linear=1",
+                "",
+            ]
+        )
+        with self.assertRaises(ValueError):
+            trees.Model(text)
+
     def test_a_one_leaf_tree_is_its_leaf(self):
         text = "\n".join(
             [

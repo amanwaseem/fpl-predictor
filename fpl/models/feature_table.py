@@ -70,6 +70,18 @@ class SeasonData:
     status: dict[tuple[int, int], str] = field(default_factory=dict)
 
 
+def season_before(season):
+    """'2025/26' for '2026/27'."""
+    start = int(season[:4]) - 1
+    return f"{start}/{(start + 1) % 100:02d}"
+
+
+def season_after(season):
+    """'2027/28' for '2026/27'."""
+    start = int(season[:4]) + 1
+    return f"{start}/{(start + 1) % 100:02d}"
+
+
 def club_at(spells, gameweek):
     for team, first, last in spells:
         if first <= gameweek <= last:

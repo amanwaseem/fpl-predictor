@@ -26,6 +26,10 @@ class TestVector(unittest.TestCase):
         self.assertEqual(x[gbm.FEATURES.index("is_mid")], 0.0)
         self.assertIsNone(x[gbm.FEATURES.index("xg_per90_5")])
 
+    def test_an_artifact_built_on_another_feature_version_is_refused(self):
+        with self.assertRaises(ValueError):
+            gbm.Bundle(tiny_artifact() | {"feature_version": "features-v0"})
+
     def test_an_artifact_for_other_inputs_is_refused(self):
         with self.assertRaises(ValueError):
             gbm.Bundle({"features": gbm.FEATURES[:-1], "models": {}})
@@ -192,7 +196,7 @@ class TestLoad(unittest.TestCase):
             gbm.load(registry=self.registry, cache=self.dir / "cache")
         self.assertEqual(get.call_count, 1)
 
-    def test_an_artifact_whose_hash_differs_is_refused(self):
+    def test_an_artifact_whose_hash_differs_is_refused_and_not_cached(self):
         self.register("0" * 64)
         response = mock.Mock(content=self.body, raise_for_status=mock.Mock())
         with (
@@ -200,6 +204,7 @@ class TestLoad(unittest.TestCase):
             self.assertRaises(SystemExit),
         ):
             gbm.load(registry=self.registry, cache=self.dir / "cache")
+        self.assertFalse((self.dir / "cache").exists())
 
 
 if __name__ == "__main__":

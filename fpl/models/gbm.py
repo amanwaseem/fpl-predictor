@@ -15,9 +15,11 @@ evaluated here in plain Python (fpl.models.trees), so a prediction still needs
 
 Each row of inputs is fpl.models.feature_table's, built here from the snapshot
 just as fpl-features builds it from the database for training. Past seasons
-know nothing of injuries, so the models predict as if every player is
-available; the snapshot's availability then scales points and minutes, as it
-does for every logged model, and as fpl-verify checks.
+carry no injury flags, so the models predict from form alone, which already
+includes the ordinary chance of missing a game. The snapshot's flag adds what
+it knows about this player this week: its chance of playing scales points and
+minutes, as it does for every logged model and as fpl-verify checks. A player
+flagged available is unchanged, and one who cannot play is zeroed.
 
 The trained models are one JSON file, a GitHub release asset named in
 models/registry.json with its SHA-256; it is fetched once into data/models/
@@ -41,7 +43,8 @@ from fpl.ingest.snapshot import (
     usable_rounds,
 )
 from fpl.log.contract import write_entry
-from fpl.models.feature_table import SeasonData, build_gameweek
+from fpl.models.feature_table import FEATURE_VERSION, SeasonData, build_gameweek, season_after
+from fpl.models.features import previous_season
 from fpl.models.trees import Model
 from fpl.paths import require_project_root
 
@@ -101,13 +104,22 @@ class Bundle:
     def __init__(self, artifact):
         if artifact["features"] != FEATURES:
             raise ValueError("the artifact was trained on different inputs than this code builds")
+        # The same columns can change what they mean; the version says when.
+        if artifact.get("feature_version") != FEATURE_VERSION:
+            raise ValueError(
+                f"the artifact was trained on {artifact.get('feature_version')} features, and "
+                f"this code builds {FEATURE_VERSION}: a new feature version is a new model"
+            )
         self.meta = {k: v for k, v in artifact.items() if k != "models"}
         # Set by load(), from the registry: the artifact's identity.
         self.sha256 = None
         self.models = {part: Model(artifact["models"][part]) for part in PARTS}
+        for part, model in self.models.items():
+            if model.feature_names != FEATURES:
+                raise ValueError(f"the {part} model was trained on other inputs")
 
     def predict(self, row):
-        """(points, minutes) for one feature-table row, as if available."""
+        """(points, minutes) for one feature-table row, before the snapshot's availability."""
         x = vector(row)
         p = self.models["sixty"].predict(x)
         long, short = (self.models[k].predict(x) for k in ("minutes_long", "minutes_short"))
@@ -127,28 +139,33 @@ def load(version=MODEL_VERSION, registry=REGISTRY, cache=CACHE):
     """The registered artifact, from the cache or its release, checked against its hash."""
     entry = registered(version, registry)
     path = Path(cache) / f"{entry['sha256']}.json"
-    if not path.exists():
+    if path.exists():
+        body = path.read_bytes()
+        where = str(path)
+    else:
         response = requests.get(entry["url"], timeout=TIMEOUT)
         response.raise_for_status()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        partial = path.with_suffix(".part")
-        partial.write_bytes(response.content)
-        partial.replace(path)
-    found = hashlib.sha256(path.read_bytes()).hexdigest()
+        body, where = response.content, entry["url"]
+    found = hashlib.sha256(body).hexdigest()
     if found != entry["sha256"]:
         raise SystemExit(
-            f"{path} has SHA-256 {found}, not the registered {entry['sha256']}. "
-            "Delete it and run again; nothing was predicted."
+            f"{where} has SHA-256 {found}, not the registered {entry['sha256']}. "
+            "Nothing was predicted"
+            + (
+                f"; delete {path} and run again."
+                if where == str(path)
+                else ", and nothing was cached."
+            )
         )
-    bundle = Bundle(json.loads(path.read_text()))
+    if not path.exists():
+        # Cached under its hash only once it is known to be the registered file.
+        path.parent.mkdir(parents=True, exist_ok=True)
+        partial = path.with_suffix(".part")
+        partial.write_bytes(body)
+        partial.replace(path)
+    bundle = Bundle(json.loads(body))
     bundle.sha256 = found
     return bundle
-
-
-def season_of(events):
-    """'2026/27' for a season whose first deadline is in August 2026."""
-    start = min(e["deadline_time"] for e in events)[:4]
-    return f"{start}/{(int(start) + 1) % 100:02d}"
 
 
 def season_data(bootstrap, fixtures, histories, pasts, usable):
@@ -158,9 +175,9 @@ def season_data(bootstrap, fixtures, histories, pasts, usable):
     his own history_past row for it: the same values fpl-features takes from
     the database, read from where a snapshot keeps them.
     """
-    season = season_of(bootstrap["events"])
-    start = int(season[:4]) - 1
-    before = f"{start}/{(start + 1) % 100:02d}"
+    # Named as the logged models name it: from GW1's deadline.
+    before = previous_season(bootstrap["events"])
+    season = season_after(before)
     positions = {t["id"]: t["singular_name_short"] for t in bootstrap["element_types"]}
     players, clubs, previous = {}, {}, {}
     for e in bootstrap["elements"]:
@@ -225,15 +242,16 @@ def main(requested_gw, out_dir, snapshot_id=None):
     snap, bootstrap, fixtures, players_dir = load_snapshot(snapshot_id)
     target_gw, deadline = resolve_target_gw(bootstrap["events"], requested_gw)
     usable, excluded = usable_rounds(bootstrap["events"], target_gw)
-    bundle = load()
     print(f"snapshot:  {snap.name}")
     print(f"target:    GW{target_gw}")
     print(f"deadline:  {deadline}")
-    print(f"model:     {MODEL_VERSION}, artifact {(bundle.sha256 or 'unregistered')[:12]}")
     print(f"included: {', '.join(str(r) for r in sorted(usable)) or 'none'}")
     print(f"excluded: {', '.join(str(r) for r in excluded) or 'none'}")
     if not usable:
         raise SystemExit(f"\nNo settled rounds before GW{target_gw}. Nothing was written.")
+    # After the refusals above, so a run that will not predict fetches nothing.
+    bundle = load()
+    print(f"model:     {MODEL_VERSION}, artifact {(bundle.sha256 or 'unregistered')[:12]}")
     elements = {p["id"] for p in bootstrap["elements"]}
     histories, pasts = {}, {}
     for pid in elements:
