@@ -16,7 +16,7 @@ from alembic import command
 from sqlalchemy import func, select, update
 
 from fpl.db import backfill, features
-from fpl.db.models import Fixture, PlayerFixtureStats, PlayerGameweekFeatures
+from fpl.db.models import Fixture, Gameweek, PlayerFixtureStats, PlayerGameweekFeatures
 from fpl.db.session import make_engine
 from fpl.ingest import history
 from fpl.models import feature_table
@@ -113,6 +113,49 @@ class TestSyntheticSeason(FeaturesCase):
             with unittest.mock.patch.object(features, "FEATURE_VERSION", "features-v2"):
                 self.assertEqual(features.stale_seasons(c, ["2016/17"]), ["2016/17"])
 
+    def test_a_change_to_the_season_before_rebuilds_the_one_after(self):
+        """Its totals are the last-season columns."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        write_season(Path(tmp.name), "2017/18", teams_csv=True)
+        with unittest.mock.patch("builtins.print"):
+            backfill.backfill(self.engine, ["2017/18"], Path(tmp.name), {}, verified=True)
+        for season in ("2016/17", "2017/18"):
+            features.build_season(self.engine, season)
+        with self.engine.begin() as c:
+            c.execute(
+                update(PlayerFixtureStats)
+                .where(PlayerFixtureStats.season == "2016/17")
+                .values(minutes=PlayerFixtureStats.minutes + 1)
+            )
+        with self.engine.connect() as c:
+            self.assertEqual(
+                features.stale_seasons(c, ["2016/17", "2017/18"]), ["2016/17", "2017/18"]
+            )
+
+    def test_a_round_settling_rebuilds_the_season(self):
+        with self.engine.begin() as c:
+            c.execute(
+                update(Gameweek)
+                .where(Gameweek.season == "2016/17", Gameweek.gameweek == 2)
+                .values(data_checked=False)
+            )
+        features.build_season(self.engine, "2016/17")
+        with self.engine.begin() as c:
+            c.execute(
+                update(Gameweek)
+                .where(Gameweek.season == "2016/17", Gameweek.gameweek == 2)
+                .values(data_checked=True)
+            )
+            self.assertEqual(features.stale_seasons(c, ["2016/17"]), ["2016/17"])
+
+    def test_a_season_never_built_is_stale_and_one_built_is_not(self):
+        with self.engine.connect() as c:
+            self.assertEqual(features.stale_seasons(c, ["2016/17"]), ["2016/17"])
+        features.build_season(self.engine, "2016/17")
+        with self.engine.connect() as c:
+            self.assertEqual(features.stale_seasons(c, ["2016/17"]), [])
+
     def test_backfilling_a_season_again_clears_its_features(self):
         features.build_season(self.engine, "2016/17")
         tmp = tempfile.TemporaryDirectory()
@@ -121,6 +164,8 @@ class TestSyntheticSeason(FeaturesCase):
         with unittest.mock.patch("builtins.print"):
             backfill.backfill(self.engine, ["2016/17"], Path(tmp.name), {}, verified=True)
         self.assertEqual(self.rows("2016/17", 2), [])
+        with self.engine.connect() as c:
+            self.assertEqual(features.stale_seasons(c, ["2016/17"]), ["2016/17"])
 
 
 @unittest.skipUnless(

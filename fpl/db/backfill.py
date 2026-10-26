@@ -24,6 +24,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from fpl.db.load import LAST_GAMEWEEK, LOAD_LOCK
 from fpl.db.models import (
+    FeatureBuild,
     Fixture,
     Gameweek,
     Player,
@@ -60,18 +61,12 @@ EXPECTED: dict[str, dict[str, int]] = {
     }.items()
 }
 
-# Children before parents, so a season can be deleted in this order. The
-# features (#84) are derived from the rest, and rebuilt by fpl-features.
-TABLES = [
-    PlayerGameweekFeatures,
-    PlayerFixtureStats,
-    PlayerClub,
-    Fixture,
-    Gameweek,
-    SeasonPlayer,
-    Team,
-]
-COUNTED = {model.__tablename__: model for model in reversed(TABLES[1:])}
+# Derived from the rest and rebuilt by fpl-features (#84): cleared first, with
+# the record of their build, so fpl-features sees the season as unbuilt.
+DERIVED = [PlayerGameweekFeatures, FeatureBuild]
+# Children before parents, so a season can be deleted in this order.
+TABLES = [PlayerFixtureStats, PlayerClub, Fixture, Gameweek, SeasonPlayer, Team]
+COUNTED = {model.__tablename__: model for model in reversed(TABLES)}
 
 
 def load_season(connection, parsed):
@@ -83,7 +78,7 @@ def load_season(connection, parsed):
             "fpl-load keeps, not a past one to backfill."
         )
     connection.execute(insert(Season).values(season=season).on_conflict_do_nothing())
-    for model in TABLES:
+    for model in DERIVED + TABLES:
         connection.execute(delete(model).where(model.season == season))
     # People are not per season. A name is taken from this season unless a
     # later one, past or live, already has the person: the newest name wins,

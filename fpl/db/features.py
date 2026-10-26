@@ -10,22 +10,25 @@ A season's gameweeks are those it can build: every one up to the first not yet
 settled, which for a past season is all 38, and for the live one is the
 settled rounds and the gameweek coming next.
 
-By default a past season is built once, and again only when the feature
-version changes; the live season is rebuilt every time, since a round settling
-or a new snapshot changes it. Each season is written in one transaction.
+By default a season is built when what it is built from has changed since
+its last build (fpl.db.models.FeatureBuild): a round settling, a new
+snapshot, a backfill, a committed entry, the season before it, or the feature
+version. Each season is written in one transaction.
 
 Run from the repository root, with DATABASE_URL set.
 """
 
 import argparse
+import hashlib
 import sys
 from collections import defaultdict
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from fpl.db.load import LAST_GAMEWEEK
+from fpl.db.load import LAST_GAMEWEEK, LOAD_LOCK
 from fpl.db.models import (
+    FeatureBuild,
     Fixture,
     Gameweek,
     PlayerClub,
@@ -39,10 +42,8 @@ from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.models.feature_table import FEATURE_VERSION, SeasonData, build_gameweek
 from fpl.paths import require_project_root
 
-LOCK = 84
 
-
-def previous_season(season):
+def season_before(season):
     """'2025/26' for '2026/27'."""
     start = int(season[:4]) - 1
     return f"{start}/{(start + 1) % 100:02d}"
@@ -113,7 +114,7 @@ def read_season(connection, season):
         r.element_id: {"position": r.position, "code": r.player_code}
         for r in connection.execute(select(SeasonPlayer).where(SeasonPlayer.season == season))
     }
-    before = previous_season(season)
+    before = season_before(season)
     previous = {
         r.player_code: {"minutes": r.minutes, "points": r.points}
         for r in connection.execute(
@@ -160,10 +161,84 @@ def buildable(data):
     return [g for g in range(1, last + 1) if g in with_fixtures]
 
 
+def fingerprint(connection, season):
+    """A digest of everything `season`'s rows are built from, and the version they are
+    built by: its results, fixtures, clubs, settled rounds and committed entries,
+    and the season before it, whose totals are the last-season columns."""
+    stats, before = PlayerFixtureStats, season_before(season)
+    parts = [FEATURE_VERSION]
+    for s in (season, before):
+        parts.append(
+            tuple(
+                connection.execute(
+                    select(
+                        func.count(),
+                        func.sum(stats.minutes),
+                        func.sum(stats.total_points),
+                        func.sum(stats.bonus),
+                        func.sum(stats.value),
+                        func.sum(func.coalesce(stats.expected_goals, 0)),
+                        func.sum(func.coalesce(stats.expected_assists, 0)),
+                        func.sum(stats.element_id * stats.fixture_id),
+                    ).where(stats.season == s)
+                ).one()
+            )
+        )
+    parts.append(
+        tuple(
+            connection.execute(
+                select(
+                    func.count(),
+                    func.sum(Fixture.gameweek * Fixture.fixture_id),
+                    func.sum(
+                        func.coalesce(Fixture.team_h_score, -1) * 31
+                        + func.coalesce(Fixture.team_a_score, -1)
+                    ),
+                    func.sum(Fixture.team_h * 37 + Fixture.team_a),
+                ).where(Fixture.season == season)
+            ).one()
+        )
+    )
+    parts.append(
+        sorted(
+            connection.scalars(
+                select(Gameweek.gameweek).where(
+                    Gameweek.season == season, Gameweek.finished, Gameweek.data_checked
+                )
+            )
+        )
+    )
+    parts.append(
+        tuple(
+            connection.execute(
+                select(
+                    func.count(),
+                    func.sum(PlayerClub.element_id * PlayerClub.team_id),
+                    func.sum(func.lower(PlayerClub.gameweeks)),
+                ).where(PlayerClub.season == season)
+            ).one()
+        )
+    )
+    parts.append(
+        tuple(
+            connection.execute(
+                select(func.count(), func.sum(Prediction.gameweek * Prediction.player_id)).where(
+                    Prediction.season == season
+                )
+            ).one()
+        )
+    )
+    return hashlib.sha256(repr(parts).encode()).hexdigest()
+
+
 def build_season(engine, season):
-    """Replace `season`'s feature rows. Returns (gameweeks built, rows)."""
+    """Replace `season`'s feature rows, and record what they were built from.
+    Returns (gameweeks built, rows)."""
     with engine.begin() as connection:
-        connection.execute(select(func.pg_advisory_xact_lock(LOCK)))
+        # The snapshot loader's lock, which the backfill takes too: what is read
+        # here cannot change under the build, and a backfill cannot delete the
+        # season's players while its features are being written.
+        connection.execute(select(func.pg_advisory_xact_lock(LOAD_LOCK)))
         data = read_season(connection, season)
         gameweeks = buildable(data)
         rows = [row for gw in gameweeks for row in build_gameweek(data, gw)]
@@ -172,29 +247,25 @@ def build_season(engine, season):
         )
         if rows:
             connection.execute(insert(PlayerGameweekFeatures), rows)
+        values = {
+            "feature_version": FEATURE_VERSION,
+            "inputs": fingerprint(connection, season),
+            "rows": len(rows),
+            "built_at_utc": func.now(),
+        }
+        connection.execute(
+            insert(FeatureBuild)
+            .values(season=season, **values)
+            .on_conflict_do_update(index_elements=["season"], set_=values)
+        )
     return gameweeks, len(rows)
 
 
 def stale_seasons(connection, seasons):
-    """The seasons to build by default: the live one, and any past one not built at this
-    version. A season is live while any of its gameweeks is unsettled."""
-    wanted = []
-    for season in seasons:
-        live = connection.scalar(
-            select(func.count())
-            .select_from(Gameweek)
-            .where(Gameweek.season == season, ~(Gameweek.finished & Gameweek.data_checked))
-        )
-        versions = set(
-            connection.scalars(
-                select(PlayerGameweekFeatures.feature_version)
-                .distinct()
-                .where(PlayerGameweekFeatures.season == season)
-            )
-        )
-        if live or versions != {FEATURE_VERSION}:
-            wanted.append(season)
-    return wanted
+    """The seasons to build by default: any whose inputs, or the feature version, have
+    changed since it was built, and any never built."""
+    built = dict(connection.execute(select(FeatureBuild.season, FeatureBuild.inputs)).all())
+    return [s for s in seasons if built.get(s) != fingerprint(connection, s)]
 
 
 @exits_on_bad_url
@@ -210,7 +281,9 @@ def main(seasons=None, rebuild=False):
             if not rebuild and not seasons:
                 chosen = stale_seasons(connection, chosen)
         if not chosen:
-            print(f"Every season is built at {FEATURE_VERSION}; nothing to do.")
+            print(
+                f"Every season is built, at {FEATURE_VERSION}, from what is there; nothing to do."
+            )
         for season in chosen:
             gameweeks, count = build_season(engine, season)
             span = f"GW{gameweeks[0]}-{gameweeks[-1]}" if gameweeks else "no gameweeks"

@@ -1,8 +1,8 @@
-"""Feature table: player_gameweek_features (#84).
+"""Feature table: player_gameweek_features and feature_builds (#84).
 
 Revision ID: 0003
 Revises: 0002
-Created: 2026-10-25 18:06:49.819383
+Created: 2026-10-25 19:32:50.975368
 """
 
 from collections.abc import Sequence
@@ -17,6 +17,23 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.create_table(
+        "feature_builds",
+        sa.Column("season", sa.Text(), nullable=False),
+        sa.Column("feature_version", sa.Text(), nullable=False),
+        sa.Column("inputs", sa.Text(), nullable=False),
+        sa.Column("rows", sa.Integer(), nullable=False),
+        sa.Column(
+            "built_at_utc",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["season"], ["seasons.season"], name=op.f("fk_feature_builds_season_seasons")
+        ),
+        sa.PrimaryKeyConstraint("season", name=op.f("pk_feature_builds")),
+    )
     op.create_table(
         "player_gameweek_features",
         sa.Column("season", sa.Text(), nullable=False),
@@ -83,3 +100,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_player_gameweek_features_player", table_name="player_gameweek_features")
     op.drop_table("player_gameweek_features")
+    op.drop_table("feature_builds")

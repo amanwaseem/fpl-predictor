@@ -16,7 +16,10 @@ deadline. Here that means:
   logged models read them (fpl.models.features.recent_history): every row,
   every score and every rating below is built from those rounds alone.
 - **The fixture list and each player's club** for the gameweek. Both are
-  published before the deadline; neither is a result.
+  published before the deadline; neither is a result. One caveat: the
+  database keeps each fixture's final gameweek, not the one first published,
+  so a match postponed after a deadline counts in the gameweek it was played.
+  The archive keeps no earlier schedule to build from.
 - **Price** as the last value seen before the gameweek, so none for GW1.
 - **Availability** only where a committed entry recorded it (the live season),
   since entries are made before deadlines. Past seasons have none.
@@ -36,6 +39,7 @@ for seasons before FPL published them (2022/23).
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from fpl.models.features import settled_before
 from fpl.models.teams import Ratings, clean_sheet_probability, team_matches
 
 FEATURE_VERSION = "features-v1"
@@ -79,10 +83,12 @@ def ratings_before(data, gameweek, usable):
     Rated on expected goals where the season has them, goals where it does not.
     """
     matches = team_matches(data.fixtures, data.histories, gameweek, usable)
-    if not matches:
+    source = "xg" if any(m["xg_for"] for m in matches) else "goals"
+    # A league with nothing scored yet (or no rounds) has no rate to rate
+    # clubs against; Ratings would stop the run, so there are no ratings.
+    if sum(m[f"{source}_for"] for m in matches) <= 0:
         return None
-    has_xg = any(m["xg_for"] for m in matches)
-    return Ratings(matches, source="xg" if has_xg else "goals")
+    return Ratings(matches, source=source)
 
 
 def _rounds(rows):
@@ -167,11 +173,8 @@ def build_gameweek(data, gameweek):
         team = club_at(data.clubs.get(element, []), gameweek)
         if team is None or team not in by_team:
             continue
-        before = [
-            h
-            for h in data.histories.get(element, [])
-            if h.get("round") is not None and h["round"] < gameweek and h["round"] in usable
-        ]
+        # The logged models' boundary: fpl.models.features.settled_before.
+        before = [h for h in data.histories.get(element, []) if settled_before(h, gameweek, usable)]
         rounds = _rounds(before)
         previous = data.previous.get(player["code"])
         prices = [r["value"] for r in rounds if r["value"] is not None]
