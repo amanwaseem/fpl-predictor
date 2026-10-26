@@ -66,10 +66,27 @@ class TestLogs(unittest.TestCase):
             response = client.get("/healthz")
         self.assertEqual(len(response.headers["x-request-id"]), 32)
 
-    def test_a_failed_request_is_logged_as_a_500(self):
+    def test_a_failed_request_is_a_500_with_its_id_in_the_answer_and_the_log(self):
         with TestClient(app_with_a_failing_route(), raise_server_exceptions=False) as client:
-            self.assertEqual(client.get("/v1/broken").status_code, 500)
-        self.assertEqual(self.lines()[-1]["status"], 500)
+            response = client.get("/v1/broken", headers={"X-Request-ID": "err-1"})
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.headers["x-request-id"], "err-1")
+        self.assertEqual(response.headers["content-type"], "application/problem+json")
+        lines = self.lines()
+        self.assertEqual(lines[-1]["status"], 500)
+        self.assertTrue(
+            any(
+                line["message"] == "unhandled error"
+                and "exception" in line
+                and line["request_id"] == "err-1"
+                for line in lines
+            )
+        )
+
+    def test_times_are_utc_with_milliseconds(self):
+        with TestClient(create_app(engine=object())) as client:
+            client.get("/healthz")
+        self.assertRegex(self.lines()[-1]["time"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$")
 
 
 class TestRouteTemplate(unittest.TestCase):
@@ -100,7 +117,8 @@ class TestSentry(unittest.TestCase):
             TestClient(app_with_a_failing_route(), raise_server_exceptions=False) as client,
             redirect_stdout(io.StringIO()),
         ):
-            self.assertEqual(client.get("/v1/broken").status_code, 500)
+            response = client.get("/v1/broken", headers={"X-Request-ID": "boom-1"})
+            self.assertEqual(response.status_code, 500)
         sentry_sdk.flush()
         events = [
             item.payload.json
@@ -109,8 +127,10 @@ class TestSentry(unittest.TestCase):
             if item.headers.get("type") == "event"
         ]
         self.assertTrue(events, "no event reached the transport")
+        self.assertEqual(len(events), 1, "reported once, not twice")
         values = events[0]["exception"]["values"]
         self.assertEqual(values[-1]["type"], "RuntimeError")
+        self.assertEqual(events[0]["tags"]["request_id"], "boom-1")
 
 
 class TestTelemetry(unittest.TestCase):

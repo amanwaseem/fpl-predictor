@@ -31,8 +31,6 @@ def cli(argv=None):
     except DatabaseURLError as e:
         raise SystemExit(str(e)) from None
     observability.configure_logging()
-    if observability.configure_sentry():
-        observability.log.info("errors are reported to Sentry")
     uvicorn.run(
         "fpl.api.app:app",
         host=args.host,

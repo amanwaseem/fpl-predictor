@@ -10,10 +10,13 @@ GitHub's failed-workflow email is the alert, when:
   included: the service is down;
 - `/v1/status` does not answer 200: the API is up but cannot read its
   database;
-- the newest snapshot production has loaded is older than STALE_HOURS: the
-  daily ingest (#93) has not run, or has failed;
-- FPL has settled a gameweek that production has not, and production's data
-  is more than a day old: the ingest ran but missed it.
+- the daily ingest (#93) has not compared FPL with production for
+  STALE_HOURS: it has not run, or could not reach the database.
+
+Freshness is the ingest's last check, not the newest snapshot loaded: on a
+day when nothing has changed the ingest loads nothing, and the snapshot stays
+days old while the data is current. An ingest that sees FPL ahead and then
+fails to load fails its own run, which is its own alert.
 
 The deadline watchdog (tools/check_deadline.py) is the other alarm: a
 deadline near with no entry. Hourly, not every minute: the machine stops when
@@ -36,7 +39,6 @@ URL = "https://fpl-predictor-aman.fly.dev"
 TIMEOUT = 60
 # The ingest runs daily; a day and a quarter allows for a late run.
 STALE_HOURS = 30
-BEHIND_HOURS = 24
 
 
 def fetch_json(url, timeout=TIMEOUT):
@@ -58,7 +60,7 @@ def settled_by_fpl(bootstrap):
 
 def check(health, status, fpl_settled):
     """(ok, lines) from the API's answers and FPL's latest settled gameweek."""
-    lines, ok = [], True
+    lines = []
     code, _ = health
     if code != 200:
         return False, [f"/healthz answered {code or 'nothing'}: the service is down."]
@@ -68,34 +70,21 @@ def check(health, status, fpl_settled):
         return False, lines + [
             f"/v1/status answered {code or 'nothing'}: the API cannot read its database."
         ]
-    age = body.get("data_age_seconds")
+    age = body.get("checked_age_seconds")
     hours = None if age is None else age / 3600
     lines.append(
-        f"/v1/status: data {'unknown' if hours is None else f'{hours:.1f} hours'} old, "
-        f"latest settled GW{body.get('latest_settled_gameweek')}, next "
+        f"/v1/status: last ingest check {'never' if hours is None else f'{hours:.1f} hours ago'}"
+        f", latest settled GW{body.get('latest_settled_gameweek')}, next "
         f"GW{body.get('next_gameweek')} with entries {body.get('next_gameweek_entries')}"
     )
-    if hours is None or hours > STALE_HOURS:
-        ok = False
-        lines.append(
-            f"STALE: no snapshot loaded in {STALE_HOURS} hours. Check the Ingest "
-            "workflow (docs/operations.md)."
-        )
-    production = body.get("latest_settled_gameweek")
-    if (
-        fpl_settled is not None
-        and (production is None or fpl_settled > production)
-        and hours is not None
-        and hours > BEHIND_HOURS
-    ):
-        ok = False
-        lines.append(
-            f"BEHIND: FPL has settled GW{fpl_settled}, production only "
-            f"GW{production}. Run Actions > Ingest > Run workflow."
-        )
-    elif fpl_settled is not None:
+    if fpl_settled is not None:
         lines.append(f"FPL's latest settled: GW{fpl_settled}")
-    return ok, lines
+    if hours is None or hours > STALE_HOURS:
+        return False, lines + [
+            f"STALE: the ingest has not checked FPL in {STALE_HOURS} hours. Check the Ingest "
+            "workflow (docs/operations.md)."
+        ]
+    return True, lines
 
 
 def main(url=URL):

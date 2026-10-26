@@ -31,6 +31,7 @@ from pathlib import Path
 from alembic.script import ScriptDirectory
 from alembic.util import CommandError
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 
 from fpl.db.load import (
     fixture_rows,
@@ -41,7 +42,15 @@ from fpl.db.load import (
     team_rows,
 )
 from fpl.db.migrate import MIGRATIONS, current, head
-from fpl.db.models import Fixture, Gameweek, PlayerClub, SeasonPlayer, Snapshot, Team
+from fpl.db.models import (
+    Fixture,
+    Gameweek,
+    IngestCheck,
+    PlayerClub,
+    SeasonPlayer,
+    Snapshot,
+    Team,
+)
 from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.paths import require_project_root
 
@@ -188,6 +197,14 @@ def main(schema_only=False):
             else:
                 api = from_api(bootstrap, fixtures)
                 found = differences(api, from_database(connection, season))
+            # Recorded whether or not a load follows: the newest check is how
+            # fresh production's data is (/v1/status, tools/check_uptime.py).
+            connection.execute(
+                insert(IngestCheck).values(
+                    season=season, compared_snapshot_id=snap.name, load_needed=bool(found)
+                )
+            )
+            connection.commit()
     finally:
         engine.dispose()
 

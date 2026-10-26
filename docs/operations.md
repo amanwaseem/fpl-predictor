@@ -10,7 +10,8 @@ entry by hand is [`RUNBOOK.md`](../RUNBOOK.md).
 |---|---|---|
 | The API is up | `/healthz` hourly, from GitHub Actions (`uptime.yml`, `tools/check_uptime.py`) | Failed-workflow email |
 | The API reads its database | `/v1/status` in the same check | Failed-workflow email |
-| The data is fresh | `/v1/status`'s `data_age_seconds` under 30 hours, and its latest settled gameweek not behind FPL's for more than a day | Failed-workflow email |
+| The data is fresh | `/v1/status`'s `checked_age_seconds`, since the ingest last compared FPL with the database, under 30 hours | Failed-workflow email |
+| A load the ingest needed went through | The Ingest workflow fails its own run | Failed-workflow email |
 | An entry is in before the deadline | The deadline watchdog (`deadline.yml`, `tools/check_deadline.py`), hourly | Failed-workflow email |
 | Errors | Sentry, when `SENTRY_DSN` is set on the Fly app | Sentry's email |
 | Latency, solver time, freshness | OpenTelemetry over OTLP, when `OTEL_EXPORTER_OTLP_ENDPOINT` is set | The dashboard |
@@ -33,7 +34,7 @@ not a page at 3am.
 | **Availability** | 99% of hourly `/healthz` checks answer 200 within 60 s, a cold start included | Uptime workflow history |
 | **Read latency** | p95 under 500 ms for `/v1` reads on a warm machine | `http.server.request.duration` by route |
 | **Optimiser latency** | p95 under 2 s for `/v1/optimise` and advice, uncached | The same, and `fpl.solver.duration` |
-| **Data freshness** | A settled gameweek's results in production within 24 hours of FPL settling it | Uptime check, `fpl.data.age` |
+| **Data freshness** | The ingest checks FPL at least daily, so a settled gameweek's results reach production within 24 hours of FPL settling it | Uptime check, `fpl.data.age` |
 | **Entries** | Every logged model's entry merged at least 2 hours before each deadline | The deadline watchdog |
 
 The load test (README, "Load test") is the reference for what latency the
@@ -60,7 +61,7 @@ Start with the failing workflow's summary, which says what failed. Then:
    for compute hours (the free plan suspends at its monthly limit).
 3. A migration that did not run: re-run Actions → Deploy.
 
-### STALE or BEHIND: the data is not fresh
+### STALE: the data is not fresh
 
 1. Actions → Ingest: did the 05:41 UTC run fail, or not run at all? GitHub
    disables schedules after 60 quiet days (deploy.md, step 5).

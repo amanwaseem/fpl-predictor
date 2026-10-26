@@ -19,6 +19,7 @@ from fpl.db import migrate
 from fpl.db.models import (
     Fixture,
     Gameweek,
+    IngestCheck,
     Player,
     PlayerClub,
     PlayerFixtureStats,
@@ -347,7 +348,16 @@ class TestRoutes(APICase):
         self.assertEqual((body["season"], body["latest_settled_gameweek"]), (SEASON, 7))
         self.assertIsNone(body["snapshot_id"])
         self.assertIsNone(body["data_age_seconds"])
+        self.assertIsNone(body["checked_age_seconds"])
         with self.engine.begin() as c:
+            c.execute(
+                insert(IngestCheck).values(
+                    season=SEASON,
+                    compared_snapshot_id="20261026T054100Z",
+                    load_needed=False,
+                    checked_at_utc=datetime.now(UTC) - timedelta(minutes=30),
+                )
+            )
             c.execute(
                 insert(Snapshot).values(
                     snapshot_id="20261020T080000Z",
@@ -365,6 +375,7 @@ class TestRoutes(APICase):
         body = self.client.get("/v1/status", headers={"Cache-Control": "no-cache"}).json()
         self.assertEqual(body["snapshot_id"], "20261020T080000Z")
         self.assertAlmostEqual(body["data_age_seconds"], 7200, delta=60)
+        self.assertAlmostEqual(body["checked_age_seconds"], 1800, delta=60)
         self.assertEqual(body["next_gameweek"], 8)
         self.assertEqual(body["next_gameweek_entries"], ["baseline-v1", "form-fixture-v1"])
 

@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import check_uptime  # noqa: E402
 
 FRESH = {
-    "data_age_seconds": 3 * 3600,
+    "checked_age_seconds": 3 * 3600,
     "latest_settled_gameweek": 8,
     "next_gameweek": 9,
     "next_gameweek_entries": [],
@@ -31,21 +31,23 @@ class TestCheck(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("database", lines[-1])
 
-    def test_data_older_than_the_limit_is_stale(self):
-        old = FRESH | {"data_age_seconds": (check_uptime.STALE_HOURS + 1) * 3600}
+    def test_no_check_within_the_limit_is_stale(self):
+        old = FRESH | {"checked_age_seconds": (check_uptime.STALE_HOURS + 1) * 3600}
         ok, lines = check_uptime.check((200, {}), (200, old), 8)
         self.assertFalse(ok)
-        self.assertTrue(any("STALE" in line for line in lines))
+        self.assertIn("STALE", lines[-1])
 
-    def test_behind_fpl_for_more_than_a_day_fails(self):
-        day_old = FRESH | {"data_age_seconds": 25 * 3600}
-        ok, lines = check_uptime.check((200, {}), (200, day_old), 9)
+    def test_an_old_snapshot_with_a_recent_check_is_fresh(self):
+        """Between gameweeks nothing is loaded for days, and that is not stale."""
+        quiet = FRESH | {"data_age_seconds": 5 * 86400}
+        self.assertTrue(check_uptime.check((200, {}), (200, quiet), 8)[0])
+
+    def test_never_checked_is_stale(self):
+        ok, _ = check_uptime.check((200, {}), (200, FRESH | {"checked_age_seconds": None}), 8)
         self.assertFalse(ok)
-        self.assertTrue(any("BEHIND" in line for line in lines))
 
-    def test_behind_fpl_by_hours_is_the_ingest_still_to_run(self):
-        ok, _ = check_uptime.check((200, {}), (200, FRESH), 9)
-        self.assertTrue(ok)
+    def test_fpl_ahead_after_a_recent_check_is_the_ingest_still_to_run(self):
+        self.assertTrue(check_uptime.check((200, {}), (200, FRESH), 9)[0])
 
     def test_fpl_unreadable_checks_age_only(self):
         ok, _ = check_uptime.check((200, {}), (200, FRESH), None)

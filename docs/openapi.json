@@ -1473,6 +1473,17 @@
       "Status": {
         "description": "How fresh production's data is, for the uptime check and the dashboard (#86).",
         "properties": {
+          "checked_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked Age Seconds"
+          },
           "data_age_seconds": {
             "anyOf": [
               {
@@ -1483,6 +1494,18 @@
               }
             ],
             "title": "Data Age Seconds"
+          },
+          "last_checked_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked Utc"
           },
           "latest_settled_gameweek": {
             "anyOf": [
@@ -1555,6 +1578,8 @@
         },
         "required": [
           "season",
+          "last_checked_utc",
+          "checked_age_seconds",
           "snapshot_id",
           "snapshot_completed_utc",
           "data_age_seconds",
