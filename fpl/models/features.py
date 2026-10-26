@@ -47,9 +47,11 @@ def recent_rows(history, target_gw, usable):
     For a model that needs more than minutes and points from the window —
     goals, assists, clean sheets — without choosing its rounds differently.
     """
-    rounds = {h["round"] for h in history
-              if h.get("round") is not None and h["round"] < target_gw
-              and h["round"] in usable}
+    rounds = {
+        h["round"]
+        for h in history
+        if h.get("round") is not None and h["round"] < target_gw and h["round"] in usable
+    }
     kept = set(sorted(rounds, reverse=True)[:LOOKBACK])
     return [h for h in history if h.get("round") in kept]
 
@@ -60,7 +62,7 @@ def weighted(values):
         return 0.0, 0.0
     total = weight_sum = 0.0
     for i, v in enumerate(values):
-        w = DECAY ** i
+        w = DECAY**i
         total += v * w
         weight_sum += w
     return total / weight_sum, weight_sum
@@ -218,8 +220,9 @@ def player_prior_parts(history_past, season, position=None, xg_weight=None, floo
     if xg_weight is None:
         xg_weight = XG_WEIGHT
 
-    realised = ((row.get("goals_scored") or 0) * GOAL_POINTS.get(position, 0)
-                + (row.get("assists") or 0) * ASSIST_POINTS)
+    realised = (row.get("goals_scored") or 0) * GOAL_POINTS.get(position, 0) + (
+        row.get("assists") or 0
+    ) * ASSIST_POINTS
     attack = realised
     expected = expected_points(row, position) if xg_weight else None
     if expected is not None:
@@ -230,22 +233,27 @@ def player_prior_parts(history_past, season, position=None, xg_weight=None, floo
     total = (row.get("total_points") or 0) - realised + attack
     clean_sheet = (row.get("clean_sheets") or 0) * CLEAN_SHEET_POINTS.get(position, 0)
     per_90 = 90.0 / minutes
-    return {"total": total * per_90, "attack": attack * per_90,
-            "clean_sheet": clean_sheet * per_90,
-            "defensive_count": defensive_count(row, position) * per_90,
-            **dict(zip(("conceded", "saves"), season_goalkeeping_parts(row, position),
-                       strict=True))}
+    return {
+        "total": total * per_90,
+        "attack": attack * per_90,
+        "clean_sheet": clean_sheet * per_90,
+        "defensive_count": defensive_count(row, position) * per_90,
+        **dict(zip(("conceded", "saves"), season_goalkeeping_parts(row, position), strict=True)),
+    }
 
 
 def season_minutes(history, target_gw, usable):
     """Minutes this season in settled rounds before the target, not windowed."""
-    return sum(h.get("minutes", 0) or 0 for h in history
-               if h.get("round") is not None and h["round"] < target_gw
-               and h["round"] in usable)
+    return sum(
+        h.get("minutes", 0) or 0
+        for h in history
+        if h.get("round") is not None and h["round"] < target_gw and h["round"] in usable
+    )
 
 
-def prior(position, last_season_pp90, minutes_this_season,
-          player_prior_minutes=PLAYER_PRIOR_MINUTES):
+def prior(
+    position, last_season_pp90, minutes_this_season, player_prior_minutes=PLAYER_PRIOR_MINUTES
+):
     """(points per 90, pseudo-minutes) to shrink a player's rate toward.
 
     Last season's rate where there is one, fading as this season accumulates;
@@ -253,8 +261,7 @@ def prior(position, last_season_pp90, minutes_this_season,
     """
     if last_season_pp90 is None:
         return POSITION_PRIOR_PP90.get(position, 3.5), POSITION_PRIOR_MINUTES
-    fade = PLAYER_PRIOR_HALF_LIFE_MINUTES / (
-        PLAYER_PRIOR_HALF_LIFE_MINUTES + minutes_this_season)
+    fade = PLAYER_PRIOR_HALF_LIFE_MINUTES / (PLAYER_PRIOR_HALF_LIFE_MINUTES + minutes_this_season)
     return last_season_pp90, player_prior_minutes * fade
 
 
@@ -281,10 +288,12 @@ def expected_minutes(recent, player):
 # the chance of keeping one; the rest is left alone. Shared because a logged
 # model and the comparators it is judged against have to split alike.
 
+
 def attack_points(row, position):
     """Points from goals and assists in one history row."""
-    return ((row.get("goals_scored") or 0) * GOAL_POINTS.get(position, 0)
-            + (row.get("assists") or 0) * ASSIST_POINTS)
+    return (row.get("goals_scored") or 0) * GOAL_POINTS.get(position, 0) + (
+        row.get("assists") or 0
+    ) * ASSIST_POINTS
 
 
 def clean_sheet_points(row, position):
@@ -342,8 +351,9 @@ def league_rates(elements, positions, histories, target_gw, usable, parts):
             for i, part in enumerate(parts):
                 t[i] += part(row, position)
             t[-1] += row.get("minutes") or 0
-    return {pos: tuple(x * 90.0 / t[-1] if t[-1] else 0.0 for x in t[:-1])
-            for pos, t in totals.items()}
+    return {
+        pos: tuple(x * 90.0 / t[-1] if t[-1] else 0.0 for x in t[:-1]) for pos, t in totals.items()
+    }
 
 
 def positional_rates(elements, positions, histories, target_gw, usable):
@@ -353,8 +363,9 @@ def positional_rates(elements, positions, histories, target_gw, usable):
     settled rounds, so a player with few minutes and no usable last season is
     shrunk toward what his position actually earns from each part.
     """
-    return league_rates(elements, positions, histories, target_gw, usable,
-                        (attack_points, clean_sheet_points))
+    return league_rates(
+        elements, positions, histories, target_gw, usable, (attack_points, clean_sheet_points)
+    )
 
 
 def defensive_contribution_points(count_per_90, position, window, expected):
@@ -369,15 +380,23 @@ def defensive_contribution_points(count_per_90, position, window, expected):
     if not played or expected <= 0:
         return 0.0
     usual = sum(played) / len(played)
-    return (DEFENSIVE_CONTRIBUTION_POINTS * min(1.0, expected / usual)
-            * chance_of_defensive_contribution(count_per_90 * usual / 90.0, position))
+    return (
+        DEFENSIVE_CONTRIBUTION_POINTS
+        * min(1.0, expected / usual)
+        * chance_of_defensive_contribution(count_per_90 * usual / 90.0, position)
+    )
 
 
 def positional_defensive_rates(elements, positions, histories, target_gw, usable):
     """League defensive contribution per 90, by position: (count, points)."""
-    return league_rates(elements, positions, histories, target_gw, usable,
-                        (lambda row, _: row.get("defensive_contribution") or 0,
-                         defensive_points))
+    return league_rates(
+        elements,
+        positions,
+        histories,
+        target_gw,
+        usable,
+        (lambda row, _: row.get("defensive_contribution") or 0, defensive_points),
+    )
 
 
 def split_rates(observed, minutes, priors, prior_minutes):
@@ -389,8 +408,9 @@ def split_rates(observed, minutes, priors, prior_minutes):
     shrunk rate — last season's or the position's rest, blended with this
     season's — rather than whatever the other parts leave over.
     """
-    total, attack, clean_sheet = (shrunk_pp90(o, minutes, p, prior_minutes)
-                                  for o, p in zip(observed, priors, strict=True))
+    total, attack, clean_sheet = (
+        shrunk_pp90(o, minutes, p, prior_minutes) for o, p in zip(observed, priors, strict=True)
+    )
     return total, attack, clean_sheet, total - attack - clean_sheet
 
 
@@ -407,8 +427,8 @@ def chance_of_sixty(rows, player):
     total = weight_sum = 0.0
     for i, rnd in enumerate(sorted(by_round, reverse=True)):
         played, fixtures = by_round[rnd]
-        total += DECAY ** i * played / fixtures
-        weight_sum += DECAY ** i
+        total += DECAY**i * played / fixtures
+        weight_sum += DECAY**i
     return (total / weight_sum if weight_sum else 0.0) * availability(player)
 
 
@@ -431,7 +451,7 @@ def poisson_floor_mean(mean, per):
     """
     if mean <= 0:
         return 0.0
-    limit = int(mean + 12 * mean ** 0.5 + 20)
+    limit = int(mean + 12 * mean**0.5 + 20)
     pmf = math.exp(-mean)
     tail = 1.0  # P(X >= k), starting at k = 0
     total = 0.0
@@ -445,8 +465,9 @@ def poisson_floor_mean(mean, per):
 
 def conceded_points(row, position):
     """Points lost to goals conceded in one history row."""
-    return CONCEDED_POINTS.get(position, 0) * ((row.get("goals_conceded") or 0)
-                                                // CONCEDED_PER_POINT)
+    return CONCEDED_POINTS.get(position, 0) * (
+        (row.get("goals_conceded") or 0) // CONCEDED_PER_POINT
+    )
 
 
 def save_points(row, position):
@@ -466,9 +487,11 @@ def season_goalkeeping_parts(row, position):
         return 0.0, 0.0
     per_90 = 90.0 / minutes
     conceded = CONCEDED_POINTS.get(position, 0) * poisson_floor_mean(
-        (row.get("goals_conceded") or 0) * per_90, CONCEDED_PER_POINT)
+        (row.get("goals_conceded") or 0) * per_90, CONCEDED_PER_POINT
+    )
     saves = SAVE_POINTS.get(position, 0) * poisson_floor_mean(
-        (row.get("saves") or 0) * per_90, SAVES_PER_POINT)
+        (row.get("saves") or 0) * per_90, SAVES_PER_POINT
+    )
     return conceded, saves
 
 
@@ -494,8 +517,9 @@ def league_save_rate(elements, positions, histories, target_gw, usable):
 
 def positional_goalkeeping_rates(elements, positions, histories, target_gw, usable):
     """League (conceded, saves) points per 90 by position."""
-    return league_rates(elements, positions, histories, target_gw, usable,
-                        (conceded_points, save_points))
+    return league_rates(
+        elements, positions, histories, target_gw, usable, (conceded_points, save_points)
+    )
 
 
 def split_parts(observed, minutes, priors, prior_minutes):
@@ -505,6 +529,7 @@ def split_parts(observed, minutes, priors, prior_minutes):
     toward its own prior at one weight, so the parts and the rest add back up
     to the total.
     """
-    total, *parts = (shrunk_pp90(o, minutes, p, prior_minutes)
-                     for o, p in zip(observed, priors, strict=True))
+    total, *parts = (
+        shrunk_pp90(o, minutes, p, prior_minutes) for o, p in zip(observed, priors, strict=True)
+    )
     return total, parts, total - sum(parts)

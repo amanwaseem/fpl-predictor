@@ -50,7 +50,7 @@ def get(path):
         except requests.RequestException as e:
             if attempt == RETRIES:
                 raise
-            wait = 2 ** attempt
+            wait = 2**attempt
             print(f"  retry {attempt}/{RETRIES} for {path} after {wait}s ({e})")
             time.sleep(wait)
 
@@ -92,7 +92,8 @@ def find_incomplete():
     latest = latest_file.read_text().strip() if latest_file.exists() else ""
 
     candidates = [
-        d for d in root.iterdir()
+        d
+        for d in root.iterdir()
         if d.is_dir()
         and not (d / "manifest.json").exists()
         and (d / "players").is_dir()
@@ -168,7 +169,6 @@ def main(skip_players: bool, resume: bool) -> None:
             "Drop --skip-players to finish it."
         )
 
-
     # On resume, reuse what is already on disk. Refetching bootstrap or
     # fixtures would mix data from two points in time into one snapshot,
     # which defeats the purpose of snapshotting at all.
@@ -222,8 +222,9 @@ def main(skip_players: bool, resume: bool) -> None:
         if skipped:
             print(f"  resumed: {skipped} already on disk, {fetched} fetched")
 
-        missing = [p["id"] for p in players
-                   if not (outdir / "players" / f"{p['id']}.json").exists()]
+        missing = [
+            p["id"] for p in players if not (outdir / "players" / f"{p['id']}.json").exists()
+        ]
         if missing:
             raise SystemExit(
                 f"\n{len(missing)} player files missing after fetch. "
@@ -235,13 +236,17 @@ def main(skip_players: bool, resume: bool) -> None:
     # as unusable — a half-finished directory is otherwise indistinguishable
     # from a complete one, and a partial snapshot silently produces a partial
     # prediction log that hard rule 1 then makes permanent.
-    write(outdir, "manifest.json", {
-        "snapshot_id": stamp,
-        "element_count": len(players),
-        "has_players": not skip_players,
-        "live_gameweeks": live_gameweeks,
-        "completed_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    })
+    write(
+        outdir,
+        "manifest.json",
+        {
+            "snapshot_id": stamp,
+            "element_count": len(players),
+            "has_players": not skip_players,
+            "live_gameweeks": live_gameweeks,
+            "completed_at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    )
 
     # Stable pointer to the most recent snapshot, so downstream code doesn't
     # need to guess at timestamps. Only a full snapshot earns the pointer:
@@ -267,8 +272,11 @@ def cli(argv=None):
     """`fpl-fetch`, or `python -m fpl.ingest.fetch`."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-players", action="store_true", help="skip slow per-player fetch")
-    ap.add_argument("--resume", action="store_true",
-                    help="continue the most recent snapshot that has no manifest")
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="continue the most recent snapshot that has no manifest",
+    )
     args = ap.parse_args(argv)
     require_project_root()
     return main(args.skip_players, args.resume)

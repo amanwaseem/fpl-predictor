@@ -40,7 +40,6 @@ class InDirectory(unittest.TestCase):
 
 
 class TestRequireProjectRoot(InDirectory):
-
     def test_refused_without_a_pyproject(self):
         with self.assertRaises(SystemExit) as raised:
             require_project_root()
@@ -67,8 +66,7 @@ class TestRequireProjectRoot(InDirectory):
 
     def test_help_still_works_anywhere(self):
         """--help is answered before the check: reading usage is never harmful."""
-        with self.assertRaises(SystemExit) as raised, \
-                contextlib.redirect_stdout(io.StringIO()):
+        with self.assertRaises(SystemExit) as raised, contextlib.redirect_stdout(io.StringIO()):
             predict_baseline.cli(["--help"])
         self.assertEqual(raised.exception.code, 0)
 
@@ -79,7 +77,6 @@ PATHLESS = {"fpl-serve", "fpl-migrate"}
 
 
 class TestEveryCommandChecks(unittest.TestCase):
-
     def test_every_cli_calls_require_project_root(self):
         """The docs say every fpl-* command refuses outside the root; hold them to it."""
         with (ROOT / "pyproject.toml").open("rb") as f:
@@ -90,15 +87,20 @@ class TestEveryCommandChecks(unittest.TestCase):
             with self.subTest(command=command):
                 module = importlib.import_module(target.partition(":")[0])
                 tree = ast.parse(Path(module.__file__).read_text())
-                cli = next(node for node in tree.body
-                           if isinstance(node, ast.FunctionDef) and node.name == "cli")
-                called = {node.func.id for node in ast.walk(cli)
-                          if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+                cli = next(
+                    node
+                    for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == "cli"
+                )
+                called = {
+                    node.func.id
+                    for node in ast.walk(cli)
+                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                }
                 self.assertIn("require_project_root", called)
 
 
 class TestName(unittest.TestCase):
-
     def test_matches_pyproject(self):
         """Renaming the project without updating fpl/paths.py would lock every command."""
         with (ROOT / "pyproject.toml").open("rb") as f:

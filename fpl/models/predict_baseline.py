@@ -105,19 +105,21 @@ def predict_rows(bootstrap, fixtures, histories, target_gw, usable):
             player, history, position, n_fix, target_gw, usable
         )
 
-        rows.append({
-            "gameweek": target_gw,
-            "player_id": pid,
-            "web_name": player["web_name"],
-            "team": teams.get(player["team"], "UNK"),
-            "position": position,
-            "price": player["now_cost"] / 10.0,
-            "predicted_points": predicted,
-            "expected_minutes": exp_min,
-            "points_per_90": pp90,
-            "n_fixtures": n_fix,
-            "status": player.get("status", ""),
-        })
+        rows.append(
+            {
+                "gameweek": target_gw,
+                "player_id": pid,
+                "web_name": player["web_name"],
+                "team": teams.get(player["team"], "UNK"),
+                "position": position,
+                "price": player["now_cost"] / 10.0,
+                "predicted_points": predicted,
+                "expected_minutes": exp_min,
+                "points_per_90": pp90,
+                "n_fixtures": n_fix,
+                "status": player.get("status", ""),
+            }
+        )
 
     # SPEC section 5: descending predicted_points, ties broken by ascending
     # player_id. The tie-break is not cosmetic — without it the order of tied
@@ -144,8 +146,9 @@ def main(requested_gw, out_dir, snapshot_id=None):
     # added an element_type mid-era before now — managers, in 2024/25 — and a
     # snapshot the position map does not cover has to stop the run rather than
     # enter the log as UNK.
-    unknown = sorted({p["element_type"] for p in bootstrap["elements"]
-                      if p["element_type"] not in positions})
+    unknown = sorted(
+        {p["element_type"] for p in bootstrap["elements"] if p["element_type"] not in positions}
+    )
     if unknown:
         raise SystemExit(
             f"element_type(s) {unknown} appear on players but have no entry in "
@@ -168,8 +171,11 @@ def main(requested_gw, out_dir, snapshot_id=None):
     print(f"excluded: {exc_txt}" + ("  (results not final)" if excluded else ""))
 
     if not usable:
-        why = (f"data_checked is false for: {exc_txt}" if excluded
-               else "no earlier gameweeks exist in this snapshot")
+        why = (
+            f"data_checked is false for: {exc_txt}"
+            if excluded
+            else "no earlier gameweeks exist in this snapshot"
+        )
         raise SystemExit(
             f"\nNo usable history before GW{target_gw} — {why}.\n"
             "Refusing to predict from provisional data. Nothing was written.\n"
@@ -190,16 +196,16 @@ def main(requested_gw, out_dir, snapshot_id=None):
     }
     rows = predict_rows(bootstrap, fixtures, histories, target_gw, usable)
 
-    outpath = write_entry(
-        rows, out_dir, target_gw, MODEL_VERSION, snap.name, deadline
-    )
+    outpath = write_entry(rows, out_dir, target_gw, MODEL_VERSION, snap.name, deadline)
 
     print(f"\nwrote {len(rows)} predictions -> {outpath}\n")
     print(f"{'player':<18}{'team':<6}{'pos':<5}{'pred':>6}{'mins':>7}{'pp90':>7}")
     print("-" * 49)
     for r in rows[:20]:
-        print(f"{r['web_name'][:17]:<18}{r['team']:<6}{r['position']:<5}"
-              f"{r['predicted_points']:>6}{r['expected_minutes']:>7}{r['points_per_90']:>7}")
+        print(
+            f"{r['web_name'][:17]:<18}{r['team']:<6}{r['position']:<5}"
+            f"{r['predicted_points']:>6}{r['expected_minutes']:>7}{r['points_per_90']:>7}"
+        )
 
 
 def cli(argv=None):
@@ -211,11 +217,15 @@ def cli(argv=None):
         default="predictions",
         metavar="DIR",
         help="output directory (default: predictions/). Use a scratch directory "
-             "for exploratory runs — predictions/ is the append-only log.",
+        "for exploratory runs — predictions/ is the append-only log.",
     )
-    ap.add_argument("--snapshot", default=None, metavar="ID",
-                    help="snapshot id under data/raw/ (default: LATEST). Pass the same "
-                         "one to every model logged for a gameweek.")
+    ap.add_argument(
+        "--snapshot",
+        default=None,
+        metavar="ID",
+        help="snapshot id under data/raw/ (default: LATEST). Pass the same "
+        "one to every model logged for a gameweek.",
+    )
     args = ap.parse_args(argv)
     require_project_root()
     return main(args.gw, args.out, args.snapshot)

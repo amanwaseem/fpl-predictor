@@ -17,6 +17,7 @@ OUT = ROOT / "docs" / "openapi.json"
 
 def document():
     from fpl.api.app import create_app
+
     return json.dumps(create_app().openapi(), indent=2, sort_keys=True) + "\n"
 
 

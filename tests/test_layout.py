@@ -34,12 +34,14 @@ def modules(stage):
 
 
 class TestLayout(unittest.TestCase):
-
     def test_ingest_imports_no_later_stage(self):
         for path in modules("ingest"):
             with self.subTest(module=path.name):
-                later = {m for m in fpl_imports(path)
-                         if m.split(".")[1:2] and m.split(".")[1] in STAGES[1:]}
+                later = {
+                    m
+                    for m in fpl_imports(path)
+                    if m.split(".")[1:2] and m.split(".")[1] in STAGES[1:]
+                }
                 self.assertEqual(later, set())
 
     def test_the_log_contract_imports_nothing_from_fpl(self):
@@ -61,8 +63,9 @@ class TestLayout(unittest.TestCase):
 
     def test_the_verifier_needs_no_model(self):
         """It checks an entry against its snapshot; it does not run a model to do it."""
-        models = {m for m in fpl_imports(FPL / "log" / "verify_entry.py")
-                  if m.startswith("fpl.models")}
+        models = {
+            m for m in fpl_imports(FPL / "log" / "verify_entry.py") if m.startswith("fpl.models")
+        }
         self.assertEqual(models, set())
 
 

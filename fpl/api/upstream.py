@@ -52,20 +52,27 @@ def fetch(engine, path):
     now = datetime.now(UTC)
     with engine.connect() as connection:
         row = connection.execute(
-            select(UpstreamResponse.status, UpstreamResponse.body,
-                   UpstreamResponse.fetched_at_utc)
-            .where(UpstreamResponse.path == path)).first()
+            select(
+                UpstreamResponse.status, UpstreamResponse.body, UpstreamResponse.fetched_at_utc
+            ).where(UpstreamResponse.path == path)
+        ).first()
     if row is not None and now - row.fetched_at_utc < timedelta(seconds=CACHE_SECONDS):
         status, body = row.status, row.body
     else:
         status, body = _get(path)
         with engine.begin() as connection:
             values = {"status": status, "body": body, "fetched_at_utc": now}
-            connection.execute(insert(UpstreamResponse).values(path=path, **values)
-                               .on_conflict_do_update(index_elements=["path"], set_=values))
+            connection.execute(
+                insert(UpstreamResponse)
+                .values(path=path, **values)
+                .on_conflict_do_update(index_elements=["path"], set_=values)
+            )
             # Kept small: anything older than a day will never be served again.
-            connection.execute(UpstreamResponse.__table__.delete().where(
-                UpstreamResponse.fetched_at_utc < now - timedelta(days=1)))
+            connection.execute(
+                UpstreamResponse.__table__.delete().where(
+                    UpstreamResponse.fetched_at_utc < now - timedelta(days=1)
+                )
+            )
     if status == 404:
         raise HTTPException(404, f"The FPL API has nothing at {path}.")
     return body
@@ -130,13 +137,19 @@ def first_prices(engine, season, elements, gameweek):
     with engine.connect() as connection:
         rows = connection.execute(
             select(PlayerFixtureStats.element_id, PlayerFixtureStats.value)
-            .join(Fixture, (Fixture.season == PlayerFixtureStats.season)
-                  & (Fixture.fixture_id == PlayerFixtureStats.fixture_id))
-            .where(PlayerFixtureStats.season == season,
-                   PlayerFixtureStats.element_id.in_(elements),
-                   Fixture.gameweek >= gameweek)
+            .join(
+                Fixture,
+                (Fixture.season == PlayerFixtureStats.season)
+                & (Fixture.fixture_id == PlayerFixtureStats.fixture_id),
+            )
+            .where(
+                PlayerFixtureStats.season == season,
+                PlayerFixtureStats.element_id.in_(elements),
+                Fixture.gameweek >= gameweek,
+            )
             .order_by(PlayerFixtureStats.element_id, Fixture.gameweek)
-            .distinct(PlayerFixtureStats.element_id))
+            .distinct(PlayerFixtureStats.element_id)
+        )
         return dict(rows.all())
 
 
@@ -150,8 +163,9 @@ def manager_squad(engine, season, team_id, gameweek, prices):
     entry = fetch(engine, f"entry/{team_id}/")
     current, started = entry.get("current_event"), entry.get("started_event")
     if current is None or started is None or started >= gameweek:
-        raise HTTPException(409, f"FPL team {team_id} has no squad from before GW{gameweek} "
-                                 "to plan from.")
+        raise HTTPException(
+            409, f"FPL team {team_id} has no squad from before GW{gameweek} to plan from."
+        )
     through = min(current, gameweek - 1)
     picks = fetch(engine, f"entry/{team_id}/event/{through}/picks/")
     used = through

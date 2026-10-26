@@ -135,16 +135,27 @@ def late_prs(bootstrap, prs, now):
     return late
 
 
-def decide(bootstrap, predictions_dir, prs, branches, now,
-           window_hours=WINDOW_HOURS, ignore_window=False):
+def decide(
+    bootstrap, predictions_dir, prs, branches, now, window_hours=WINDOW_HOURS, ignore_window=False
+):
     """A dict: action, gameweek, deadline, season, branch, late, why."""
-    out = {"action": SKIP, "gameweek": None, "deadline": None, "season": None,
-           "branch": None, "late": [], "why": ""}
+    out = {
+        "action": SKIP,
+        "gameweek": None,
+        "deadline": None,
+        "season": None,
+        "branch": None,
+        "late": [],
+        "why": "",
+    }
     try:
         upcoming = next_deadline(bootstrap)
     except Malformed as e:
-        out.update(action=FAIL, why=f"bootstrap-static is malformed ({e}). The API's "
-                                    "schema may have changed. Nothing was made.")
+        out.update(
+            action=FAIL,
+            why=f"bootstrap-static is malformed ({e}). The API's "
+            "schema may have changed. Nothing was made.",
+        )
         return out
     out["late"] = late_prs(bootstrap, prs, now)
     if upcoming is None:
@@ -156,10 +167,10 @@ def decide(bootstrap, predictions_dir, prs, branches, now,
     hours = (deadline - now).total_seconds() / 3600
     inside = 0 < hours and (hours <= window_hours or ignore_window)
     branch = bot_branch(season, gameweek)
-    out.update(gameweek=gameweek, deadline=deadline.strftime(TIMESTAMP),
-               season=season, branch=branch)
-    when = (f"GW{gameweek:02d} ({season}) deadline {deadline.strftime(TIMESTAMP)}, "
-            f"{hours:.1f}h away")
+    out.update(
+        gameweek=gameweek, deadline=deadline.strftime(TIMESTAMP), season=season, branch=branch
+    )
+    when = f"GW{gameweek:02d} ({season}) deadline {deadline.strftime(TIMESTAMP)}, {hours:.1f}h away"
 
     def result(action, why):
         out.update(action=action, why=f"{when}. {why}")
@@ -181,34 +192,52 @@ def decide(bootstrap, predictions_dir, prs, branches, now,
     # Inside the window from here: a failure is worth an email.
     stale = classified["other_season"] + classified["unreadable"]
     if stale:
-        return result(FAIL, f"predictions/ holds {', '.join(stale)}, for this gameweek "
-                            "number but not this deadline (another season, or no readable "
-                            "deadline_utc). Entry names carry no season, so a new entry "
-                            "would collide with it. A person has to decide how the log "
-                            "holds two seasons. Nothing was made.")
+        return result(
+            FAIL,
+            f"predictions/ holds {', '.join(stale)}, for this gameweek "
+            "number but not this deadline (another season, or no readable "
+            "deadline_utc). Entry names carry no season, so a new entry "
+            "would collide with it. A person has to decide how the log "
+            "holds two seasons. Nothing was made.",
+        )
 
     if branch in branches:
         from_branch = _prs_from(branch, prs)
         if any(pr.get("state") == "OPEN" for pr in from_branch):
             numbers = ", ".join(f"#{pr['number']}" for pr in from_branch)
-            return result(FAIL, f"{branch} has an open PR ({numbers}) that adds no entry "
-                                "in predictions/. A person has to look.")
+            return result(
+                FAIL,
+                f"{branch} has an open PR ({numbers}) that adds no entry "
+                "in predictions/. A person has to look.",
+            )
         if any(pr.get("state") == "MERGED" for pr in from_branch):
-            return result(FAIL, f"A PR from {branch} was merged, yet main has no entry for "
-                                "this deadline. Was it reverted? A person has to look.")
+            return result(
+                FAIL,
+                f"A PR from {branch} was merged, yet main has no entry for "
+                "this deadline. Was it reverted? A person has to look.",
+            )
         if from_branch:
             numbers = ", ".join(f"#{pr['number']}" for pr in from_branch)
-            return result(SKIP, f"The PR from {branch} ({numbers}) was closed without "
-                                "merging, by a person. Not reopened. Make the entry by "
-                                "hand if one is still wanted; the watchdog will warn.")
-        return result(RESUME, f"{branch} exists with no PR: an earlier run pushed and "
-                              "did not open it. Opening it from that branch.")
+            return result(
+                SKIP,
+                f"The PR from {branch} ({numbers}) was closed without "
+                "merging, by a person. Not reopened. Make the entry by "
+                "hand if one is still wanted; the watchdog will warn.",
+            )
+        return result(
+            RESUME,
+            f"{branch} exists with no PR: an earlier run pushed and "
+            "did not open it. Opening it from that branch.",
+        )
 
     hand = hand_branch(gameweek)
     if hand in branches and not _prs_from(hand, prs):
-        return result(FAIL, f"Branch {hand} exists with no PR: an entry is being made by "
-                            "hand. Not making a second. Open its PR, or make the entry "
-                            "by hand (RUNBOOK section 7).")
+        return result(
+            FAIL,
+            f"Branch {hand} exists with no PR: an entry is being made by "
+            "hand. Not making a second. Open its PR, or make the entry "
+            "by hand (RUNBOOK section 7).",
+        )
 
     return result(ACT, "Making the entry." + (" (window ignored)" if ignore_window else ""))
 
@@ -243,26 +272,34 @@ def cmd_decide(args, now=None):
     now = now or datetime.now(UTC)
     bootstrap, unreadable = load_bootstrap(now, args.fake_deadline_hours, args.fake_gameweek)
     if unreadable:
-        report(SKIP, f"Could not check: {unreadable}. "
-                     "The next run tries again; the watchdog still warns.")
-        write_outputs(action=SKIP, gameweek=None, deadline=None, season=None,
-                      branch=None, late="")
+        report(
+            SKIP,
+            f"Could not check: {unreadable}. The next run tries again; the watchdog still warns.",
+        )
+        write_outputs(action=SKIP, gameweek=None, deadline=None, season=None, branch=None, late="")
         return 0
     prs = load_prs(args.prs)
     if len(prs) >= PR_LIMIT:
-        report(FAIL, f"{len(prs)} PRs listed: the list may be truncated, and could hide "
-                     "the one that already adds this entry. Raise PR_LIMIT.")
+        report(
+            FAIL,
+            f"{len(prs)} PRs listed: the list may be truncated, and could hide "
+            "the one that already adds this entry. Raise PR_LIMIT.",
+        )
         write_outputs(action=FAIL)
         return 1
     branches = read_branches(args.branches)
-    out = decide(bootstrap, args.predictions, prs, branches, now,
-                 ignore_window=args.ignore_window)
+    out = decide(bootstrap, args.predictions, prs, branches, now, ignore_window=args.ignore_window)
     report(out["action"], out["why"])
     for number, gw in out["late"]:
         print(f"LATE: #{number} adds a GW{gw:02d} entry, and that deadline has passed.")
-    write_outputs(action=out["action"], gameweek=out["gameweek"], deadline=out["deadline"],
-                  season=out["season"], branch=out["branch"],
-                  late=" ".join(str(n) for n, _ in out["late"]))
+    write_outputs(
+        action=out["action"],
+        gameweek=out["gameweek"],
+        deadline=out["deadline"],
+        season=out["season"],
+        branch=out["branch"],
+        late=" ".join(str(n) for n, _ in out["late"]),
+    )
     return 1 if out["action"] == FAIL else 0
 
 
@@ -273,8 +310,10 @@ def snapshot_problem(snapshot_id, gameweek, now, max_age_minutes):
     taken = datetime.strptime(snapshot_id, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
     age = (now - taken).total_seconds() / 60
     if age > max_age_minutes:
-        return (f"Snapshot {snapshot_id} is {age:.0f} minutes old; this run's fetch should "
-                f"be under {max_age_minutes}. LATEST was not moved by this run.")
+        return (
+            f"Snapshot {snapshot_id} is {age:.0f} minutes old; this run's fetch should "
+            f"be under {max_age_minutes}. LATEST was not moved by this run."
+        )
     if age < -5:
         return f"Snapshot {snapshot_id} is from the future: the runner's clock is wrong."
     try:
@@ -283,14 +322,17 @@ def snapshot_problem(snapshot_id, gameweek, now, max_age_minutes):
     except SystemExit as e:
         return f"Snapshot {snapshot_id} cannot be predicted from: {e}"
     if target != gameweek:
-        return (f"Snapshot {snapshot_id} predicts GW{target}, not the planned GW{gameweek}. "
-                "The deadline moved past while it was fetched; the next run plans again.")
+        return (
+            f"Snapshot {snapshot_id} predicts GW{target}, not the planned GW{gameweek}. "
+            "The deadline moved past while it was fetched; the next run plans again."
+        )
     return None
 
 
 def cmd_check_snapshot(args, now=None):
-    problem = snapshot_problem(args.snapshot, args.gameweek, now or datetime.now(UTC),
-                               args.max_age_minutes)
+    problem = snapshot_problem(
+        args.snapshot, args.gameweek, now or datetime.now(UTC), args.max_age_minutes
+    )
     print(problem or f"OK: snapshot {args.snapshot} is fresh and predicts GW{args.gameweek}.")
     return 1 if problem else 0
 
@@ -332,19 +374,23 @@ def cmd_check_changes(args):
 
 
 def commit_message(gameweek, deadline, snapshot_id, tag, sha, models):
-    joined = " and ".join(models) if len(models) < 3 else \
-        ", ".join(models[:-1]) + " and " + models[-1]
-    return (f"Log GW{gameweek} predictions: {joined}, from one snapshot\n\n"
-            f"Made by the entry workflow from snapshot {snapshot_id}, before the\n"
-            f"{deadline} deadline.\n\n"
-            f"{TRAILER_MADE_BY}: {MADE_BY}\n"
-            f"{TRAILER_RELEASE}: {tag}\n"
-            f"{TRAILER_SHA}: {sha}\n")
+    joined = (
+        " and ".join(models) if len(models) < 3 else ", ".join(models[:-1]) + " and " + models[-1]
+    )
+    return (
+        f"Log GW{gameweek} predictions: {joined}, from one snapshot\n\n"
+        f"Made by the entry workflow from snapshot {snapshot_id}, before the\n"
+        f"{deadline} deadline.\n\n"
+        f"{TRAILER_MADE_BY}: {MADE_BY}\n"
+        f"{TRAILER_RELEASE}: {tag}\n"
+        f"{TRAILER_SHA}: {sha}\n"
+    )
 
 
 def cmd_commit_message(args):
-    sys.stdout.write(commit_message(args.gameweek, args.deadline, args.snapshot,
-                                    args.tag, args.sha, args.models))
+    sys.stdout.write(
+        commit_message(args.gameweek, args.deadline, args.snapshot, args.tag, args.sha, args.models)
+    )
     return 0
 
 
@@ -382,26 +428,25 @@ def cmd_read_trailers(args):
     return 0
 
 
-def pr_body(gameweek, deadline, snapshot_id, tag, sha, release_url, run_url, digest,
-            resumed=False):
+def pr_body(gameweek, deadline, snapshot_id, tag, sha, release_url, run_url, digest, resumed=False):
     lines = [
         f"Made by the entry workflow (#68). **Merge before `{deadline}`.** "
         "A missed deadline stays missed, and a PR merged after it is a late entry.",
         "",
-        f"- snapshot: `{snapshot_id}`, release asset [`{tag}`]({release_url}), "
-        f"SHA-256 `{sha}`",
+        f"- snapshot: `{snapshot_id}`, release asset [`{tag}`]({release_url}), SHA-256 `{sha}`",
         f"- run: {run_url}",
     ]
     if resumed:
-        lines.append("- opened by a later run: the run that made the entry pushed it "
-                     "and could not open this PR. The entry was re-verified against "
-                     "the release asset first.")
+        lines.append(
+            "- opened by a later run: the run that made the entry pushed it "
+            "and could not open this PR. The entry was re-verified against "
+            "the release asset first."
+        )
     lines += [
         "",
         'Before merging (RUNBOOK.md, "The automated entry"):',
         "",
-        "- [ ] `included:` and `excluded:` below are what you expect: no unsettled "
-        "round included",
+        "- [ ] `included:` and `excluded:` below are what you expect: no unsettled round included",
         "- [ ] the deadline is right and `generated` is before it",
         "- [ ] `ci` is green",
         "",
@@ -412,9 +457,19 @@ def pr_body(gameweek, deadline, snapshot_id, tag, sha, release_url, run_url, dig
 
 
 def cmd_pr_body(args):
-    sys.stdout.write(pr_body(args.gameweek, args.deadline, args.snapshot, args.tag,
-                             args.sha, args.release_url, args.run_url,
-                             Path(args.digest).read_text(), args.resumed))
+    sys.stdout.write(
+        pr_body(
+            args.gameweek,
+            args.deadline,
+            args.snapshot,
+            args.tag,
+            args.sha,
+            args.release_url,
+            args.run_url,
+            Path(args.digest).read_text(),
+            args.resumed,
+        )
+    )
     return 0
 
 
@@ -422,8 +477,10 @@ def cmd_before_deadline(args, now=None):
     now = now or datetime.now(UTC)
     deadline = datetime.strptime(args.deadline, TIMESTAMP).replace(tzinfo=UTC)
     if now >= deadline - timedelta(minutes=args.margin_minutes):
-        print(f"REFUSED: the {args.deadline} deadline is under {args.margin_minutes} "
-              "minutes away or past. Nothing more is pushed or opened.")
+        print(
+            f"REFUSED: the {args.deadline} deadline is under {args.margin_minutes} "
+            "minutes away or past. Nothing more is pushed or opened."
+        )
         return 1
     print(f"OK: {(deadline - now).total_seconds() / 3600:.1f}h before the deadline.")
     return 0
@@ -454,8 +511,10 @@ def cmd_token_expiry(args, now=None):
     text = sys.stdin.read()
     if not re.match(r"^HTTP/\S+ 200", text):
         status = text.splitlines()[0] if text else "no response"
-        print(f"REFUSED: ENTRY_BOT_TOKEN was rejected ({status}). Create a new one: "
-              'RUNBOOK.md, "The automated entry".')
+        print(
+            f"REFUSED: ENTRY_BOT_TOKEN was rejected ({status}). Create a new one: "
+            'RUNBOOK.md, "The automated entry".'
+        )
         return 1
     try:
         days = token_days_left(text, now)
@@ -466,8 +525,10 @@ def cmd_token_expiry(args, now=None):
         print("OK: ENTRY_BOT_TOKEN does not expire.")
         return 0
     if days <= args.fail_days:
-        print(f"REFUSED: ENTRY_BOT_TOKEN expires in {days:.1f} days. Replace it now: "
-              'RUNBOOK.md, "The automated entry".')
+        print(
+            f"REFUSED: ENTRY_BOT_TOKEN expires in {days:.1f} days. Replace it now: "
+            'RUNBOOK.md, "The automated entry".'
+        )
         return 1
     print(f"OK: ENTRY_BOT_TOKEN expires in {days:.0f} days.")
     return 0
@@ -481,8 +542,11 @@ def cli(argv=None):
     p.add_argument("--predictions", default=LOG_DIR_NAME, metavar="DIR")
     p.add_argument("--prs", required=True, metavar="FILE")
     p.add_argument("--branches", required=True, metavar="FILE")
-    p.add_argument("--ignore-window", action="store_true",
-                   help="act whatever the time to the deadline (dry runs only)")
+    p.add_argument(
+        "--ignore-window",
+        action="store_true",
+        help="act whatever the time to the deadline (dry runs only)",
+    )
     p.add_argument("--fake-deadline-hours", type=float, default=None, metavar="H")
     p.add_argument("--fake-gameweek", type=int, default=None, metavar="N")
 
@@ -501,12 +565,20 @@ def cli(argv=None):
     p.add_argument("--models", nargs="+", required=True)
 
     p = sub.add_parser("read-trailers", help="a commit message on stdin")
-    p.add_argument("--plain", action="store_true",
-                   help="print only '<tag> <sha>', for a shell to read")
+    p.add_argument(
+        "--plain", action="store_true", help="print only '<tag> <sha>', for a shell to read"
+    )
 
     p = sub.add_parser("pr-body")
-    for name in ("--deadline", "--snapshot", "--tag", "--sha", "--release-url",
-                 "--run-url", "--digest"):
+    for name in (
+        "--deadline",
+        "--snapshot",
+        "--tag",
+        "--sha",
+        "--release-url",
+        "--run-url",
+        "--digest",
+    ):
         p.add_argument(name, required=True)
     p.add_argument("--gameweek", type=int, required=True)
     p.add_argument("--resumed", action="store_true")
@@ -519,8 +591,9 @@ def cli(argv=None):
     p.add_argument("--fail-days", type=float, default=7)
 
     args = ap.parse_args(argv)
-    if args.command == "decide" and \
-            (args.fake_deadline_hours is None) != (args.fake_gameweek is None):
+    if args.command == "decide" and (args.fake_deadline_hours is None) != (
+        args.fake_gameweek is None
+    ):
         ap.error("--fake-deadline-hours and --fake-gameweek go together.")
     return {
         "decide": cmd_decide,

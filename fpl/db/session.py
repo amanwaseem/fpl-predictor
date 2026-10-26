@@ -71,10 +71,12 @@ def exits_on_bad_url(main):
     The library raises an ordinary exception, so tests and the API can handle
     it; only a command's entry point turns it into SystemExit.
     """
+
     @functools.wraps(main)
     def wrapper(*args, **kwargs):
         try:
             return main(*args, **kwargs)
         except DatabaseURLError as e:
             raise SystemExit(str(e)) from None
+
     return wrapper

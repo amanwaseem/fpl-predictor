@@ -10,7 +10,6 @@ from tests.log_files import write_entry, write_score
 
 
 class TestSeason(unittest.TestCase):
-
     def test_august_to_may_is_one_season(self):
         for deadline in (datetime(2026, 8, 14, tzinfo=UTC), datetime(2027, 5, 23, tzinfo=UTC)):
             with self.subTest(deadline=deadline):
@@ -18,7 +17,6 @@ class TestSeason(unittest.TestCase):
 
 
 class TestReadLog(TempCwd):
-
     def test_entries_and_scores_become_rows(self):
         write_entry(self.tmp)
         write_score(self.tmp)
@@ -28,8 +26,10 @@ class TestReadLog(TempCwd):
         self.assertEqual(len(log.score_entries), 1)
         self.assertEqual(len(log.player_scores), 3)
         entry = log.entries[0]
-        self.assertEqual((entry["season"], entry["gameweek"], entry["model_version"]),
-                         ("2026/27", 8, "baseline-v1"))
+        self.assertEqual(
+            (entry["season"], entry["gameweek"], entry["model_version"]),
+            ("2026/27", 8, "baseline-v1"),
+        )
         self.assertEqual(entry["deadline_utc"], datetime(2026, 10, 23, 17, 30, tzinfo=UTC))
 
     def test_an_unreadable_entry_is_refused(self):

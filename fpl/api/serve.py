@@ -29,8 +29,9 @@ def cli(argv=None):
         database_url()
     except DatabaseURLError as e:
         raise SystemExit(str(e)) from None
-    uvicorn.run("fpl.api.app:app", host=args.host, port=args.port, reload=args.reload,
-                proxy_headers=True)
+    uvicorn.run(
+        "fpl.api.app:app", host=args.host, port=args.port, reload=args.reload, proxy_headers=True
+    )
     return 0
 
 

@@ -105,8 +105,9 @@ def load_snapshot(snapshot_id=None):
     # files are actually on disk before building a log entry from them. A
     # prediction missing an arbitrary subset of players is worse than no
     # prediction, because nothing in the committed CSV reveals the gap.
-    missing = [p["id"] for p in bootstrap["elements"]
-               if not (players_dir / f"{p['id']}.json").exists()]
+    missing = [
+        p["id"] for p in bootstrap["elements"] if not (players_dir / f"{p['id']}.json").exists()
+    ]
     if missing:
         shown = ", ".join(str(i) for i in missing[:10])
         more = f" (and {len(missing) - 10} more)" if len(missing) > 10 else ""
@@ -201,8 +202,7 @@ def resolve_target_gw(events, requested):
                 "Availability, price and status in this snapshot are all "
                 "post-deadline for GW{}, so the prediction would be "
                 "contaminated.\n"
-                "Backtesting needs a snapshot taken before that deadline."
-                .format(requested)
+                "Backtesting needs a snapshot taken before that deadline.".format(requested)
             )
         if requested > upcoming["id"]:
             raise SystemExit(

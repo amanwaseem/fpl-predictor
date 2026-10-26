@@ -37,22 +37,27 @@ def at(hours):
 
 def bootstrap(gameweek, hours_away):
     """GW `gameweek` is next, `hours_away` from NOW; the one before it is past."""
-    return {"events": [
-        {"id": gameweek - 1, "deadline_time": "2026-10-03T10:00:00Z", "is_next": False},
-        {"id": gameweek, "deadline_time": at(hours_away).strftime(STAMP), "is_next": True},
-    ]}
+    return {
+        "events": [
+            {"id": gameweek - 1, "deadline_time": "2026-10-03T10:00:00Z", "is_next": False},
+            {"id": gameweek, "deadline_time": at(hours_away).strftime(STAMP), "is_next": True},
+        ]
+    }
 
 
 def write_entry(directory, name, deadline):
     """An entry file as far as the watchdog reads one: a first row with deadline_utc."""
     stamp = deadline.strftime(STAMP) if isinstance(deadline, datetime) else deadline
-    (Path(directory) / name).write_text(
-        "gameweek,player_id,deadline_utc\n6,1," + stamp + "\n")
+    (Path(directory) / name).write_text("gameweek,player_id,deadline_utc\n6,1," + stamp + "\n")
 
 
 def pr(number, *paths, state="OPEN", branch="b"):
-    return {"number": number, "state": state, "headRefName": branch,
-            "files": [{"path": p} for p in paths]}
+    return {
+        "number": number,
+        "state": state,
+        "headRefName": branch,
+        "files": [{"path": p} for p in paths],
+    }
 
 
 class LogDir(unittest.TestCase):
@@ -63,12 +68,11 @@ class LogDir(unittest.TestCase):
     def check(self, hours, prs=(), gameweek=6):
         boot = bootstrap(gameweek, hours)
         return check_deadline.check(
-            boot, lambda gw, d: check_deadline.classify_entries(gw, d, self.log),
-            list(prs), NOW)
+            boot, lambda gw, d: check_deadline.classify_entries(gw, d, self.log), list(prs), NOW
+        )
 
 
 class TestAlarm(LogDir):
-
     def test_no_alarm_days_out_with_no_entry(self):
         """The entry workflow has not acted yet: that is not a risk."""
         status, message = self.check(48)
@@ -99,13 +103,19 @@ class TestAlarm(LogDir):
 
     def test_a_closed_pr_does_not_count(self):
         status, message = self.check(
-            6, [pr(80, "predictions/gw06_baseline-v1.csv", state="CLOSED")])
+            6, [pr(80, "predictions/gw06_baseline-v1.csv", state="CLOSED")]
+        )
         self.assertEqual(status, check_deadline.FAIL)
         self.assertIn("no open PR", message)
 
     def test_a_pr_adding_files_outside_the_log_does_not_count(self):
-        prs = [pr(81, "tests/fixtures/predictions/gw06_baseline-v1.csv",
-                  "scratch/predictions/gw06_baseline-v1.csv")]
+        prs = [
+            pr(
+                81,
+                "tests/fixtures/predictions/gw06_baseline-v1.csv",
+                "scratch/predictions/gw06_baseline-v1.csv",
+            )
+        ]
         self.assertIn("no open PR", self.check(6, prs)[1])
 
     def test_a_deadline_already_passed_still_fails(self):
@@ -120,7 +130,6 @@ class TestAlarm(LogDir):
 
 
 class TestWhatCountsAsAnEntry(LogDir):
-
     def test_another_gameweeks_entry_does_not_count(self):
         for name in ("gw05_baseline-v1.csv", "gw16_baseline-v1.csv", "gw60_baseline-v1.csv"):
             write_entry(self.log, name, at(6))
@@ -156,16 +165,15 @@ class TestWhatCountsAsAnEntry(LogDir):
     def test_a_missing_log_directory_is_no_entries(self):
         missing = self.log / "nope"
         found = check_deadline.classify_entries(6, at(6), missing)
-        self.assertEqual(found, {"current": [], "moved": [], "other_season": [],
-                                 "unreadable": []})
+        self.assertEqual(found, {"current": [], "moved": [], "other_season": [], "unreadable": []})
 
 
 class TestBootstrap(LogDir):
-
     def test_no_next_gameweek_passes(self):
         """After the last deadline of a season there is nothing to warn about."""
-        season_over = {"events": [{"id": 38, "deadline_time": "2027-05-23T13:30:00Z",
-                                   "is_next": False}]}
+        season_over = {
+            "events": [{"id": 38, "deadline_time": "2027-05-23T13:30:00Z", "is_next": False}]
+        }
         status, message = check_deadline.check(season_over, {}, [], NOW)
         self.assertEqual(status, check_deadline.PASS)
         self.assertIn("No next gameweek", message)
@@ -175,15 +183,20 @@ class TestBootstrap(LogDir):
         cases = {
             "no events": {},
             "events not a list": {"events": {"id": 6}},
-            "two is_next": {"events": [
-                {"id": 6, "deadline_time": "2026-10-08T10:00:00Z", "is_next": True},
-                {"id": 7, "deadline_time": "2026-10-15T10:00:00Z", "is_next": True}]},
+            "two is_next": {
+                "events": [
+                    {"id": 6, "deadline_time": "2026-10-08T10:00:00Z", "is_next": True},
+                    {"id": 7, "deadline_time": "2026-10-15T10:00:00Z", "is_next": True},
+                ]
+            },
             "no deadline": {"events": [{"id": 6, "is_next": True}]},
             "bad deadline": {"events": [{"id": 6, "deadline_time": "soon", "is_next": True}]},
-            "bad id": {"events": [{"id": "6", "deadline_time": "2026-10-08T10:00:00Z",
-                                   "is_next": True}]},
-            "bool id": {"events": [{"id": True, "deadline_time": "2026-10-08T10:00:00Z",
-                                    "is_next": True}]},
+            "bad id": {
+                "events": [{"id": "6", "deadline_time": "2026-10-08T10:00:00Z", "is_next": True}]
+            },
+            "bool id": {
+                "events": [{"id": True, "deadline_time": "2026-10-08T10:00:00Z", "is_next": True}]
+            },
             "not a dict": [],
         }
         for name, boot in cases.items():
@@ -193,20 +206,19 @@ class TestBootstrap(LogDir):
                 self.assertIn("malformed", message)
 
     def test_season_of(self):
-        self.assertEqual(check_deadline.season_of(datetime(2026, 8, 15, tzinfo=UTC)),
-                         "2026-27")
-        self.assertEqual(check_deadline.season_of(datetime(2027, 5, 23, tzinfo=UTC)),
-                         "2026-27")
-        self.assertEqual(check_deadline.season_of(datetime(2099, 9, 1, tzinfo=UTC)),
-                         "2099-00")
+        self.assertEqual(check_deadline.season_of(datetime(2026, 8, 15, tzinfo=UTC)), "2026-27")
+        self.assertEqual(check_deadline.season_of(datetime(2027, 5, 23, tzinfo=UTC)), "2026-27")
+        self.assertEqual(check_deadline.season_of(datetime(2099, 9, 1, tzinfo=UTC)), "2099-00")
 
     def test_deadline_of_any_gameweek(self):
         boot = bootstrap(6, 6)
-        self.assertEqual(check_deadline.deadline_of(boot, 5),
-                         datetime(2026, 10, 3, 10, 0, tzinfo=UTC))
+        self.assertEqual(
+            check_deadline.deadline_of(boot, 5), datetime(2026, 10, 3, 10, 0, tzinfo=UTC)
+        )
         self.assertIsNone(check_deadline.deadline_of(boot, 30))
-        self.assertIsNone(check_deadline.deadline_of(
-            {"events": [{"id": 5, "deadline_time": None}]}, 5))
+        self.assertIsNone(
+            check_deadline.deadline_of({"events": [{"id": 5, "deadline_time": None}]}, 5)
+        )
 
 
 class TestMain(unittest.TestCase):

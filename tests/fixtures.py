@@ -57,8 +57,18 @@ def team(tid, short_name=None):
     return {"id": tid, "short_name": short_name or f"T{tid:02d}"}
 
 
-def element(pid, *, team=1, element_type=3, status="a", chance=None,
-            web_name=None, now_cost=50, points_per_game="0.0", form="0.0"):
+def element(
+    pid,
+    *,
+    team=1,
+    element_type=3,
+    status="a",
+    chance=None,
+    web_name=None,
+    now_cost=50,
+    points_per_game="0.0",
+    form="0.0",
+):
     return {
         "id": pid,
         "web_name": web_name or f"p{pid}",
@@ -75,8 +85,13 @@ def element(pid, *, team=1, element_type=3, status="a", chance=None,
 
 
 def event(gw, *, deadline, data_checked=False, finished=False, is_next=False):
-    return {"id": gw, "deadline_time": deadline, "data_checked": data_checked,
-            "finished": finished, "is_next": is_next}
+    return {
+        "id": gw,
+        "deadline_time": deadline,
+        "data_checked": data_checked,
+        "finished": finished,
+        "is_next": is_next,
+    }
 
 
 def season(target_gw, deadline, *, checked_through=None):
@@ -88,15 +103,25 @@ def season(target_gw, deadline, *, checked_through=None):
     """
     if checked_through is None:
         checked_through = target_gw - 1
-    past = [event(gw, deadline=f"2026-08-{13 + gw:02d}T17:30:00Z",
-                  data_checked=gw <= checked_through, finished=True)
-            for gw in range(1, target_gw)]
+    past = [
+        event(
+            gw,
+            deadline=f"2026-08-{13 + gw:02d}T17:30:00Z",
+            data_checked=gw <= checked_through,
+            finished=True,
+        )
+        for gw in range(1, target_gw)
+    ]
     return past + [event(target_gw, deadline=deadline, is_next=True)]
 
 
 def fixture(gw, home, away, fid=None):
-    return {"id": fid if fid is not None else home * 100 + away,
-            "event": gw, "team_h": home, "team_a": away}
+    return {
+        "id": fid if fid is not None else home * 100 + away,
+        "event": gw,
+        "team_h": home,
+        "team_a": away,
+    }
 
 
 def full_round(gw, team_ids):
@@ -107,8 +132,7 @@ def full_round(gw, team_ids):
 
 def history(rounds, *, minutes=90, points=5):
     """A player's per-round history rows, in the element-summary shape."""
-    return [{"round": gw, "minutes": minutes, "total_points": points}
-            for gw in rounds]
+    return [{"round": gw, "minutes": minutes, "total_points": points} for gw in rounds]
 
 
 def live(snapshot_dir, gw, results):
@@ -118,16 +142,34 @@ def live(snapshot_dir, gw, results):
     """
     path = Path(snapshot_dir) / "live" / f"{gw}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"elements": [
-        {"id": pid, "stats": {"total_points": points, "minutes": minutes}}
-        for pid, (points, minutes) in sorted(results.items())
-    ]}))
+    path.write_text(
+        json.dumps(
+            {
+                "elements": [
+                    {"id": pid, "stats": {"total_points": points, "minutes": minutes}}
+                    for pid, (points, minutes) in sorted(results.items())
+                ]
+            }
+        )
+    )
     return path
 
 
-def snapshot(root, name, *, elements=None, teams=None, element_types=None,
-             events=None, fixtures=None, histories=None, pasts=None,
-             player_ids=None, manifest=DERIVE, latest=False):
+def snapshot(
+    root,
+    name,
+    *,
+    elements=None,
+    teams=None,
+    element_types=None,
+    events=None,
+    fixtures=None,
+    histories=None,
+    pasts=None,
+    player_ids=None,
+    manifest=DERIVE,
+    latest=False,
+):
     """Write a snapshot under `root`/data/raw/`name` and return its path.
 
     `player_ids` controls which per-player history files are written, which is
@@ -154,17 +196,20 @@ def snapshot(root, name, *, elements=None, teams=None, element_types=None,
             summary["history_past"] = pasts.get(pid, [])
         (directory / "players" / f"{pid}.json").write_text(json.dumps(summary))
 
-    (directory / "bootstrap.json").write_text(json.dumps({
-        "elements": elements,
-        "teams": teams,
-        "element_types": element_types,
-        "events": events,
-    }))
+    (directory / "bootstrap.json").write_text(
+        json.dumps(
+            {
+                "elements": elements,
+                "teams": teams,
+                "element_types": element_types,
+                "events": events,
+            }
+        )
+    )
     (directory / "fixtures.json").write_text(json.dumps(fixtures))
 
     if manifest is DERIVE:
-        manifest = {"snapshot_id": name, "element_count": len(elements),
-                    "has_players": True}
+        manifest = {"snapshot_id": name, "element_count": len(elements), "has_players": True}
     if manifest is not None:
         (directory / "manifest.json").write_text(json.dumps(manifest))
 
@@ -173,9 +218,17 @@ def snapshot(root, name, *, elements=None, teams=None, element_types=None,
     return directory
 
 
-def league_snapshot(root, name="20260910T000000Z", *, target_gw=4,
-                    deadline=None, per_team=4, latest=True, events=None,
-                    **kwargs):
+def league_snapshot(
+    root,
+    name="20260910T000000Z",
+    *,
+    target_gw=4,
+    deadline=None,
+    per_team=4,
+    latest=True,
+    events=None,
+    **kwargs,
+):
     """A full 20-team snapshot with a played history and one round of fixtures.
 
     The shape the verifier and the end-to-end test both need: enough teams to
@@ -191,26 +244,32 @@ def league_snapshot(root, name="20260910T000000Z", *, target_gw=4,
         for slot in range(per_team):
             pid += 1
             position = POSITIONS[slot % len(POSITIONS)][0]
-            elements.append(element(pid, team=t, element_type=position,
-                                    now_cost=45 + slot * 5))
-            histories[pid] = history(range(1, target_gw),
-                                     minutes=90 - slot * 5, points=4 + slot)
+            elements.append(element(pid, team=t, element_type=position, now_cost=45 + slot * 5))
+            histories[pid] = history(range(1, target_gw), minutes=90 - slot * 5, points=4 + slot)
 
     return snapshot(
-        root, name,
+        root,
+        name,
         elements=elements,
         teams=teams,
         events=season(target_gw, deadline) if events is None else events,
         fixtures=full_round(target_gw, range(1, LEAGUE_SIZE + 1)),
         histories=histories,
         latest=latest,
-        **kwargs
+        **kwargs,
     )
 
 
-def entry_rows(bootstrap, fixtures, target_gw, deadline, *,
-               snapshot_id="20260910T000000Z", model_version="baseline-v1",
-               generated_at=None):
+def entry_rows(
+    bootstrap,
+    fixtures,
+    target_gw,
+    deadline,
+    *,
+    snapshot_id="20260910T000000Z",
+    model_version="baseline-v1",
+    generated_at=None,
+):
     """A clean prediction log entry for a snapshot, in contract sort order.
 
     Built directly rather than by running a model, so that the verifier's
@@ -220,8 +279,7 @@ def entry_rows(bootstrap, fixtures, target_gw, deadline, *,
     fixtures, and the rows come out sorted.
     """
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
-    positions = {p["id"]: p["singular_name_short"]
-                 for p in bootstrap["element_types"]}
+    positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
     counts = fixture_counts(fixtures, target_gw)
     generated_at = past_timestamp() if generated_at is None else generated_at
 
@@ -236,23 +294,25 @@ def entry_rows(bootstrap, fixtures, target_gw, deadline, *,
             pp90 = round(4.0 + (player["id"] % 7) * 0.1, 2)
             predicted = round(pp90 * (minutes / 90.0) * n_fixtures, 2)
 
-        rows.append({
-            "gameweek": target_gw,
-            "player_id": player["id"],
-            "web_name": player["web_name"],
-            "team": teams[player["team"]],
-            "position": positions[player["element_type"]],
-            "price": player["now_cost"] / 10.0,
-            "predicted_points": predicted,
-            "expected_minutes": minutes,
-            "points_per_90": pp90,
-            "n_fixtures": n_fixtures,
-            "status": player.get("status", "a"),
-            "model_version": model_version,
-            "snapshot_id": snapshot_id,
-            "generated_at_utc": generated_at,
-            "deadline_utc": deadline,
-        })
+        rows.append(
+            {
+                "gameweek": target_gw,
+                "player_id": player["id"],
+                "web_name": player["web_name"],
+                "team": teams[player["team"]],
+                "position": positions[player["element_type"]],
+                "price": player["now_cost"] / 10.0,
+                "predicted_points": predicted,
+                "expected_minutes": minutes,
+                "points_per_90": pp90,
+                "n_fixtures": n_fixtures,
+                "status": player.get("status", "a"),
+                "model_version": model_version,
+                "snapshot_id": snapshot_id,
+                "generated_at_utc": generated_at,
+                "deadline_utc": deadline,
+            }
+        )
 
     rows.sort(key=lambda r: (-r["predicted_points"], r["player_id"]))
     return rows

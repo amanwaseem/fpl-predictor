@@ -30,8 +30,7 @@ class TestBaselineEndToEnd(fixtures.TempCwd):
     def setUp(self):
         super().setUp()
         self.deadline = fixtures.future_deadline()
-        self.dir = self.league(SNAPSHOT_ID, target_gw=TARGET_GW,
-                               deadline=self.deadline)
+        self.dir = self.league(SNAPSHOT_ID, target_gw=TARGET_GW, deadline=self.deadline)
 
     def predict(self, gw=TARGET_GW, out="predictions"):
         out_stream = io.StringIO()
@@ -70,10 +69,12 @@ class TestBaselineEndToEnd(fixtures.TempCwd):
         # A second snapshot, taken while GW3 is still being played. Writing it
         # with latest=True repoints data/raw/LATEST, so the predictor picks it
         # up in place of the settled one setUp built.
-        self.league("20260911T000000Z", target_gw=TARGET_GW,
-                    deadline=self.deadline,
-                    events=fixtures.season(TARGET_GW, self.deadline,
-                                           checked_through=2))
+        self.league(
+            "20260911T000000Z",
+            target_gw=TARGET_GW,
+            deadline=self.deadline,
+            events=fixtures.season(TARGET_GW, self.deadline, checked_through=2),
+        )
         output = self.predict()
         self.assertIn("included: 1, 2", output)
         self.assertIn("excluded: 3", output)

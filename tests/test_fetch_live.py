@@ -20,9 +20,11 @@ from tests import fixtures
 
 def live_payload(gw, points=6):
     """The shape of event/<gw>/live/: one entry per element, with stats."""
-    return {"elements": [{"id": pid, "stats": {"total_points": points,
-                                               "minutes": 90}}
-                         for pid in (1, 2)]}
+    return {
+        "elements": [
+            {"id": pid, "stats": {"total_points": points, "minutes": 90}} for pid in (1, 2)
+        ]
+    }
 
 
 class StubbedAPI(fixtures.TempCwd):
@@ -62,8 +64,7 @@ class StubbedAPI(fixtures.TempCwd):
             "elements": [fixtures.element(1), fixtures.element(2)],
             "teams": [fixtures.team(1)],
             "element_types": fixtures.ELEMENT_TYPES,
-            "events": fixtures.season(settled_through + 1,
-                                      "2026-09-12T12:30:00Z"),
+            "events": fixtures.season(settled_through + 1, "2026-09-12T12:30:00Z"),
         }
 
     def live_requests(self):
@@ -95,8 +96,7 @@ class TestFetchLive(StubbedAPI):
     def test_one_request_per_gameweek(self):
         """The point of storing this: scoring never refetches 654 players."""
         fetch.fetch_live(self.out(), self.bootstrap()["events"])
-        self.assertEqual(self.live_requests(),
-                         ["event/1/live/", "event/2/live/", "event/3/live/"])
+        self.assertEqual(self.live_requests(), ["event/1/live/", "event/2/live/", "event/3/live/"])
 
     def test_nothing_settled_yet(self):
         outdir = self.out()
@@ -111,8 +111,9 @@ class TestFetchLive(StubbedAPI):
         first = list(self.live_requests())
 
         fetch.fetch_live(outdir, events)
-        self.assertEqual(self.live_requests(), first,
-                         "a second run refetched live data already on disk")
+        self.assertEqual(
+            self.live_requests(), first, "a second run refetched live data already on disk"
+        )
 
     def test_resumed_file_content_is_left_alone(self):
         outdir = self.out()
@@ -133,13 +134,16 @@ class TestManifest(StubbedAPI):
         self.assertEqual(self.manifest()["live_gameweeks"], [1, 2, 3])
 
     def test_snapshot_stays_self_describing_with_none(self):
-        with patch.object(StubbedAPI, "bootstrap",
-                          lambda self, settled_through=0: {
-                              "elements": [fixtures.element(1)],
-                              "teams": [fixtures.team(1)],
-                              "element_types": fixtures.ELEMENT_TYPES,
-                              "events": fixtures.season(
-                                  1, "2026-08-14T17:30:00Z")}):
+        with patch.object(
+            StubbedAPI,
+            "bootstrap",
+            lambda self, settled_through=0: {
+                "elements": [fixtures.element(1)],
+                "teams": [fixtures.team(1)],
+                "element_types": fixtures.ELEMENT_TYPES,
+                "events": fixtures.season(1, "2026-08-14T17:30:00Z"),
+            },
+        ):
             fetch.main(skip_players=False, resume=False)
         self.assertEqual(self.manifest()["live_gameweeks"], [])
 
@@ -147,8 +151,9 @@ class TestManifest(StubbedAPI):
         """Live data is orthogonal to player history and costs three requests."""
         fetch.main(skip_players=True, resume=False)
         snap = next((self.tmp / "data/raw").glob("2026*"))
-        self.assertEqual(json.loads((snap / "manifest.json").read_text())
-                         ["live_gameweeks"], [1, 2, 3])
+        self.assertEqual(
+            json.loads((snap / "manifest.json").read_text())["live_gameweeks"], [1, 2, 3]
+        )
 
 
 class TestLoadLive(StubbedAPI):

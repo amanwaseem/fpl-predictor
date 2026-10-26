@@ -28,7 +28,6 @@ def brute_floor_mean(mean, per, terms=200):
 
 
 class TestRules(unittest.TestCase):
-
     def test_conceded_is_minus_one_per_two_for_keepers_and_defenders(self):
         self.assertEqual(features.conceded_points({"goals_conceded": 3}, "DEF"), -1)
         self.assertEqual(features.conceded_points({"goals_conceded": 4}, "GKP"), -2)
@@ -46,12 +45,12 @@ class TestRules(unittest.TestCase):
 
 
 class TestPoissonFloor(unittest.TestCase):
-
     def test_matches_the_distribution(self):
         for mean, per in ((1.3, 2), (2.9, 3), (0.2, 2), (6.0, 3)):
             with self.subTest(mean=mean, per=per):
-                self.assertAlmostEqual(features.poisson_floor_mean(mean, per),
-                                       brute_floor_mean(mean, per), places=9)
+                self.assertAlmostEqual(
+                    features.poisson_floor_mean(mean, per), brute_floor_mean(mean, per), places=9
+                )
 
     def test_nothing_from_nothing(self):
         self.assertEqual(features.poisson_floor_mean(0.0, 2), 0.0)
@@ -62,7 +61,6 @@ class TestPoissonFloor(unittest.TestCase):
 
 
 class TestSeasonParts(unittest.TestCase):
-
     def test_priced_as_a_match_at_his_average(self):
         row = {"minutes": 3420, "goals_conceded": 38, "saves": 114}  # 38 full matches
         conceded, saves = features.season_goalkeeping_parts(row, "GKP")
@@ -76,14 +74,15 @@ class TestSeasonParts(unittest.TestCase):
 
 
 class TestLeagueSaveRate(unittest.TestCase):
-
     def test_keepers_only_and_settled_rounds_before_the_target_only(self):
         elements = [{"id": 1, "element_type": 1}, {"id": 2, "element_type": 2}]
         positions = {1: "GKP", 2: "DEF"}
         histories = {
-            1: [{"round": 1, "saves": 4, "expected_goals_conceded": "2.0"},
+            1: [
+                {"round": 1, "saves": 4, "expected_goals_conceded": "2.0"},
                 {"round": 2, "saves": 2, "expected_goals_conceded": "1.0"},
-                {"round": 3, "saves": 9, "expected_goals_conceded": "1.0"}],
+                {"round": 3, "saves": 9, "expected_goals_conceded": "1.0"},
+            ],
             2: [{"round": 1, "saves": 5, "expected_goals_conceded": "1.0"}],
         }
         rate = features.league_save_rate(elements, positions, histories, 3, {1, 2, 3})
@@ -93,10 +92,10 @@ class TestLeagueSaveRate(unittest.TestCase):
 
 
 class TestSplitParts(unittest.TestCase):
-
     def test_parts_and_rest_add_up_to_the_total(self):
         total, parts, rest = features.split_parts(
-            (20, 6, 4, -2, 3), 450, (4.0, 1.0, 0.8, -0.4, 0.5), 270)
+            (20, 6, 4, -2, 3), 450, (4.0, 1.0, 0.8, -0.4, 0.5), 270
+        )
         self.assertAlmostEqual(sum(parts) + rest, total)
         self.assertEqual(len(parts), 4)
 
@@ -122,7 +121,6 @@ class KeeperLeague(League):
 
 
 class TestGoalkeeping(unittest.TestCase):
-
     def test_leaves_midfield_forwards_and_every_rate_alone(self):
         """Only GKP and DEF have these points, and the parts still add up."""
         league = KeeperLeague()
@@ -138,8 +136,10 @@ class TestGoalkeeping(unittest.TestCase):
         league = KeeperLeague()
 
         def change(gw4):
-            return (league.predict(gw4, goalkeeping=True)[2]["predicted_points"]
-                    - league.predict(gw4)[2]["predicted_points"])
+            return (
+                league.predict(gw4, goalkeeping=True)[2]["predicted_points"]
+                - league.predict(gw4)[2]["predicted_points"]
+            )
 
         self.assertLess(change(HARD), change(SOFT))
 
@@ -148,8 +148,10 @@ class TestGoalkeeping(unittest.TestCase):
         league = KeeperLeague()
 
         def change(gw4):
-            return (league.predict(gw4, goalkeeping=True)[9]["predicted_points"]
-                    - league.predict(gw4)[9]["predicted_points"])
+            return (
+                league.predict(gw4, goalkeeping=True)[9]["predicted_points"]
+                - league.predict(gw4)[9]["predicted_points"]
+            )
 
         with mock.patch.dict(predict_fixture.CONCEDED_POINTS, clear=True):
             self.assertGreater(change(HARD), change(SOFT))
@@ -157,12 +159,12 @@ class TestGoalkeeping(unittest.TestCase):
     def test_off_by_default(self):
         """form-fixture-v1 as logged is the default."""
         league = KeeperLeague()
-        self.assertEqual(league.predict(SOFT),
-                         league.predict(SOFT, goalkeeping=False, defensive=False))
+        self.assertEqual(
+            league.predict(SOFT), league.predict(SOFT, goalkeeping=False, defensive=False)
+        )
 
 
 class TestDefensiveContribution(unittest.TestCase):
-
     def test_no_threshold_no_points(self):
         self.assertEqual(features.defensive_points({"defensive_contribution": 30}, "GKP"), 0)
         self.assertEqual(features.chance_of_defensive_contribution(30.0, "GKP"), 0.0)
@@ -173,8 +175,12 @@ class TestDefensiveContribution(unittest.TestCase):
         self.assertEqual(features.defensive_points({"defensive_contribution": 12}, "MID"), 2)
 
     def test_count_rebuilt_as_his_position_now_counts_it(self):
-        row = {"clearances_blocks_interceptions": 4, "tackles": 3, "recoveries": 6,
-               "defensive_contribution": 13}
+        row = {
+            "clearances_blocks_interceptions": 4,
+            "tackles": 3,
+            "recoveries": 6,
+            "defensive_contribution": 13,
+        }
         self.assertEqual(features.defensive_count(row, "DEF"), 7)
         self.assertEqual(features.defensive_count(row, "MID"), 13)
 
@@ -183,8 +189,10 @@ class TestDefensiveContribution(unittest.TestCase):
         for pid in (9, 10):
             for row in league.histories[pid]:
                 row["defensive_contribution"] = 20
-        self.assertEqual(league.predict(SOFT, goalkeeping=True)[9],
-                         league.predict(SOFT, goalkeeping=True, defensive=True)[9])
+        self.assertEqual(
+            league.predict(SOFT, goalkeeping=True)[9],
+            league.predict(SOFT, goalkeeping=True, defensive=True)[9],
+        )
 
     def test_a_count_just_under_the_threshold_is_worth_something(self):
         """No DC points observed, but a chance of reaching 10 next time.
@@ -210,7 +218,8 @@ class TestDefensiveMinutes(unittest.TestCase):
         window = [{"minutes": 90}, {"minutes": 0}, {"minutes": 90}]
         self.assertAlmostEqual(
             features.defensive_contribution_points(9.0, "DEF", window, 60.0),
-            self.chance(9.0) * 60 / 90)
+            self.chance(9.0) * 60 / 90,
+        )
 
     def test_sixty_every_match_is_judged_on_sixty_minutes(self):
         window = [{"minutes": 60}] * 3
@@ -221,30 +230,43 @@ class TestDefensiveMinutes(unittest.TestCase):
     def test_nothing_without_minutes(self):
         self.assertEqual(features.defensive_contribution_points(9.0, "DEF", [], 90.0), 0.0)
         self.assertEqual(
-            features.defensive_contribution_points(9.0, "DEF", [{"minutes": 90}], 0.0), 0.0)
+            features.defensive_contribution_points(9.0, "DEF", [{"minutes": 90}], 0.0), 0.0
+        )
 
 
 class TestLeagueRates(unittest.TestCase):
-
     def test_settled_rounds_before_the_target_only(self):
         """The rule 2 filter every league rate shares."""
         elements = [{"id": 1, "element_type": 2}]
-        histories = {1: [{"round": 1, "minutes": 90, "goals_conceded": 2},
-                         {"round": 2, "minutes": 90, "goals_conceded": 4},
-                         {"round": 3, "minutes": 90, "goals_conceded": 6}]}
-        rates = features.league_rates(elements, {2: "DEF"}, histories, 3, {1},
-                                      (features.conceded_points,))
+        histories = {
+            1: [
+                {"round": 1, "minutes": 90, "goals_conceded": 2},
+                {"round": 2, "minutes": 90, "goals_conceded": 4},
+                {"round": 3, "minutes": 90, "goals_conceded": 6},
+            ]
+        }
+        rates = features.league_rates(
+            elements, {2: "DEF"}, histories, 3, {1}, (features.conceded_points,)
+        )
         self.assertEqual(rates, {"DEF": (-1.0,)})
 
 
 class TestPriorParts(unittest.TestCase):
-
     def test_carry_goalkeeping_parts_from_the_same_row(self):
-        past = [{"season_name": "2025/26", "minutes": 3420, "total_points": 140,
-                 "goals_conceded": 38, "saves": 114, "clean_sheets": 12}]
+        past = [
+            {
+                "season_name": "2025/26",
+                "minutes": 3420,
+                "total_points": 140,
+                "goals_conceded": 38,
+                "saves": 114,
+                "clean_sheets": 12,
+            }
+        ]
         parts = features.player_prior_parts(past, "2025/26", "GKP", xg_weight=0)
-        self.assertEqual((parts["conceded"], parts["saves"]),
-                         features.season_goalkeeping_parts(past[0], "GKP"))
+        self.assertEqual(
+            (parts["conceded"], parts["saves"]), features.season_goalkeeping_parts(past[0], "GKP")
+        )
 
 
 if __name__ == "__main__":

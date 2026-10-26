@@ -109,8 +109,10 @@ def url_problems(url, complete=False):
                 # The deploy-day mistake: with nothing before an @, whatever
                 # follows :// is read as the host, so a pasted password
                 # becomes a hostname.
-                found.append("with no user@ before it, what follows :// is being read as "
-                             "the host, so a password pasted there looks like one")
+                found.append(
+                    "with no user@ before it, what follows :// is being read as "
+                    "the host, so a password pasted there looks like one"
+                )
         if not given(parts.password, "password"):
             found.append("it has no password")
         if not given(parts.netloc.rpartition("@")[2], "host"):
@@ -128,12 +130,16 @@ def pooled(url):
         return False
 
 
-POOLED = ("its host is a pooled (-pooler) endpoint; migrations need the direct "
-          "connection string (docs/deploy.md)")
+POOLED = (
+    "its host is a pooled (-pooler) endpoint; migrations need the direct "
+    "connection string (docs/deploy.md)"
+)
 
 
 def describe_problems(found, name="DATABASE_URL"):
     """One message for a list of problems, saying why the value is not shown."""
-    return (f"{name} is set but cannot be used: {'; '.join(found)}.\n"
-            f"Its value is not shown, since it holds a password. It should look like "
-            f"{EXAMPLE}")
+    return (
+        f"{name} is set but cannot be used: {'; '.join(found)}.\n"
+        f"Its value is not shown, since it holds a password. It should look like "
+        f"{EXAMPLE}"
+    )

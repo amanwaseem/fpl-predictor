@@ -80,8 +80,10 @@ def main(ref):
     committed = committed_entries(ref, root)
 
     if violations:
-        print(f"Hard rule 1 violated — {len(violations)} committed "
-              f"prediction(s) altered:\n", file=sys.stderr)
+        print(
+            f"Hard rule 1 violated — {len(violations)} committed prediction(s) altered:\n",
+            file=sys.stderr,
+        )
         for v in violations:
             print(f"  {v}", file=sys.stderr)
         print(
@@ -94,19 +96,25 @@ def main(ref):
         return 1
 
     if not committed:
-        print(f"No entries committed under {LOG_DIR}/ at {ref} — nothing to "
-              "protect yet.")
+        print(f"No entries committed under {LOG_DIR}/ at {ref} — nothing to protect yet.")
     else:
-        print(f"{len(committed)} committed entr"
-              f"{'y' if len(committed) == 1 else 'ies'} unchanged since {ref}.")
+        print(
+            f"{len(committed)} committed entr"
+            f"{'y' if len(committed) == 1 else 'ies'} unchanged since {ref}."
+        )
 
     # Additions are the normal case and are reported rather than counted as
     # violations: a new gameweek is exactly what appending to the log means.
     tracked = set(committed)
-    added = sorted(
-        str(p.relative_to(root)) for p in (root / LOG_DIR).glob("*.csv")
-        if str(p.relative_to(root)) not in tracked
-    ) if (root / LOG_DIR).is_dir() else []
+    added = (
+        sorted(
+            str(p.relative_to(root))
+            for p in (root / LOG_DIR).glob("*.csv")
+            if str(p.relative_to(root)) not in tracked
+        )
+        if (root / LOG_DIR).is_dir()
+        else []
+    )
     for path in added:
         print(f"  new entry (not yet at {ref}): {path}")
     return 0
@@ -114,7 +122,8 @@ def main(ref):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--ref", default=DEFAULT_REF,
-                    help=f"commit to compare against (default: {DEFAULT_REF})")
+    ap.add_argument(
+        "--ref", default=DEFAULT_REF, help=f"commit to compare against (default: {DEFAULT_REF})"
+    )
     args = ap.parse_args()
     sys.exit(main(args.ref))

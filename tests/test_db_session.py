@@ -17,7 +17,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class TestUrl(unittest.TestCase):
-
     def test_plain_postgres_urls_get_the_psycopg_driver(self):
         for url in ("postgres://u:p@host/db", "postgresql://u:p@host/db"):
             with self.subTest(url=url):
@@ -38,7 +37,6 @@ class TestUrl(unittest.TestCase):
 
 
 class TestOfflineMigrations(unittest.TestCase):
-
     def test_the_sql_prints_without_a_database(self):
         """`alembic upgrade head --sql` is for reading the DDL; it needs no DATABASE_URL."""
         config = Config(str(ROOT / "alembic.ini"))
@@ -46,8 +44,7 @@ class TestOfflineMigrations(unittest.TestCase):
         out = io.StringIO()
         config.stdout = out
         environ = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}
-        with mock.patch.dict(os.environ, environ, clear=True), \
-                contextlib.redirect_stdout(out):
+        with mock.patch.dict(os.environ, environ, clear=True), contextlib.redirect_stdout(out):
             command.upgrade(config, "head", sql=True)
         self.assertIn("CREATE TABLE player_clubs", out.getvalue())
 

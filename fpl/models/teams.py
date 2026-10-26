@@ -47,7 +47,6 @@ HOME_ADVANTAGE = 1.0
 ITERATIONS = 50
 
 
-
 def _club(row, fixture):
     return fixture["team_h"] if row["was_home"] else fixture["team_a"]
 
@@ -60,10 +59,14 @@ def team_matches(fixtures, histories, target_gw, usable):
     falls in a usable round strictly before the target.
     """
     played = {
-        f["id"]: f for f in fixtures
-        if f.get("event") is not None and f["event"] < target_gw
-        and f["event"] in usable and f.get("finished")
-        and f.get("team_h_score") is not None and f.get("team_a_score") is not None
+        f["id"]: f
+        for f in fixtures
+        if f.get("event") is not None
+        and f["event"] < target_gw
+        and f["event"] in usable
+        and f.get("finished")
+        and f.get("team_h_score") is not None
+        and f.get("team_a_score") is not None
     }
 
     xg = {}
@@ -81,12 +84,18 @@ def team_matches(fixtures, histories, target_gw, usable):
             (f["team_h"], f["team_a"], True, f["team_h_score"], f["team_a_score"]),
             (f["team_a"], f["team_h"], False, f["team_a_score"], f["team_h_score"]),
         ):
-            matches.append({
-                "fixture": f["id"], "team": team, "opponent": opp, "home": home,
-                "xg_for": xg.get((f["id"], team), 0.0),
-                "xg_against": xg.get((f["id"], opp), 0.0),
-                "goals_for": gf, "goals_against": ga,
-            })
+            matches.append(
+                {
+                    "fixture": f["id"],
+                    "team": team,
+                    "opponent": opp,
+                    "home": home,
+                    "xg_for": xg.get((f["id"], team), 0.0),
+                    "xg_against": xg.get((f["id"], opp), 0.0),
+                    "goals_for": gf,
+                    "goals_against": ga,
+                }
+            )
     return matches
 
 
@@ -106,15 +115,30 @@ class Ratings:
             # Each rating is goals observed over goals expected from the rest
             # of the model, with k matches of exactly-average football on both
             # sides of the fraction.
-            self.attack = {c: (sum(m[scored] for m in matches if m["team"] == c) + k * self.rate)
-                           / (sum(self._base(m) * self.defence[m["opponent"]]
-                                  for m in matches if m["team"] == c) + k * self.rate)
-                           for c in clubs}
-            self.defence = {c: (sum(m[scored] for m in matches if m["opponent"] == c)
-                                + k * self.rate)
-                            / (sum(self._base(m) * self.attack[m["team"]]
-                                   for m in matches if m["opponent"] == c) + k * self.rate)
-                            for c in clubs}
+            self.attack = {
+                c: (sum(m[scored] for m in matches if m["team"] == c) + k * self.rate)
+                / (
+                    sum(
+                        self._base(m) * self.defence[m["opponent"]]
+                        for m in matches
+                        if m["team"] == c
+                    )
+                    + k * self.rate
+                )
+                for c in clubs
+            }
+            self.defence = {
+                c: (sum(m[scored] for m in matches if m["opponent"] == c) + k * self.rate)
+                / (
+                    sum(
+                        self._base(m) * self.attack[m["team"]]
+                        for m in matches
+                        if m["opponent"] == c
+                    )
+                    + k * self.rate
+                )
+                for c in clubs
+            }
 
     def _base(self, match):
         return self.rate * (self.home if match["home"] else 1.0 / self.home)
@@ -122,8 +146,7 @@ class Ratings:
     def expected_goals(self, team, opponent, home):
         """Expected goals for `team` against `opponent`. Unrated clubs are average."""
         venue = self.home if home else 1.0 / self.home
-        return (self.rate * venue * self.attack.get(team, 1.0)
-                * self.defence.get(opponent, 1.0))
+        return self.rate * venue * self.attack.get(team, 1.0) * self.defence.get(opponent, 1.0)
 
     def usual_goals(self, team):
         """Expected goals for `team` against an average side at a neutral venue."""
@@ -133,8 +156,10 @@ class Ratings:
         """(goals for, goals against) expected for `team` in `fixture`."""
         home = fixture["team_h"] == team
         opponent = fixture["team_a"] if home else fixture["team_h"]
-        return (self.expected_goals(team, opponent, home),
-                self.expected_goals(opponent, team, not home))
+        return (
+            self.expected_goals(team, opponent, home),
+            self.expected_goals(opponent, team, not home),
+        )
 
 
 class DifficultyRatings:
@@ -157,8 +182,7 @@ class DifficultyRatings:
             d = _difficulty_faced(by_id[m["fixture"]], m["home"])
             faced.setdefault(d, []).append(m[scored])
         self.factor = {
-            d: (sum(xs) + k * self.rate) / ((len(xs) + k) * self.rate)
-            for d, xs in faced.items()
+            d: (sum(xs) + k * self.rate) / ((len(xs) + k) * self.rate) for d, xs in faced.items()
         }
 
     def goals_in(self, fixture, home):
@@ -185,7 +209,8 @@ def _league_rate(matches, scored):
     if rate <= 0:
         raise SystemExit(
             f"No {scored.removesuffix('_for')} in {len(matches)} settled club-matches "
-            "to rate clubs from. Has the element-summary schema changed?")
+            "to rate clubs from. Has the element-summary schema changed?"
+        )
     return rate
 
 
@@ -196,4 +221,3 @@ def _difficulty_faced(fixture, home):
 def clean_sheet_probability(goals_against):
     """P(no goals conceded), treating goals against as Poisson."""
     return math.exp(-goals_against)
-

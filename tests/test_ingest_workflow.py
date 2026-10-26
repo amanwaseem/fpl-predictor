@@ -23,7 +23,6 @@ def step(name):
 
 
 class TestIngestWorkflow(unittest.TestCase):
-
     def test_every_command_it_runs_exists(self):
         called = set(re.findall(r"\b(fpl-[a-z]+)\b", steps()))
         self.assertEqual(called, {"fpl-fetch", "fpl-stale", "fpl-load"})
@@ -48,9 +47,15 @@ class TestIngestWorkflow(unittest.TestCase):
 
     def test_the_order_of_the_steps(self):
         body = steps()
-        order = ["--workflow deploy.yml", "actions/checkout", "tools/check_database_url.py",
-                 "fpl-fetch --skip-players", "fpl-stale >", "run: fpl-fetch\n",
-                 "fpl-stale --schema-only && fpl-load"]
+        order = [
+            "--workflow deploy.yml",
+            "actions/checkout",
+            "tools/check_database_url.py",
+            "fpl-fetch --skip-players",
+            "fpl-stale >",
+            "run: fpl-fetch\n",
+            "fpl-stale --schema-only && fpl-load",
+        ]
         positions = [body.index(marker) for marker in order]
         self.assertEqual(positions, sorted(positions))
 
@@ -82,8 +87,11 @@ class TestIngestWorkflow(unittest.TestCase):
         job_header = jobs.split("steps:", 1)[0]
         self.assertNotIn("secrets.DATABASE_URL", before_jobs)
         self.assertNotIn("secrets.DATABASE_URL", job_header)
-        for name in ("Snapshot the bootstrap and fixtures", "Snapshot the FPL API in full",
-                     "Wait for any deploy in progress"):
+        for name in (
+            "Snapshot the bootstrap and fixtures",
+            "Snapshot the FPL API in full",
+            "Wait for any deploy in progress",
+        ):
             with self.subTest(step=name):
                 self.assertNotIn("DATABASE_URL", step(name))
         self.assertIn("environment: production", WORKFLOW)

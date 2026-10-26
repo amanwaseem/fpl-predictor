@@ -58,9 +58,15 @@ HARNESS_VERSION = "harness-v1"
 BASELINE_MODEL = "baseline-v1"
 
 SCORE_FIELDS = [
-    "player_id", "web_name", "team", "position",
-    "predicted_points", "actual_points", "error",
-    "expected_minutes", "actual_minutes",
+    "player_id",
+    "web_name",
+    "team",
+    "position",
+    "predicted_points",
+    "actual_points",
+    "error",
+    "expected_minutes",
+    "actual_minutes",
 ]
 
 # Mean actual per band of predicted points, over players predicted to play.
@@ -100,8 +106,7 @@ def actuals(live):
     `stats.total_points` already sums a double gameweek's two fixtures.
     """
     return {
-        e["id"]: {"points": e["stats"]["total_points"],
-                  "minutes": e["stats"]["minutes"]}
+        e["id"]: {"points": e["stats"]["total_points"], "minutes": e["stats"]["minutes"]}
         for e in live["elements"]
     }
 
@@ -178,16 +183,21 @@ def _calibration(matched):
     playing = [p for p in matched if p["expected_minutes"] > 0]
     bands = []
     for low, high in CALIBRATION_BANDS:
-        rows = [p for p in playing if p["predicted_points"] >= low
-                and (high is None or p["predicted_points"] < high)]
+        rows = [
+            p
+            for p in playing
+            if p["predicted_points"] >= low and (high is None or p["predicted_points"] < high)
+        ]
         if not rows:
             continue
-        bands.append({
-            "band": f"{low}-{high}" if high is not None else f"{low}+",
-            "n": len(rows),
-            "mean_predicted": sum(p["predicted_points"] for p in rows) / len(rows),
-            "mean_actual": sum(p["actual_points"] for p in rows) / len(rows),
-        })
+        bands.append(
+            {
+                "band": f"{low}-{high}" if high is not None else f"{low}+",
+                "n": len(rows),
+                "mean_predicted": sum(p["predicted_points"] for p in rows) / len(rows),
+                "mean_actual": sum(p["actual_points"] for p in rows) / len(rows),
+            }
+        )
     return bands
 
 
@@ -195,9 +205,11 @@ def _minutes(matched):
     return {
         "mae": metrics.mae([(p["expected_minutes"], p["actual_minutes"]) for p in matched]),
         "predicted_zero_but_played": sum(
-            1 for p in matched if p["expected_minutes"] == 0 and p["actual_minutes"] > 0),
+            1 for p in matched if p["expected_minutes"] == 0 and p["actual_minutes"] > 0
+        ),
         "predicted_60_plus_but_did_not_play": sum(
-            1 for p in matched if p["expected_minutes"] >= 60 and p["actual_minutes"] == 0),
+            1 for p in matched if p["expected_minutes"] >= 60 and p["actual_minutes"] == 0
+        ),
     }
 
 
@@ -208,8 +220,7 @@ def _comparators(matched, bootstrap):
     these (the GW4 review's point).
     """
     if bootstrap is None:
-        return {"available": False,
-                "reason": "prediction snapshot not on this machine"}
+        return {"available": False, "reason": "prediction snapshot not on this machine"}
     by_id = {e["id"]: e for e in bootstrap["elements"]}
     missing = sorted(p["player_id"] for p in matched if p["player_id"] not in by_id)
     if missing:
@@ -220,8 +231,10 @@ def _comparators(matched, bootstrap):
 
     out = {"available": True}
     for name, field in COMPARATORS.items():
+
         def value(p, field=field):
             return 0.0 if field is None else float(by_id[p["player_id"]][field])
+
         pairs = [(value(p), p["actual_points"]) for p in matched]
         block = metrics.summary(pairs)
         # A constant predictor picks an XI by tie-break alone; its "captured"
@@ -239,8 +252,7 @@ def _head_to_head(model_version, matched, baseline_matched):
     if model_version == BASELINE_MODEL:
         return {"applicable": False, "reason": "this is the baseline"}
     if baseline_matched is None:
-        return {"applicable": False,
-                "reason": f"no {BASELINE_MODEL} entry for this gameweek"}
+        return {"applicable": False, "reason": f"no {BASELINE_MODEL} entry for this gameweek"}
     base = {p["player_id"]: p for p in baseline_matched}
     common = [p for p in matched if p["player_id"] in base]
     if not common:
@@ -250,7 +262,8 @@ def _head_to_head(model_version, matched, baseline_matched):
         "n": len(common),
         "model": metrics.summary([(p["predicted_points"], p["actual_points"]) for p in common]),
         "baseline": metrics.summary(
-            [(base[p["player_id"]]["predicted_points"], p["actual_points"]) for p in common]),
+            [(base[p["player_id"]]["predicted_points"], p["actual_points"]) for p in common]
+        ),
     }
 
 
@@ -262,24 +275,34 @@ def join(rows, actual):
         if result is None:
             missing_actual.append(row["player_id"])
             continue
-        matched.append({
-            "player_id": row["player_id"],
-            "web_name": row["web_name"],
-            "team": row["team"],
-            "position": row["position"],
-            "predicted_points": row["predicted_points"],
-            "actual_points": result["points"],
-            "error": row["predicted_points"] - result["points"],
-            "expected_minutes": row["expected_minutes"],
-            "actual_minutes": result["minutes"],
-        })
+        matched.append(
+            {
+                "player_id": row["player_id"],
+                "web_name": row["web_name"],
+                "team": row["team"],
+                "position": row["position"],
+                "predicted_points": row["predicted_points"],
+                "actual_points": result["points"],
+                "error": row["predicted_points"] - result["points"],
+                "expected_minutes": row["expected_minutes"],
+                "actual_minutes": result["minutes"],
+            }
+        )
     logged = {row["player_id"] for row in rows}
     missing_prediction = sorted(pid for pid in actual if pid not in logged)
     return matched, sorted(missing_actual), missing_prediction
 
 
-def score_entry(rows, gameweek, model_version, events, actual, bootstrap,
-                baseline_matched=None, actuals_snapshot_id=None):
+def score_entry(
+    rows,
+    gameweek,
+    model_version,
+    events,
+    actual,
+    bootstrap,
+    baseline_matched=None,
+    actuals_snapshot_id=None,
+):
     """Score one entry. Returns (matched rows, metrics dict)."""
     if gameweek not in settled_gameweeks(events):
         raise SystemExit(
@@ -293,9 +316,9 @@ def score_entry(rows, gameweek, model_version, events, actual, bootstrap,
         raise SystemExit(f"GW{gameweek} {model_version}: no player joins to actuals.")
 
     pairs = [(p["predicted_points"], p["actual_points"]) for p in matched]
-    playing = [(p["predicted_points"], p["actual_points"])
-               for p in matched if p["expected_minutes"] > 0]
-
+    playing = [
+        (p["predicted_points"], p["actual_points"]) for p in matched if p["expected_minutes"] > 0
+    ]
 
     result = {
         "harness_version": HARNESS_VERSION,
@@ -307,8 +330,10 @@ def score_entry(rows, gameweek, model_version, events, actual, bootstrap,
         "join": {
             "matched": len(matched),
             "missing_actual": {"count": len(missing_actual), "player_ids": missing_actual},
-            "missing_prediction": {"count": len(missing_prediction),
-                                   "player_ids": missing_prediction},
+            "missing_prediction": {
+                "count": len(missing_prediction),
+                "player_ids": missing_prediction,
+            },
         },
         "metrics": {"all": _block(pairs), "predicted_to_play": _block(playing)},
         "totals": {"predicted": sum(p for p, _ in pairs), "actual": sum(a for _, a in pairs)},
@@ -329,8 +354,7 @@ def missed_gameweeks(logged, settled):
     `logged` is the model's gameweeks in order; `settled` any collection.
     """
     last_settled = max(settled, default=0)
-    return [gw for gw in range(logged[0], last_settled + 1)
-            if gw in settled and gw not in logged]
+    return [gw for gw in range(logged[0], last_settled + 1) if gw in settled and gw not in logged]
 
 
 def pooled_block(groups):
@@ -340,16 +364,17 @@ def pooled_block(groups):
     actual_minutes. The API's scorecard uses this too, so it cannot drift from
     scores/cumulative.json.
     """
-    all_pairs = [[(p["predicted_points"], p["actual_points"]) for p in group]
-                 for group in groups]
-    playing_pairs = [[(p["predicted_points"], p["actual_points"])
-                      for p in group if p["expected_minutes"] > 0]
-                     for group in groups]
+    all_pairs = [[(p["predicted_points"], p["actual_points"]) for p in group] for group in groups]
+    playing_pairs = [
+        [(p["predicted_points"], p["actual_points"]) for p in group if p["expected_minutes"] > 0]
+        for group in groups
+    ]
     minutes = [(p["expected_minutes"], p["actual_minutes"]) for group in groups for p in group]
     return {
         "all": metrics.pooled_summary(all_pairs) if groups else None,
-        "predicted_to_play": (metrics.pooled_summary(playing_pairs)
-                              if any(playing_pairs) else None),
+        "predicted_to_play": (
+            metrics.pooled_summary(playing_pairs) if any(playing_pairs) else None
+        ),
         "minutes_mae": metrics.mae(minutes) if minutes else None,
     }
 
@@ -366,8 +391,9 @@ def cumulative(scored, events, entries):
     models = sorted({model for _, model in entries})
     for model in models:
         logged = sorted(gw for gw, m in entries if m == model)
-        mine = sorted((gw, matched, res) for (gw, m), (matched, res) in scored.items()
-                      if m == model)
+        mine = sorted(
+            (gw, matched, res) for (gw, m), (matched, res) in scored.items() if m == model
+        )
         with_xi = [res["xi"] for _, _, res in mine if res["xi"]["available"]]
         captured = sum(xi["captured"]["actual"] for xi in with_xi)
         optimum = sum(xi["optimum"]["actual"] for xi in with_xi)
@@ -376,11 +402,20 @@ def cumulative(scored, events, entries):
             "gameweeks_pending": [gw for gw in logged if gw not in settled],
             "gameweeks_missed": missed_gameweeks(logged, settled),
             "pooled": pooled_block([matched for _, matched, _ in mine]),
-            "xi": {"gameweeks": len(with_xi), "captured": captured, "optimum": optimum,
-                   "captured_share": captured / optimum if optimum else None},
+            "xi": {
+                "gameweeks": len(with_xi),
+                "captured": captured,
+                "optimum": optimum,
+                "captured_share": captured / optimum if optimum else None,
+            },
             "per_gameweek": [
-                {"gameweek": gw, **{k: res["metrics"]["all"][k]
-                                    for k in ("n", "mae", "rmse", "bias", "spearman")}}
+                {
+                    "gameweek": gw,
+                    **{
+                        k: res["metrics"]["all"][k]
+                        for k in ("n", "mae", "rmse", "bias", "spearman")
+                    },
+                }
                 for gw, _, res in mine
             ],
         }
@@ -423,15 +458,21 @@ def _carried_comparators(out, gw, model, result):
     stem = f"gw{gw:02d}_{model}"
     path = out / f"{stem}.json"
     previous = json.loads(path.read_text()) if path.exists() else None
-    if (previous is not None
-            and previous.get("harness_version") == HARNESS_VERSION
-            and previous.get("prediction_snapshot_id") == result["prediction_snapshot_id"]
-            and previous.get("comparators", {}).get("available")):
-        print(f"carried:   {stem} comparators — prediction snapshot "
-              f"{result['prediction_snapshot_id']} not on this machine")
+    if (
+        previous is not None
+        and previous.get("harness_version") == HARNESS_VERSION
+        and previous.get("prediction_snapshot_id") == result["prediction_snapshot_id"]
+        and previous.get("comparators", {}).get("available")
+    ):
+        print(
+            f"carried:   {stem} comparators — prediction snapshot "
+            f"{result['prediction_snapshot_id']} not on this machine"
+        )
         return previous["comparators"]
-    print(f"WARNING:   {stem} has no comparators — prediction snapshot "
-          f"{result['prediction_snapshot_id']} not on this machine and none to carry")
+    print(
+        f"WARNING:   {stem} has no comparators — prediction snapshot "
+        f"{result['prediction_snapshot_id']} not on this machine and none to carry"
+    )
     return result["comparators"]
 
 
@@ -490,9 +531,14 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
             live_cache[gw] = actuals(load_live(snap, gw))
         baseline = scored.get((gw, BASELINE_MODEL), (None,))[0]
         matched, result = score_entry(
-            rows, gw, model, events, live_cache[gw],
+            rows,
+            gw,
+            model,
+            events,
+            live_cache[gw],
             prediction_bootstrap(rows[0]["snapshot_id"]),
-            baseline_matched=baseline, actuals_snapshot_id=snap.name,
+            baseline_matched=baseline,
+            actuals_snapshot_id=snap.name,
         )
         if not result["comparators"]["available"]:
             result["comparators"] = _carried_comparators(out, gw, model, result)
@@ -506,17 +552,21 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
     summary = cumulative(scored, events, list(entries))
     _write_json(out / "cumulative.json", summary)
 
-    print(f"\n{'entry':<22}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}{'XI':>9}"
-          f"{'  vs form MAE':>14}")
+    print(f"\n{'entry':<22}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}{'XI':>9}{'  vs form MAE':>14}")
     for (gw, model), (_, r) in sorted(scored.items()):
         m = r["metrics"]["all"]
         rho = "-" if m["spearman"] is None else f"{m['spearman']:.3f}"
-        xi = (f"{r['xi']['captured']['actual']}/{r['xi']['optimum']['actual']}"
-              if r["xi"]["available"] else "n/a")
+        xi = (
+            f"{r['xi']['captured']['actual']}/{r['xi']['optimum']['actual']}"
+            if r["xi"]["available"]
+            else "n/a"
+        )
         comp = r["comparators"]
         form = f"{comp['form']['mae']:.2f}" if comp["available"] else "n/a"
-        print(f"{f'gw{gw:02d}_{model}':<22}{m['n']:>5}{m['mae']:>7.2f}{m['rmse']:>7.2f}"
-              f"{rho:>7}{xi:>9}{form:>14}")
+        print(
+            f"{f'gw{gw:02d}_{model}':<22}{m['n']:>5}{m['mae']:>7.2f}{m['rmse']:>7.2f}"
+            f"{rho:>7}{xi:>9}{form:>14}"
+        )
     for model, block in summary["models"].items():
         if block["gameweeks_missed"]:
             missed = ", ".join(f"GW{gw}" for gw in block["gameweeks_missed"])
@@ -528,10 +578,15 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
 def cli(argv=None):
     """`fpl-score`, or `python -m fpl.evaluation.score`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--actuals", default=None, metavar="SNAPSHOT_ID",
-                    help="snapshot holding the actual results (default: LATEST)")
-    ap.add_argument("--out", default="scores", metavar="DIR",
-                    help="output directory (default: scores/)")
+    ap.add_argument(
+        "--actuals",
+        default=None,
+        metavar="SNAPSHOT_ID",
+        help="snapshot holding the actual results (default: LATEST)",
+    )
+    ap.add_argument(
+        "--out", default="scores", metavar="DIR", help="output directory (default: scores/)"
+    )
     args = ap.parse_args(argv)
     require_project_root()
     return main(args.actuals, args.out)

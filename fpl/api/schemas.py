@@ -195,20 +195,27 @@ class OptimiseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     season: Annotated[str | None, Field(pattern=r"^\d{4}/\d{2}$", examples=["2026/27"])] = None
-    gameweek: Annotated[int | None, Field(
-        ge=1, le=38, description="Defaults to the model's latest entry.")] = None
-    model: Annotated[str, Field(pattern=r"^[A-Za-z0-9.-]{1,40}$",
-                                examples=["baseline-v1"])] = BASELINE_MODEL
-    squad: Annotated[list[OwnedPlayer] | None, Field(
-        min_length=15, max_length=15,
-        description="The fifteen owned. Without it, the best squad from scratch.")] = None
+    gameweek: Annotated[
+        int | None, Field(ge=1, le=38, description="Defaults to the model's latest entry.")
+    ] = None
+    model: Annotated[str, Field(pattern=r"^[A-Za-z0-9.-]{1,40}$", examples=["baseline-v1"])] = (
+        BASELINE_MODEL
+    )
+    squad: Annotated[
+        list[OwnedPlayer] | None,
+        Field(
+            min_length=15,
+            max_length=15,
+            description="The fifteen owned. Without it, the best squad from scratch.",
+        ),
+    ] = None
     bank: Annotated[float, Field(ge=0, le=100, description="£m; with a squad")] = 0.0
     free_transfers: Annotated[int, Field(ge=0, le=5)] = 1
-    budget: Annotated[float, Field(
-        ge=50, le=200, description="£m; without a squad")] = 100.0
+    budget: Annotated[float, Field(ge=50, le=200, description="£m; without a squad")] = 100.0
     include_unavailable: bool = False
-    horizon: Annotated[int, Field(
-        ge=1, le=1, description="Gameweeks to plan over. One, until #55.")] = 1
+    horizon: Annotated[
+        int, Field(ge=1, le=1, description="Gameweeks to plan over. One, until #55.")
+    ] = 1
 
 
 class Pick(BaseModel):

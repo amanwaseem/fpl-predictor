@@ -60,8 +60,7 @@ def _timestamp(value, what, faults):
         return datetime.strptime(value, TIMESTAMP).replace(tzinfo=UTC)
     except (TypeError, ValueError):
         faults.append(
-            f"{what} is {value!r}, which is not a SPEC section 5 timestamp "
-            "(YYYY-MM-DDTHH:MM:SSZ)"
+            f"{what} is {value!r}, which is not a SPEC section 5 timestamp (YYYY-MM-DDTHH:MM:SSZ)"
         )
         return None
 
@@ -77,15 +76,14 @@ def _coverage_faults(rows, bootstrap):
     faults = []
     elements = bootstrap["elements"]
     if len(rows) != len(elements):
-        faults.append(
-            f"entry has {len(rows)} rows but the snapshot has {len(elements)} "
-            "players"
-        )
+        faults.append(f"entry has {len(rows)} rows but the snapshot has {len(elements)} players")
 
     expected = {p["id"] for p in elements}
     present = {row["player_id"] for row in rows}
-    for label, ids in (("missing from the entry", sorted(expected - present)),
-                       ("not in the snapshot", sorted(present - expected))):
+    for label, ids in (
+        ("missing from the entry", sorted(expected - present)),
+        ("not in the snapshot", sorted(present - expected)),
+    ):
         if ids:
             shown = ", ".join(str(i) for i in ids[:10])
             more = f" (and {len(ids) - 10} more)" if len(ids) > 10 else ""
@@ -131,8 +129,7 @@ def _description_faults(rows, players, teams, positions):
             want, found = expected[field], row[field]
             if want is None:
                 continue  # unknown team or element_type, reported elsewhere
-            wrong = (abs(found - want) > 1e-9 if field == "price"
-                     else found != want)
+            wrong = abs(found - want) > 1e-9 if field == "price" else found != want
             if wrong:
                 disagreements[field].append((row["player_id"], found, want))
 
@@ -140,13 +137,11 @@ def _description_faults(rows, players, teams, positions):
         items = disagreements.get(field)
         if not items:
             continue
-        shown = ", ".join(f"player {pid} says {found!r} not {want!r}"
-                          for pid, found, want in items[:3])
-        more = f" (and {len(items) - 3} more)" if len(items) > 3 else ""
-        faults.append(
-            f"{len(items)} row(s) disagree with the snapshot on {field}: "
-            f"{shown}{more}"
+        shown = ", ".join(
+            f"player {pid} says {found!r} not {want!r}" for pid, found, want in items[:3]
         )
+        more = f" (and {len(items) - 3} more)" if len(items) > 3 else ""
+        faults.append(f"{len(items)} row(s) disagree with the snapshot on {field}: {shown}{more}")
     return faults
 
 
@@ -154,9 +149,7 @@ def _team_faults(rows, bootstrap, ids_by_name):
     faults = []
     unknown = sorted({row["team"] for row in rows} - set(ids_by_name))
     if unknown:
-        faults.append(
-            f"team short name(s) not in the snapshot: {', '.join(unknown)}"
-        )
+        faults.append(f"team short name(s) not in the snapshot: {', '.join(unknown)}")
 
     present = {row["team"] for row in rows} - set(unknown)
     if len(present) < LEAGUE_SIZE:
@@ -211,9 +204,11 @@ def _fixture_faults(rows, counts, players, teams, target_gw):
     # checked alongside points because expected_minutes is what a scoring
     # post-mortem reads to decide whether a miss was the minutes model or the
     # rate model, and a blanking player credited 90 minutes corrupts that.
-    playing = [row for row in rows
-               if row["n_fixtures"] == 0
-               and (row["predicted_points"] != 0 or row["expected_minutes"] != 0)]
+    playing = [
+        row
+        for row in rows
+        if row["n_fixtures"] == 0 and (row["predicted_points"] != 0 or row["expected_minutes"] != 0)
+    ]
     if playing:
         shown = ", ".join(
             f"{r['web_name']} ({r['team']}) "
@@ -264,8 +259,7 @@ def _availability_faults(rows, bootstrap):
                     f"{row['expected_minutes']} minutes"
                 )
         else:
-            ceiling = (FULL_MATCH_MINUTES * expected
-                       * max(row["n_fixtures"], 1)) + ROUNDING
+            ceiling = (FULL_MATCH_MINUTES * expected * max(row["n_fixtures"], 1)) + ROUNDING
             if row["expected_minutes"] > ceiling:
                 faults.append(
                     f"{flagged} — but the entry predicts "
@@ -313,8 +307,7 @@ def _provenance_faults(rows, bootstrap, target_gw, model_version, entry_path):
     # SPEC section 5 rule 5, checked again on the committed file. write_entry
     # refuses a late entry, but only the file on disk is the evidence, and it
     # is what a reader auditing the log months later actually has.
-    generated_at = _timestamp(rows[0]["generated_at_utc"], "generated_at_utc",
-                              faults)
+    generated_at = _timestamp(rows[0]["generated_at_utc"], "generated_at_utc", faults)
     deadline_at = _timestamp(deadline, "deadline_utc", faults)
     if generated_at and deadline_at and generated_at >= deadline_at:
         faults.append(
@@ -349,27 +342,26 @@ def check_entry(rows, bootstrap, fixtures, target_gw, model_version, entry_path)
         return faults + ["the snapshot has two teams sharing a short_name"]
 
     players = {p["id"]: p for p in bootstrap["elements"]}
-    positions = {p["id"]: p["singular_name_short"]
-                 for p in bootstrap["element_types"]}
+    positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
 
     faults += _coverage_faults(rows, bootstrap)
     faults += _description_faults(rows, players, team_names, positions)
     faults += _team_faults(rows, bootstrap, ids_by_name)
-    faults += _fixture_faults(rows, fixture_counts(fixtures, target_gw),
-                              players, team_names, target_gw)
+    faults += _fixture_faults(
+        rows, fixture_counts(fixtures, target_gw), players, team_names, target_gw
+    )
     faults += _availability_faults(rows, bootstrap)
-    faults += _provenance_faults(rows, bootstrap, target_gw, model_version,
-                                 entry_path)
+    faults += _provenance_faults(rows, bootstrap, target_gw, model_version, entry_path)
     return faults
 
 
 def _report(entry_path, faults):
     shown = faults[:MAX_REPORTED]
-    more = (f"\n... and {len(faults) - MAX_REPORTED} more"
-            if len(faults) > MAX_REPORTED else "")
-    print(f"REFUSED {entry_path}\n"
-          f"{len(faults)} problem(s):\n  " + "\n  ".join(shown) + more,
-          file=sys.stderr)
+    more = f"\n... and {len(faults) - MAX_REPORTED} more" if len(faults) > MAX_REPORTED else ""
+    print(
+        f"REFUSED {entry_path}\n{len(faults)} problem(s):\n  " + "\n  ".join(shown) + more,
+        file=sys.stderr,
+    )
     return 1
 
 
@@ -392,14 +384,16 @@ def main(path):
     # that a normal run reports it in the same place as everything else.
     snapshot_ids = sorted({row["snapshot_id"] for row in rows})
     if len(snapshot_ids) != 1:
-        return _report(entry_path, [
-            f"snapshot_id is not the same in every row: {snapshot_ids[:5]}. "
-            "There is no single snapshot to check this entry against."
-        ])
+        return _report(
+            entry_path,
+            [
+                f"snapshot_id is not the same in every row: {snapshot_ids[:5]}. "
+                "There is no single snapshot to check this entry against."
+            ],
+        )
 
     snap, bootstrap, fixtures, _ = load_snapshot(snapshot_ids[0])
-    faults = check_entry(rows, bootstrap, fixtures, target_gw, model_version,
-                         entry_path)
+    faults = check_entry(rows, bootstrap, fixtures, target_gw, model_version, entry_path)
     if faults:
         return _report(entry_path, faults)
 
@@ -408,18 +402,17 @@ def main(path):
     blanks = sorted(teams[t] for t in teams if counts.get(t, 0) == 0)
     doubles = sorted(teams[t] for t in teams if counts.get(t, 0) > 1)
     deadline = rows[0]["deadline_utc"]
-    margin = (datetime.strptime(deadline, TIMESTAMP)
-              - datetime.strptime(rows[0]["generated_at_utc"], TIMESTAMP))
+    margin = datetime.strptime(deadline, TIMESTAMP) - datetime.strptime(
+        rows[0]["generated_at_utc"], TIMESTAMP
+    )
 
     print(f"entry:     {entry_path}")
     print(f"snapshot:  {snap.name}")
     print(f"model:     {model_version}")
     print(f"target:    GW{target_gw}")
     print(f"deadline:  {deadline}")
-    print(f"generated: {rows[0]['generated_at_utc']}  "
-          f"({margin} before the deadline)")
-    print(f"rows:      {len(rows)} players across "
-          f"{len({r['team'] for r in rows})} teams")
+    print(f"generated: {rows[0]['generated_at_utc']}  ({margin} before the deadline)")
+    print(f"rows:      {len(rows)} players across {len({r['team'] for r in rows})} teams")
     print(f"blanking:  {', '.join(blanks) or 'none'}")
     print(f"doubles:   {', '.join(doubles) or 'none'}")
     print(f"\nOK — entry agrees with snapshot {snap.name} on every check.")

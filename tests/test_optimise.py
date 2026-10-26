@@ -35,8 +35,15 @@ ENTRIES = sorted((ROOT / "predictions").glob("gw*_*.csv"))
 
 
 def player(pid, position, team, price, predicted, status="a"):
-    return {"player_id": pid, "web_name": f"p{pid}", "team": team, "position": position,
-            "price": price, "predicted_points": predicted, "status": status}
+    return {
+        "player_id": pid,
+        "web_name": f"p{pid}",
+        "team": team,
+        "position": position,
+        "price": price,
+        "predicted_points": predicted,
+        "status": status,
+    }
 
 
 def random_pool(seed, *, clubs=8):
@@ -46,8 +53,15 @@ def random_pool(seed, *, clubs=8):
     for position, count in (("GKP", 3), ("DEF", 6), ("MID", 6), ("FWD", 4)):
         for _ in range(count):
             pid += 1
-            pool.append(player(pid, position, f"C{rng.randrange(clubs)}",
-                               rng.randrange(40, 130) / 10, rng.randrange(0, 900) / 100))
+            pool.append(
+                player(
+                    pid,
+                    position,
+                    f"C{rng.randrange(clubs)}",
+                    rng.randrange(40, 130) / 10,
+                    rng.randrange(0, 900) / 100,
+                )
+            )
     return pool
 
 
@@ -74,8 +88,12 @@ def exhaustive_best(pool, budget, bench_weight):
             continue
         if sum(tenths(p["price"]) for p in squad) > tenths(budget):
             continue
-        ranked = {pos: sorted((points(p["predicted_points"]) for p in squad
-                               if p["position"] == pos), reverse=True) for pos in SQUAD}
+        ranked = {
+            pos: sorted(
+                (points(p["predicted_points"]) for p in squad if p["position"] == pos), reverse=True
+            )
+            for pos in SQUAD
+        }
         for d, m, f in FORMATIONS:
             starting = {"GKP": 1, "DEF": d, "MID": m, "FWD": f}
             xi = [v for pos, k in starting.items() for v in ranked[pos][:k]]
@@ -86,11 +104,15 @@ def exhaustive_best(pool, budget, bench_weight):
 
 
 class TestRulesComeFromXi(unittest.TestCase):
-
     def test_the_xi_bounds_admit_exactly_fpl_xis_formations(self):
         (dl, dh), (ml, mh), (fl, fh) = (XI_BOUNDS[p] for p in ("DEF", "MID", "FWD"))
-        admitted = {(d, m, f) for d in range(dl, dh + 1) for m in range(ml, mh + 1)
-                    for f in range(fl, fh + 1) if d + m + f == 10}
+        admitted = {
+            (d, m, f)
+            for d in range(dl, dh + 1)
+            for m in range(ml, mh + 1)
+            for f in range(fl, fh + 1)
+            if d + m + f == 10
+        }
         self.assertEqual(admitted, set(FORMATIONS))
         self.assertEqual(XI_BOUNDS["GKP"], (1, 1))
 
@@ -127,7 +149,6 @@ class TestAgainstExhaustiveSearch(unittest.TestCase):
 
 
 class TestOnCommittedEntries(unittest.TestCase):
-
     def test_every_entry_gives_a_legal_squad_at_least_as_good_as_fpl_xi_would_pick(self):
         """fpl.evaluation.xi picks the best XI of the chosen squad; the optimiser's XI and captain
         together can be no worse than that XI with its own best player captained."""
@@ -152,12 +173,14 @@ class TestOnCommittedEntries(unittest.TestCase):
 
 
 class TestDeterminism(unittest.TestCase):
-
     def test_ties_go_to_lower_ids_whatever_the_input_order(self):
         """Every player equal: the squad is the lowest ids that make a legal one."""
-        pool = [player(pid, pos, f"C{pid % 8}", 5.0, 2.0)
-                for pid, pos in enumerate(["GKP"] * 4 + ["DEF"] * 8 + ["MID"] * 8
-                                          + ["FWD"] * 6, start=1)]
+        pool = [
+            player(pid, pos, f"C{pid % 8}", 5.0, 2.0)
+            for pid, pos in enumerate(
+                ["GKP"] * 4 + ["DEF"] * 8 + ["MID"] * 8 + ["FWD"] * 6, start=1
+            )
+        ]
         first = best_squad(pool)
         shuffled = pool[:]
         random.Random(1).shuffle(shuffled)
@@ -214,8 +237,13 @@ class TestRefusals(unittest.TestCase):
         squad.cost = 100.5
         squad.xi = squad.xi[:10]
         found = " ".join(violations(squad))
-        for words in ("captain does not start", "vice-captain does not start",
-                      "over £100.0m", "10 starters", "distinct"):
+        for words in (
+            "captain does not start",
+            "vice-captain does not start",
+            "over £100.0m",
+            "10 starters",
+            "distinct",
+        ):
             self.assertIn(words, found)
 
 
@@ -250,28 +278,28 @@ class TestAvailability(unittest.TestCase):
                 rows, _ = read_entry(path)
                 status = {r["player_id"]: r["status"] for r in rows}
                 squad = best_squad(rows)
-                self.assertTrue(all(status[p.player_id] in "ad"
-                                    for p in squad.xi + squad.bench))
+                self.assertTrue(all(status[p.player_id] in "ad" for p in squad.xi + squad.bench))
 
 
 class TestTheSolverIsOptional(unittest.TestCase):
-
     def test_importing_the_module_does_not_import_the_solver(self):
         """So `fpl-optimise --help` works on an install without highspy."""
         code = "import sys, fpl.optimise; print('highspy' in sys.modules)"
-        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
-                             check=True, cwd=ROOT).stdout.strip()
+        out = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=ROOT
+        ).stdout.strip()
         self.assertEqual(out, "False")
 
     def test_without_it_a_solve_says_how_to_install_it(self):
-        with mock.patch.dict(sys.modules, {"highspy": None}), \
-                self.assertRaises(ImportError) as raised:
+        with (
+            mock.patch.dict(sys.modules, {"highspy": None}),
+            self.assertRaises(ImportError) as raised,
+        ):
             best_squad(random_pool(0), budget=200.0)
         self.assertIn("uv sync --group optimise", str(raised.exception))
 
 
 class TestXiHelpersAreShared(unittest.TestCase):
-
     def test_the_optimisers_xi_is_ordered_and_labelled_as_fpl_xi_does(self):
         rows, _ = read_entry(ENTRIES[-1])
         squad = best_squad(rows)
@@ -281,7 +309,6 @@ class TestXiHelpersAreShared(unittest.TestCase):
 
 
 class TestCommand(unittest.TestCase):
-
     def setUp(self):
         self.previous = Path.cwd()
         os.chdir(ROOT)
@@ -319,8 +346,7 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(len(json.loads(out)["xi"]), 11)
 
     def test_a_bench_weight_outside_zero_to_one_is_a_usage_error(self):
-        with self.assertRaises(SystemExit) as raised, \
-                contextlib.redirect_stderr(io.StringIO()):
+        with self.assertRaises(SystemExit) as raised, contextlib.redirect_stderr(io.StringIO()):
             self.run_cli("--bench-weight", "2")
         self.assertEqual(raised.exception.code, 2)
 

@@ -58,16 +58,30 @@ class TestEntry(fixtures.TempCwd):
         for club in clubs:
             for slot in range(4):
                 pid += 1
-                elements.append(fixtures.element(pid, team=club, element_type=slot + 1,
-                                                 now_cost=45 + slot * 5))
+                elements.append(
+                    fixtures.element(pid, team=club, element_type=slot + 1, now_cost=45 + slot * 5)
+                )
                 histories[pid] = [
-                    row(f["id"], f["event"], f["team_h"] == club,
-                        minutes=90 - slot * 10, points=2 + slot, xg=0.1 * (slot + 1))
-                    for f in fx if f["event"] < 4 and club in (f["team_h"], f["team_a"])]
-        self.snapshot(name, elements=elements, teams=[fixtures.team(t) for t in clubs],
-                      events=fixtures.season(4, deadline or fixtures.future_deadline()),
-                      fixtures=fx,
-                      histories=histories, latest=True)
+                    row(
+                        f["id"],
+                        f["event"],
+                        f["team_h"] == club,
+                        minutes=90 - slot * 10,
+                        points=2 + slot,
+                        xg=0.1 * (slot + 1),
+                    )
+                    for f in fx
+                    if f["event"] < 4 and club in (f["team_h"], f["team_a"])
+                ]
+        self.snapshot(
+            name,
+            elements=elements,
+            teams=[fixtures.team(t) for t in clubs],
+            events=fixtures.season(4, deadline or fixtures.future_deadline()),
+            fixtures=fx,
+            histories=histories,
+            latest=True,
+        )
 
     def run_entry(self, *args, **kwargs):
         out, err = io.StringIO(), io.StringIO()
@@ -83,15 +97,24 @@ class TestEntry(fixtures.TempCwd):
                 self.assertTrue(Path(f"predictions/gw04_{model}.csv").exists())
                 self.assertTrue(Path(f"reports/gw04_{model}.md").exists())
                 self.assertIn(f"### {model}", out)
-        self.assertEqual(out.count("OK — entry agrees with snapshot"), 2 * len(MODELS),
-                         "each verify prints once live and once in the digest")
+        self.assertEqual(
+            out.count("OK — entry agrees with snapshot"),
+            2 * len(MODELS),
+            "each verify prints once live and once in the digest",
+        )
 
     def test_digest_carries_what_the_runbook_says_to_paste(self):
         _, out, _ = self.run_entry()
         text = next(Path("scratch").glob("entry-gw04-*/digest.md")).read_text()
         self.assertIn(text.strip(), out)
-        for line in (f"snapshot: `{SNAPSHOT_ID}`", "included: 1, 2, 3", "excluded: none",
-                     "prior:", "ratings:", "rows:"):
+        for line in (
+            f"snapshot: `{SNAPSHOT_ID}`",
+            "included: 1, 2, 3",
+            "excluded: none",
+            "prior:",
+            "ratings:",
+            "rows:",
+        ):
             self.assertIn(line, text)
 
     def test_digest_out_is_the_same_digest(self):
@@ -110,7 +133,8 @@ class TestEntry(fixtures.TempCwd):
         """No digest means no PR body: a failed run cannot be mistaken for one."""
         code, _, _ = self.run_entry(
             models=[("baseline-v1", predict_baseline.main), ("broken-v1", failing)],
-            digest_out="here.md")
+            digest_out="here.md",
+        )
         self.assertEqual(code, 1)
         self.assertFalse(Path("here.md").exists())
 
@@ -138,9 +162,10 @@ class TestEntry(fixtures.TempCwd):
         self.run_entry()
         run = next(Path("scratch").glob("entry-gw04-*/entry")).parent
         for model in MODELS:
-            dry, real = (fixtures.read_csv(p) for p in
-                         (run / "entry" / f"gw04_{model}.csv",
-                          f"predictions/gw04_{model}.csv"))
+            dry, real = (
+                fixtures.read_csv(p)
+                for p in (run / "entry" / f"gw04_{model}.csv", f"predictions/gw04_{model}.csv")
+            )
             for r in dry + real:
                 del r["generated_at_utc"]
             self.assertEqual(dry, real)
@@ -151,8 +176,9 @@ class TestEntry(fixtures.TempCwd):
         self.assertEqual(code, 1)
         self.assertIn("broken-v1: scratch run failed", err)
         self.assertIn("this model could not run", err)
-        self.assertFalse(Path("predictions").exists(),
-                         "no model may reach the log while another cannot run")
+        self.assertFalse(
+            Path("predictions").exists(), "no model may reach the log while another cannot run"
+        )
 
     def test_stops_at_the_first_failed_step_and_names_it(self):
         models = [("flaky-v1", flaky), *entry.LOGGED_MODELS]
@@ -162,15 +188,16 @@ class TestEntry(fixtures.TempCwd):
         self.assertIn("Do not commit a partial set", err)
         self.assertFalse(Path("reports/gw04_flaky-v1.md").exists(), "verify never ran")
         for model in MODELS:
-            self.assertFalse(Path(f"predictions/gw04_{model}.csv").exists(),
-                             "nothing runs after the first failure")
+            self.assertFalse(
+                Path(f"predictions/gw04_{model}.csv").exists(),
+                "nothing runs after the first failure",
+            )
 
     def test_refuses_to_run_when_an_entry_is_already_in_the_log(self):
         self.run_entry()
         with self.assertRaises(SystemExit) as raised:
             self.run_entry()
         self.assertIn("Already in the log", str(raised.exception))
-
 
     def test_an_unexpected_error_still_names_what_was_left_behind(self):
         models = [*entry.LOGGED_MODELS, ("crashing-v1", crashing)]
@@ -211,6 +238,7 @@ class TestEntry(fixtures.TempCwd):
         for model in MODELS:
             rows = fixtures.read_csv(f"scratch/manual/gw04_{model}.csv")
             self.assertEqual({r["snapshot_id"] for r in rows}, {SNAPSHOT_ID})
+
 
 if __name__ == "__main__":
     unittest.main()

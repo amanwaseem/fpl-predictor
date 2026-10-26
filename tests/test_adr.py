@@ -56,7 +56,6 @@ def problems(directory=ADR_DIR):
 
 
 class TestRecords(unittest.TestCase):
-
     def test_the_record_set_is_sound(self):
         self.assertEqual(problems(), [])
 

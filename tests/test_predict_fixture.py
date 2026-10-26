@@ -28,15 +28,31 @@ ENTRY = Path("predictions/gw04_form-fixture-v1.csv")
 
 
 def played(fid, gw, home, away, score_h, score_a):
-    return {"id": fid, "event": gw, "team_h": home, "team_a": away,
-            "team_h_score": score_h, "team_a_score": score_a, "finished": True,
-            "team_h_difficulty": 3, "team_a_difficulty": 3}
+    return {
+        "id": fid,
+        "event": gw,
+        "team_h": home,
+        "team_a": away,
+        "team_h_score": score_h,
+        "team_a_score": score_a,
+        "finished": True,
+        "team_h_difficulty": 3,
+        "team_a_difficulty": 3,
+    }
 
 
 def row(fid, gw, home, *, minutes=90, points=2, xg=0.2, goals=0, assists=0, cs=0):
-    return {"fixture": fid, "round": gw, "was_home": home, "minutes": minutes,
-            "total_points": points, "expected_goals": f"{xg:.2f}",
-            "goals_scored": goals, "assists": assists, "clean_sheets": cs}
+    return {
+        "fixture": fid,
+        "round": gw,
+        "was_home": home,
+        "minutes": minutes,
+        "total_points": points,
+        "expected_goals": f"{xg:.2f}",
+        "goals_scored": goals,
+        "assists": assists,
+        "clean_sheets": cs,
+    }
 
 
 class League:
@@ -48,12 +64,21 @@ class League:
     """
 
     # (player id, club, element_type)
-    PLAYERS = [(1, 1, 4), (2, 1, 2), (3, 2, 4), (4, 2, 2),
-               (5, 3, 4), (6, 3, 2), (7, 4, 4), (8, 4, 2)]
+    PLAYERS = [
+        (1, 1, 4),
+        (2, 1, 2),
+        (3, 2, 4),
+        (4, 2, 2),
+        (5, 3, 4),
+        (6, 3, 2),
+        (7, 4, 4),
+        (8, 4, 2),
+    ]
 
     def __init__(self):
-        self.elements = [fixtures.element(pid, team=club, element_type=pos)
-                         for pid, club, pos in self.PLAYERS]
+        self.elements = [
+            fixtures.element(pid, team=club, element_type=pos) for pid, club, pos in self.PLAYERS
+        ]
         self.history_fixtures = []
         self.histories = {pid: [] for pid, _, _ in self.PLAYERS}
         self.pasts = {}
@@ -65,27 +90,41 @@ class League:
                         continue
                     strong = club == home
                     forward = pos == 4
-                    self.histories[pid].append(row(
-                        fid, gw, strong, points=(8 if forward else 6) if strong else 1,
-                        xg=(1.5 if forward else 0.2) if strong else 0.05,
-                        goals=int(strong and forward), cs=int(strong and not forward)))
+                    self.histories[pid].append(
+                        row(
+                            fid,
+                            gw,
+                            strong,
+                            points=(8 if forward else 6) if strong else 1,
+                            xg=(1.5 if forward else 0.2) if strong else 0.05,
+                            goals=int(strong and forward),
+                            cs=int(strong and not forward),
+                        )
+                    )
 
     def bootstrap(self):
-        return {"elements": self.elements, "teams": [fixtures.team(t) for t in (1, 2, 3, 4)],
-                "element_types": fixtures.ELEMENT_TYPES, "events": EVENTS}
+        return {
+            "elements": self.elements,
+            "teams": [fixtures.team(t) for t in (1, 2, 3, 4)],
+            "element_types": fixtures.ELEMENT_TYPES,
+            "events": EVENTS,
+        }
 
     def predict(self, gw4, **settings):
         fx = self.history_fixtures + [
-            {"id": 40 + i, "event": 4, "team_h": h, "team_a": a}
-            for i, (h, a) in enumerate(gw4)]
+            {"id": 40 + i, "event": 4, "team_h": h, "team_a": a} for i, (h, a) in enumerate(gw4)
+        ]
         bootstrap = self.bootstrap()
         usable, _ = usable_rounds(EVENTS, 4)
-        return {r["player_id"]: r for r in predict_fixture.predict_rows(
-            bootstrap, fx, self.histories, self.pasts, 4, usable, **settings)}
+        return {
+            r["player_id"]: r
+            for r in predict_fixture.predict_rows(
+                bootstrap, fx, self.histories, self.pasts, 4, usable, **settings
+            )
+        }
 
 
 class TestAttack(unittest.TestCase):
-
     def test_a_weaker_defence_lifts_a_forward(self):
         league = League()
         soft = league.predict([(1, 3), (2, 4)])[1]["predicted_points"]
@@ -95,12 +134,13 @@ class TestAttack(unittest.TestCase):
     def test_the_logged_rate_is_before_the_fixture(self):
         """points_per_90 keeps baseline-v1's meaning: the opponent does not move it."""
         league = League()
-        self.assertEqual(league.predict([(1, 3), (2, 4)])[1]["points_per_90"],
-                         league.predict([(1, 2), (3, 4)])[1]["points_per_90"])
+        self.assertEqual(
+            league.predict([(1, 3), (2, 4)])[1]["points_per_90"],
+            league.predict([(1, 2), (3, 4)])[1]["points_per_90"],
+        )
 
 
 class TestCleanSheet(unittest.TestCase):
-
     def test_a_weaker_attack_lifts_a_defender(self):
         league = League()
         soft = league.predict([(1, 3), (2, 4)])[2]["predicted_points"]
@@ -114,15 +154,13 @@ class TestCleanSheet(unittest.TestCase):
         he has no part the fixture moves, and the opponent must not matter.
         """
         league = League()
-        league.histories[2] = [dict(r, minutes=45, clean_sheets=0)
-                               for r in league.histories[2]]
+        league.histories[2] = [dict(r, minutes=45, clean_sheets=0) for r in league.histories[2]]
         soft = league.predict([(1, 3), (2, 4)])[2]["predicted_points"]
         hard = league.predict([(1, 2), (3, 4)])[2]["predicted_points"]
         self.assertAlmostEqual(soft, hard)
 
 
 class TestRest(unittest.TestCase):
-
     def test_bonus_saves_and_cards_are_not_fixture_scaled(self):
         """With no goals or assists anywhere, a forward has only the rest left.
 
@@ -132,8 +170,10 @@ class TestRest(unittest.TestCase):
         come from his side's chance of keeping one, not from his history.)
         """
         league = League()
-        league.histories = {pid: [dict(r, goals_scored=0, assists=0) for r in rows]
-                            for pid, rows in league.histories.items()}
+        league.histories = {
+            pid: [dict(r, goals_scored=0, assists=0) for r in rows]
+            for pid, rows in league.histories.items()
+        }
         soft = league.predict([(1, 3), (2, 4)])[1]["predicted_points"]
         hard = league.predict([(1, 2), (3, 4)])[1]["predicted_points"]
         self.assertAlmostEqual(soft, hard)
@@ -141,7 +181,6 @@ class TestRest(unittest.TestCase):
 
 
 class TestMinutes(unittest.TestCase):
-
     def test_a_blank_predicts_nothing(self):
         rows = League().predict([(2, 4)])
         self.assertEqual(rows[1]["predicted_points"], 0.0)
@@ -155,26 +194,38 @@ class TestMinutes(unittest.TestCase):
 
     def test_injured_means_nothing(self):
         league = League()
-        league.elements = [dict(e, status="i", chance_of_playing_next_round=0)
-                           if e["id"] == 1 else e for e in league.elements]
+        league.elements = [
+            dict(e, status="i", chance_of_playing_next_round=0) if e["id"] == 1 else e
+            for e in league.elements
+        ]
         self.assertEqual(league.predict([(1, 3), (2, 4)])[1]["predicted_points"], 0.0)
 
 
 class TestPrior(unittest.TestCase):
-
     def test_a_strong_last_season_lifts_an_identical_start(self):
         league = League()
         base = league.predict([(1, 3), (2, 4)])[3]["predicted_points"]
-        league.pasts[3] = [{"season_name": "2025/26", "minutes": 3000, "total_points": 300,
-                            "goals_scored": 25, "assists": 10, "clean_sheets": 0,
-                            "expected_goals": "22.0", "expected_assists": "9.0"}]
+        league.pasts[3] = [
+            {
+                "season_name": "2025/26",
+                "minutes": 3000,
+                "total_points": 300,
+                "goals_scored": 25,
+                "assists": 10,
+                "clean_sheets": 0,
+                "expected_goals": "22.0",
+                "expected_assists": "9.0",
+            }
+        ]
         self.assertGreater(league.predict([(1, 3), (2, 4)])[3]["predicted_points"], base)
 
     def test_positional_prior_when_last_season_is_off(self):
         league = League()
         league.pasts[3] = [{"season_name": "2025/26", "minutes": 3000, "total_points": 300}]
-        self.assertEqual(league.predict([(1, 3), (2, 4)], last_season=False),
-                         League().predict([(1, 3), (2, 4)], last_season=False))
+        self.assertEqual(
+            league.predict([(1, 3), (2, 4)], last_season=False),
+            League().predict([(1, 3), (2, 4)], last_season=False),
+        )
 
 
 class TestImportBoundary(unittest.TestCase):
@@ -182,11 +233,19 @@ class TestImportBoundary(unittest.TestCase):
 
     def test_imports(self):
         tree = ast.parse(Path(predict_fixture.__file__).read_text())
-        imported = {node.module for node in ast.walk(tree)
-                    if isinstance(node, ast.ImportFrom) and node.module}
+        imported = {
+            node.module
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module
+        }
         # fpl.paths is the shared repository-root check every command makes.
-        allowed = {"fpl.models.features", "fpl.log.contract", "fpl.paths",
-                   "fpl.ingest.snapshot", "fpl.models.teams"}
+        allowed = {
+            "fpl.models.features",
+            "fpl.log.contract",
+            "fpl.paths",
+            "fpl.ingest.snapshot",
+            "fpl.models.teams",
+        }
         self.assertLessEqual(imported, allowed)
         self.assertNotIn("fpl.models.predict_baseline", imported)
 
@@ -206,20 +265,32 @@ class TestEndToEnd(fixtures.TempCwd):
         for club in clubs:
             for slot in range(4):
                 pid += 1
-                elements.append(fixtures.element(pid, team=club, element_type=slot + 1,
-                                                 now_cost=45 + slot * 5))
+                elements.append(
+                    fixtures.element(pid, team=club, element_type=slot + 1, now_cost=45 + slot * 5)
+                )
                 histories[pid] = []
                 for f in fx:
                     if f["event"] < 4 and club in (f["team_h"], f["team_a"]):
-                        histories[pid].append(row(f["id"], f["event"], f["team_h"] == club,
-                                                  minutes=90 - slot * 10, points=2 + slot,
-                                                  xg=0.1 * (slot + 1)))
-        self.snapshot(SNAPSHOT_ID, elements=elements,
-                      teams=[fixtures.team(t) for t in clubs],
-                      events=fixtures.season(4, self.deadline), fixtures=fx,
-                      histories=histories, pasts={1: [{"season_name": "2025/26",
-                                                       "minutes": 3000, "total_points": 150}]},
-                      latest=True)
+                        histories[pid].append(
+                            row(
+                                f["id"],
+                                f["event"],
+                                f["team_h"] == club,
+                                minutes=90 - slot * 10,
+                                points=2 + slot,
+                                xg=0.1 * (slot + 1),
+                            )
+                        )
+        self.snapshot(
+            SNAPSHOT_ID,
+            elements=elements,
+            teams=[fixtures.team(t) for t in clubs],
+            events=fixtures.season(4, self.deadline),
+            fixtures=fx,
+            histories=histories,
+            pasts={1: [{"season_name": "2025/26", "minutes": 3000, "total_points": 150}]},
+            latest=True,
+        )
 
     def predict(self, out="predictions"):
         stream = io.StringIO()
@@ -248,17 +319,24 @@ class TestEndToEnd(fixtures.TempCwd):
 
         def body(path):
             with open(path, newline="") as f:
-                return [{k: v for k, v in r.items() if k != "generated_at_utc"}
-                        for r in csv.DictReader(f)]
-        self.assertEqual(body("scratch/a/gw04_form-fixture-v1.csv"),
-                         body("scratch/b/gw04_form-fixture-v1.csv"))
+                return [
+                    {k: v for k, v in r.items() if k != "generated_at_utc"}
+                    for r in csv.DictReader(f)
+                ]
+
+        self.assertEqual(
+            body("scratch/a/gw04_form-fixture-v1.csv"), body("scratch/b/gw04_form-fixture-v1.csv")
+        )
 
     def test_prior_count_leaves_out_a_blanking_club(self):
         """Player 1 has the only usable last season; his club (and its GW4
         opponent, club 2) sit GW4 out, leaving 72 predicted, none with a prior."""
         bootstrap_path = Path("data/raw") / SNAPSHOT_ID / "fixtures.json"
-        fx = [f for f in json.loads(bootstrap_path.read_text())
-              if not (f["event"] == 4 and 1 in (f["team_h"], f["team_a"]))]
+        fx = [
+            f
+            for f in json.loads(bootstrap_path.read_text())
+            if not (f["event"] == 4 and 1 in (f["team_h"], f["team_a"]))
+        ]
         bootstrap_path.write_text(json.dumps(fx))
         self.assertIn("prior:     0 from 2025/26 / 72 positional", self.predict(out="scratch"))
 

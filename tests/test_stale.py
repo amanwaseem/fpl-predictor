@@ -16,10 +16,22 @@ from fpl.db import stale
 from fpl.db.migrate import head
 from tests.fixtures import element, event, team
 
-EVENTS = [event(1, deadline="2026-08-14T17:30:00Z", finished=True, data_checked=True),
-          event(2, deadline="2026-08-21T17:30:00Z")]
-FIXTURES = [{"id": 1, "event": 1, "kickoff_time": "2026-08-15T14:00:00Z", "finished": True,
-             "team_h": 1, "team_a": 2, "team_h_score": 2, "team_a_score": 1}]
+EVENTS = [
+    event(1, deadline="2026-08-14T17:30:00Z", finished=True, data_checked=True),
+    event(2, deadline="2026-08-21T17:30:00Z"),
+]
+FIXTURES = [
+    {
+        "id": 1,
+        "event": 1,
+        "kickoff_time": "2026-08-15T14:00:00Z",
+        "finished": True,
+        "team_h": 1,
+        "team_a": 2,
+        "team_h_score": 2,
+        "team_a_score": 1,
+    }
+]
 
 
 def player(pid, **kwargs):
@@ -27,13 +39,14 @@ def player(pid, **kwargs):
 
 
 def bootstrap():
-    return {"events": EVENTS,
-            "teams": [team(t) | {"code": 100 + t, "name": f"Team {t}"} for t in (1, 2)],
-            "elements": [player(1), player(2, element_type=1)]}
+    return {
+        "events": EVENTS,
+        "teams": [team(t) | {"code": 100 + t, "name": f"Team {t}"} for t in (1, 2)],
+        "elements": [player(1), player(2, element_type=1)],
+    }
 
 
 class TestDifferences(unittest.TestCase):
-
     def test_the_api_against_itself_differs_in_nothing(self):
         api = stale.from_api(bootstrap(), FIXTURES)
         self.assertEqual(stale.differences(api, api), [])
@@ -47,28 +60,31 @@ class TestDifferences(unittest.TestCase):
 
     def test_a_result_is_a_difference(self):
         api = stale.from_api(bootstrap(), FIXTURES)
-        unplayed = [FIXTURES[0] | {"finished": False, "team_h_score": None,
-                                   "team_a_score": None}]
+        unplayed = [FIXTURES[0] | {"finished": False, "team_h_score": None, "team_a_score": None}]
         database = stale.from_api(bootstrap(), unplayed)
         self.assertEqual(stale.differences(api, database), ["fixtures: 1 differ (1)"])
 
     def test_a_new_player_is_a_difference_and_a_non_player_is_not(self):
         more = bootstrap()
         more["elements"] += [player(3), player(4, element_type=5)]
-        found = stale.differences(stale.from_api(more, FIXTURES),
-                                  stale.from_api(bootstrap(), FIXTURES))
+        found = stale.differences(
+            stale.from_api(more, FIXTURES), stale.from_api(bootstrap(), FIXTURES)
+        )
         self.assertEqual(found, ["players: 1 differ (3)", "clubs: 1 differ (3)"])
 
     def test_an_empty_database_differs_everywhere(self):
         found = stale.differences(stale.from_api(bootstrap(), FIXTURES), {})
-        self.assertEqual([line.split(":")[0] for line in found],
-                         ["gameweeks", "fixtures", "teams", "players", "clubs"])
+        self.assertEqual(
+            [line.split(":")[0] for line in found],
+            ["gameweeks", "fixtures", "teams", "players", "clubs"],
+        )
 
     def test_a_transfer_is_a_difference(self):
         moved = bootstrap()
         moved["elements"][0] = player(1, team=2)
-        found = stale.differences(stale.from_api(moved, FIXTURES),
-                                  stale.from_api(bootstrap(), FIXTURES))
+        found = stale.differences(
+            stale.from_api(moved, FIXTURES), stale.from_api(bootstrap(), FIXTURES)
+        )
         self.assertEqual(found, ["clubs: 1 differ (1)"])
 
     def test_clubs_are_not_compared_once_the_season_is_over(self):
@@ -77,26 +93,28 @@ class TestDifferences(unittest.TestCase):
 
     def test_a_home_and_away_swap_is_a_difference(self):
         swapped = [FIXTURES[0] | {"team_h": 2, "team_a": 1}]
-        found = stale.differences(stale.from_api(bootstrap(), swapped),
-                                  stale.from_api(bootstrap(), FIXTURES))
+        found = stale.differences(
+            stale.from_api(bootstrap(), swapped), stale.from_api(bootstrap(), FIXTURES)
+        )
         self.assertEqual(found, ["fixtures: 1 differ (1)"])
 
     def test_a_row_only_the_database_has_is_not_a_difference(self):
         """The load never deletes, so it would be a difference every day."""
         fewer = bootstrap()
         fewer["elements"] = fewer["elements"][:1]
-        found = stale.differences(stale.from_api(fewer, FIXTURES),
-                                  stale.from_api(bootstrap(), FIXTURES))
+        found = stale.differences(
+            stale.from_api(fewer, FIXTURES), stale.from_api(bootstrap(), FIXTURES)
+        )
         self.assertEqual(found, [])
 
     def test_many_differences_are_counted_not_listed(self):
         api = {"players": {(i,): ("x", "MID") for i in range(12)}}
-        self.assertEqual(stale.differences(api, {}),
-                         ["players: 12 differ (0, 1, 2, 3, 4 and 7 more)"])
+        self.assertEqual(
+            stale.differences(api, {}), ["players: 12 differ (0, 1, 2, 3, 4 and 7 more)"]
+        )
 
 
 class TestSchema(unittest.TestCase):
-
     def test_at_head_is_fine(self):
         self.assertIsNone(stale.schema_problem(head(), head()))
 
@@ -108,7 +126,6 @@ class TestSchema(unittest.TestCase):
 
 
 class TestOutputs(unittest.TestCase):
-
     def test_the_step_output_is_written_for_actions(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "out"
@@ -129,8 +146,11 @@ class TestOutputs(unittest.TestCase):
     def test_the_newest_complete_snapshot_is_compared_not_latest(self):
         with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()):
             raw = Path(tmp)
-            for name, complete in (("20261020T000000Z", True), ("20261021T000000Z", True),
-                                   ("20261022T000000Z", False)):
+            for name, complete in (
+                ("20261020T000000Z", True),
+                ("20261021T000000Z", True),
+                ("20261022T000000Z", False),
+            ):
                 (raw / name).mkdir()
                 if complete:
                     (raw / name / "manifest.json").write_text("{}")

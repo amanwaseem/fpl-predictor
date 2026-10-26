@@ -99,8 +99,13 @@ EVENT_FIELDS = ("id", "deadline_time", "finished", "data_checked")
 
 # A GW N fixture keeps only what was published before it kicked off.
 UPCOMING_FIXTURE_FIELDS = (
-    "id", "event", "team_h", "team_a", "kickoff_time",
-    "team_h_difficulty", "team_a_difficulty",
+    "id",
+    "event",
+    "team_h",
+    "team_a",
+    "kickoff_time",
+    "team_h_difficulty",
+    "team_a_difficulty",
 )
 
 # Naive comparators rebuilt from history. FPL's own form and points_per_game
@@ -173,8 +178,9 @@ def as_of(bootstrap, fixtures, histories, target_gw):
         if event["id"] < target_gw:
             events.append(dict(_pick(event, EVENT_FIELDS), is_next=False))
         elif event["id"] == target_gw:
-            events.append(dict(_pick(event, EVENT_FIELDS), finished=False,
-                               data_checked=False, is_next=True))
+            events.append(
+                dict(_pick(event, EVENT_FIELDS), finished=False, data_checked=False, is_next=True)
+            )
 
     view_fixtures = []
     for fixture in fixtures:
@@ -202,8 +208,9 @@ def _baseline(bootstrap, fixtures, histories, target_gw, pasts=None):
 
 def _form_fixture(bootstrap, fixtures, histories, target_gw, pasts=None, **settings):
     usable, _ = usable_rounds(bootstrap["events"], target_gw)
-    return predict_fixture.predict_rows(bootstrap, fixtures, histories, pasts or {},
-                                        target_gw, usable, **settings)
+    return predict_fixture.predict_rows(
+        bootstrap, fixtures, histories, pasts or {}, target_gw, usable, **settings
+    )
 
 
 # Every model the backtest can replay: name -> f(bootstrap, fixtures,
@@ -223,7 +230,8 @@ MODELS = {
     # The same with #45's defensive contribution: whether it earns its place
     # in v2, now that it has another gameweek to be judged on.
     "form-fixture-v2-dc": lambda *view, **kw: _form_fixture(
-        *view, goalkeeping=True, defensive=True, **kw),
+        *view, goalkeeping=True, defensive=True, **kw
+    ),
     # The v2 candidate with the flat prior moved by price for players without
     # a usable last season (#49), and its control: the same weight, no price.
     "price-prior": price_prior_rows,
@@ -231,7 +239,8 @@ MODELS = {
     # form-fixture-v1 on FPL's difficulty: whether the ratings earn their
     # place over the comparator once the prior is in.
     "baseline-prior-fdr": lambda *view, **kw: baseline_fixture_rows(
-        *view, strength="fdr", last_season=True, **kw),
+        *view, strength="fdr", last_season=True, **kw
+    ),
 }
 
 
@@ -243,10 +252,8 @@ GRIDS = {
     # The prior's weight for players without a usable last season, before it
     # fades: the flat prior's 270, and more, out past where form stops
     # mattering.
-    "price-prior": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400, 28800,
-                                            57600)},
-    "flat-prior-weight": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400, 28800,
-                                                  57600)},
+    "price-prior": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400, 28800, 57600)},
+    "flat-prior-weight": {"price_prior_minutes": (270, 900, 1800, 3600, 7200, 14400, 28800, 57600)},
     # v1's settings stay at their logged values; only DC's own weight is tuned.
     "form-fixture-v2-dc": {"defensive_prior_scale": (0.25, 0.5, 1.0, 2.0)},
     "baseline-prior": {
@@ -277,8 +284,10 @@ def settings(model):
     """Every combination in the model's grid, in a fixed order. [{}] if none."""
     grid = GRIDS.get(model, {})
     names = sorted(grid)
-    return [dict(zip(names, values, strict=True))
-            for values in itertools.product(*(grid[n] for n in names))]
+    return [
+        dict(zip(names, values, strict=True))
+        for values in itertools.product(*(grid[n] for n in names))
+    ]
 
 
 def _comparator_values(histories):
@@ -296,7 +305,8 @@ def _comparator_values(histories):
         values[pid] = {
             "zero": 0.0,
             "history_ppg": (
-                sum(r.get("total_points", 0) for r in played) / len(played) if played else 0.0),
+                sum(r.get("total_points", 0) for r in played) / len(played) if played else 0.0
+            ),
             f"last_{RECENT_ROUNDS}_mean": sum(recent) / len(recent) if recent else 0.0,
         }
     return values
@@ -305,8 +315,9 @@ def _comparator_values(histories):
 def prior_coverage(view, pasts):
     """How many players in the view have a usable last season, and how many not."""
     season = previous_season(view["events"])
-    player = sum(1 for e in view["elements"]
-                 if player_prior(pasts.get(e["id"], []), season) is not None)
+    player = sum(
+        1 for e in view["elements"] if player_prior(pasts.get(e["id"], []), season) is not None
+    )
     return {"player": player, "positional": len(view["elements"]) - player}
 
 
@@ -343,23 +354,29 @@ def replay(snap, bootstrap, fixtures, histories, pasts, model, target_gw):
         raise SystemExit(f"GW{target_gw}: no replayed player joins to actuals.")
 
     pairs = [(p["predicted_points"], p["actual_points"]) for p in matched]
-    playing = [(p["predicted_points"], p["actual_points"])
-               for p in matched if p["expected_minutes"] > 0]
+    playing = [
+        (p["predicted_points"], p["actual_points"]) for p in matched if p["expected_minutes"] > 0
+    ]
 
     naive = _comparator_values(view_histories)
     comparators = {}
     for name in next(iter(naive.values())):
         comparators[name] = metrics.summary(
-            [(naive[p["player_id"]][name], p["actual_points"]) for p in matched])
+            [(naive[p["player_id"]][name], p["actual_points"]) for p in matched]
+        )
 
     return matched, {
         "gameweek": target_gw,
-        "join": {"matched": len(matched), "missing_actual": len(missing_actual),
-                 "missing_prediction": len(missing_prediction)},
-        "metrics": {"all": metrics.summary(pairs),
-                    "predicted_to_play": metrics.summary(playing) if playing else None},
-        "minutes_mae": metrics.mae([(p["expected_minutes"], p["actual_minutes"])
-                                    for p in matched]),
+        "join": {
+            "matched": len(matched),
+            "missing_actual": len(missing_actual),
+            "missing_prediction": len(missing_prediction),
+        },
+        "metrics": {
+            "all": metrics.summary(pairs),
+            "predicted_to_play": metrics.summary(playing) if playing else None,
+        },
+        "minutes_mae": metrics.mae([(p["expected_minutes"], p["actual_minutes"]) for p in matched]),
         "xi": score.xi_block(matched),
         "comparators": comparators,
         "prior_coverage": prior_coverage(view, view_pasts),
@@ -416,12 +433,16 @@ def run(snapshot_id, model, gameweeks=None):
     spreads = [r["club_spread"] for r in per_gw if r["club_spread"] is not None]
     pooled = {
         "all": metrics.pooled_summary(
-            [[(p["predicted_points"], p["actual_points"]) for p in m] for m in all_matched]),
-        "club_spread": (math.sqrt(sum(x * x for x in spreads) / len(spreads))
-                        if spreads else None),
+            [[(p["predicted_points"], p["actual_points"]) for p in m] for m in all_matched]
+        ),
+        "club_spread": (math.sqrt(sum(x * x for x in spreads) / len(spreads)) if spreads else None),
         "comparators": {
-            name: {"mae": sum(r["comparators"][name]["mae"] * r["comparators"][name]["n"]
-                              for r in per_gw) / sum(r["comparators"][name]["n"] for r in per_gw)}
+            name: {
+                "mae": sum(
+                    r["comparators"][name]["mae"] * r["comparators"][name]["n"] for r in per_gw
+                )
+                / sum(r["comparators"][name]["n"] for r in per_gw)
+            }
             for name in per_gw[0]["comparators"]
         },
     }
@@ -470,31 +491,40 @@ def held_out(snapshot_id, model, gameweeks=None):
     folds = []
     for gw in gameweeks:
         train = [g for g in gameweeks if g != gw]
-        best = min(range(len(grid)), key=lambda i: (
-            metrics.pooled_summary([_pairs(matched[i, g]) for g in train])["mae"], i))
-        folds.append({
-            "gameweek": gw,
-            "chosen": grid[best],
-            "tuned_on": train,
-            "metrics": metrics.summary(_pairs(matched[best, gw])),
-            "club_spread": spread(list(club_residuals(matched[best, gw]).values())),
-        })
+        best = min(
+            range(len(grid)),
+            key=lambda i: (
+                metrics.pooled_summary([_pairs(matched[i, g]) for g in train])["mae"],
+                i,
+            ),
+        )
+        folds.append(
+            {
+                "gameweek": gw,
+                "chosen": grid[best],
+                "tuned_on": train,
+                "metrics": metrics.summary(_pairs(matched[best, gw])),
+                "club_spread": spread(list(club_residuals(matched[best, gw]).values())),
+            }
+        )
     spreads = [f["club_spread"] for f in folds if f["club_spread"] is not None]
 
     return {
         "backtest_version": BACKTEST_VERSION,
         "note": NOT_EVIDENCE,
         "method": "leave-one-gameweek-out; each week scored by the setting with "
-                  "the lowest pooled MAE on the others",
+        "the lowest pooled MAE on the others",
         "snapshot_id": snap.name,
         "model_version": model,
         "gameweeks": gameweeks,
         "grid": GRIDS.get(model, {}),
         "folds": folds,
         "pooled": metrics.pooled_summary(
-            [_pairs(matched[grid.index(f["chosen"]), f["gameweek"]]) for f in folds]),
-        "pooled_club_spread": (math.sqrt(sum(x * x for x in spreads) / len(spreads))
-                               if spreads else None),
+            [_pairs(matched[grid.index(f["chosen"]), f["gameweek"]]) for f in folds]
+        ),
+        "pooled_club_spread": (
+            math.sqrt(sum(x * x for x in spreads) / len(spreads)) if spreads else None
+        ),
     }
 
 
@@ -506,21 +536,28 @@ def _print_held_out(report):
     listed = "; ".join(f"{k} {', '.join(map(str, v))}" for k, v in sorted(grid.items()))
     print("grid:      " + (listed if grid else "none — scored as it stands"))
     print(f"method:    {report['method']}\n")
+
     def club(value):
         return "-" if value is None else f"{value:.1f}"
 
-    print(f"{'GW':<6}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}{'club sd':>9}"
-          "   chosen on the other weeks")
+    print(
+        f"{'GW':<6}{'n':>5}{'MAE':>7}{'RMSE':>7}{'rho':>7}{'club sd':>9}"
+        "   chosen on the other weeks"
+    )
     for f in report["folds"]:
         m = f["metrics"]
         rho = "-" if m["spearman"] is None else f"{m['spearman']:.3f}"
         chosen = ", ".join(f"{k}={v}" for k, v in sorted(f["chosen"].items())) or "-"
-        print(f"GW{f['gameweek']:<4}{m['n']:>5}{m['mae']:>7.3f}{m['rmse']:>7.3f}{rho:>7}"
-              f"{club(f['club_spread']):>9}   {chosen}")
+        print(
+            f"GW{f['gameweek']:<4}{m['n']:>5}{m['mae']:>7.3f}{m['rmse']:>7.3f}{rho:>7}"
+            f"{club(f['club_spread']):>9}   {chosen}"
+        )
     p = report["pooled"]
     rho = "-" if p["spearman"] is None else f"{p['spearman']:.3f}"
-    print(f"{'pooled':<6}{p['n']:>5}{p['mae']:>7.3f}{p['rmse']:>7.3f}{rho:>7}"
-          f"{club(report['pooled_club_spread']):>9}")
+    print(
+        f"{'pooled':<6}{p['n']:>5}{p['mae']:>7.3f}{p['rmse']:>7.3f}{rho:>7}"
+        f"{club(report['pooled_club_spread']):>9}"
+    )
 
 
 def _print(report):
@@ -536,8 +573,11 @@ def _print(report):
     for r in report["per_gameweek"]:
         m = r["metrics"]["all"]
         rho = "-" if m["spearman"] is None else f"{m['spearman']:.3f}"
-        xi = (f"{r['xi']['captured']['actual']}/{r['xi']['optimum']['actual']}"
-              if r["xi"]["available"] else "n/a")
+        xi = (
+            f"{r['xi']['captured']['actual']}/{r['xi']['optimum']['actual']}"
+            if r["xi"]["available"]
+            else "n/a"
+        )
         club = "-" if r["club_spread"] is None else f"{r['club_spread']:.1f}"
         line = f"GW{r['gameweek']:<4}{m['n']:>5}{m['mae']:>7.2f}{m['rmse']:>7.2f}{rho:>7}{xi:>9}"
         line += f"{club:>9}"
@@ -550,16 +590,24 @@ def _print(report):
     line = f"{'pooled':<6}{p['n']:>5}{p['mae']:>7.2f}{p['rmse']:>7.2f}{rho:>7}{'':>9}{club:>9}"
     line += "".join(f"{report['pooled']['comparators'][n]['mae']:>14.2f}" for n in names)
     print(line)
-    print("\ncomparator columns are MAE, rebuilt from history — FPL's own form and "
-          "points_per_game are current and would leak.")
-    print("club sd:   spread across clubs of predicted minus actual, summed over players "
-          "predicted to play.")
+    print(
+        "\ncomparator columns are MAE, rebuilt from history — FPL's own form and "
+        "points_per_game are current and would leak."
+    )
+    print(
+        "club sd:   spread across clubs of predicted minus actual, summed over players "
+        "predicted to play."
+    )
     # Printed for every model, not only those that read it: it is a fact about
     # the snapshot, and it says how much of a prior-based result is the prior.
-    print("prior:     " + ", ".join(
-        f"GW{r['gameweek']} {r['prior_coverage']['player']} last season / "
-        f"{r['prior_coverage']['positional']} positional"
-        for r in report["per_gameweek"]))
+    print(
+        "prior:     "
+        + ", ".join(
+            f"GW{r['gameweek']} {r['prior_coverage']['player']} last season / "
+            f"{r['prior_coverage']['positional']} positional"
+            for r in report["per_gameweek"]
+        )
+    )
 
 
 def main(snapshot_id, model, first, last, out_dir, held=False):
@@ -590,16 +638,27 @@ def main(snapshot_id, model, first, last, out_dir, held=False):
 def cli(argv=None):
     """`fpl-backtest`, or `python -m fpl.evaluation.backtest`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--snapshot", default=None, metavar="SNAPSHOT_ID",
-                    help="snapshot to replay (default: LATEST)")
+    ap.add_argument(
+        "--snapshot",
+        default=None,
+        metavar="SNAPSHOT_ID",
+        help="snapshot to replay (default: LATEST)",
+    )
     ap.add_argument("--model", default="baseline-v1", choices=sorted(MODELS))
     ap.add_argument("--from", dest="first", type=int, default=None, metavar="GW")
     ap.add_argument("--to", dest="last", type=int, default=None, metavar="GW")
-    ap.add_argument("--out", default="scratch", metavar="DIR",
-                    help="output directory (default: scratch/, gitignored)")
-    ap.add_argument("--held-out", action="store_true",
-                    help="tune on all but one gameweek, score that one, for each; "
-                         "the gate for keeping a factor")
+    ap.add_argument(
+        "--out",
+        default="scratch",
+        metavar="DIR",
+        help="output directory (default: scratch/, gitignored)",
+    )
+    ap.add_argument(
+        "--held-out",
+        action="store_true",
+        help="tune on all but one gameweek, score that one, for each; "
+        "the gate for keeping a factor",
+    )
     args = ap.parse_args(argv)
     require_project_root()
     return main(args.snapshot, args.model, args.first, args.last, args.out, args.held_out)

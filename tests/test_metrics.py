@@ -24,7 +24,6 @@ PAIRS = [(1.0, 0), (2.0, 4), (3.0, 3)]
 
 
 class TestErrors(unittest.TestCase):
-
     def test_mae(self):
         self.assertAlmostEqual(mae(PAIRS), 1.0)
 
@@ -42,7 +41,6 @@ class TestErrors(unittest.TestCase):
 
 
 class TestAverageRanks(unittest.TestCase):
-
     def test_distinct(self):
         self.assertEqual(average_ranks([30, 10, 20]), [3, 1, 2])
 
@@ -57,7 +55,6 @@ class TestAverageRanks(unittest.TestCase):
 
 
 class TestSpearman(unittest.TestCase):
-
     def test_known_value_with_a_tie(self):
         # Actual ranks 1, 2, 3.5, 5, 3.5. Against predicted ranks 1..5:
         # cov = 8, sum sq = 10 and 9.5, so rho = 8 / sqrt(95).
@@ -89,7 +86,6 @@ class TestSpearman(unittest.TestCase):
 
 
 class TestSummary(unittest.TestCase):
-
     def test_fields(self):
         s = summary(PAIRS)
         self.assertEqual(s["n"], 3)
@@ -109,7 +105,6 @@ class TestSummary(unittest.TestCase):
         self.assertAlmostEqual(pooled["mae"], 1.0)
         mean_of_means = (mae(gw_a) + mae(gw_b)) / 2
         self.assertNotAlmostEqual(pooled["mae"], mean_of_means)
-
 
 
 class TestRareCases(unittest.TestCase):
