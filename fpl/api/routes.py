@@ -1,5 +1,6 @@
 """The routes: /v1 for the data, /healthz and /readyz for whoever runs the service."""
 
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -7,7 +8,7 @@ from fastapi import Path as PathParam
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from fpl.api import queries, schemas, solver, upstream
+from fpl.api import observability, queries, schemas, solver, upstream
 from fpl.api.limits import solver_rate
 from fpl.api.problems import responses
 from fpl.db import migrate
@@ -121,6 +122,17 @@ def list_models(db: Database, season: SeasonParam = None):
     with db.connect() as conn:
         season = queries.resolve_season(conn, season)
         return {"season": season, "models": queries.models(conn, season)}
+
+
+@v1.get("/status", response_model=schemas.Status, tags=["health"])
+def get_status(db: Database, season: SeasonParam = None):
+    """How fresh the data is: the newest snapshot loaded, the latest settled
+    gameweek, and the entries so far for the next deadline."""
+    with db.connect() as conn:
+        season = queries.resolve_season(conn, season)
+        body = queries.status(conn, season, datetime.now(UTC))
+    observability.record_freshness(body["data_age_seconds"])
+    return body
 
 
 @v1.get("/scorecard", response_model=schemas.Scorecard, tags=["models"])

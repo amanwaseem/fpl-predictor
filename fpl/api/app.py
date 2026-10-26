@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 
-from fpl.api import problems
+from fpl.api import observability, problems
 from fpl.api.routes import health, optimiser, v1
 from fpl.db.session import make_engine
 
@@ -106,6 +106,9 @@ def create_app(engine=None):
     app.include_router(health)
     problems.install(app)
     app.middleware("http")(http_caching)
+    # Outermost, so its line covers the whole request, caching included.
+    app.middleware("http")(observability.request_logging)
+    observability.configure_telemetry(app)
     app.openapi = openapi_with_problems(app)
     return app
 

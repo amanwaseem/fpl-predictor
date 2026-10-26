@@ -24,6 +24,7 @@ from fpl.db.models import (
     PlayerFixtureStats,
     Season,
     SeasonPlayer,
+    Snapshot,
     Team,
 )
 from fpl.db.project import project, read_log
@@ -340,6 +341,32 @@ class TestRoutes(APICase):
         again = self.client.get("/v1/scorecard", headers={"If-None-Match": first.headers["etag"]})
         self.assertEqual(again.status_code, 304)
         self.assertEqual(again.content, b"")
+
+    def test_status_says_how_fresh_the_data_is(self):
+        body = self.get("/v1/status")
+        self.assertEqual((body["season"], body["latest_settled_gameweek"]), (SEASON, 7))
+        self.assertIsNone(body["snapshot_id"])
+        self.assertIsNone(body["data_age_seconds"])
+        with self.engine.begin() as c:
+            c.execute(
+                insert(Snapshot).values(
+                    snapshot_id="20261020T080000Z",
+                    season=SEASON,
+                    element_count=3,
+                    has_players=True,
+                    completed_at_utc=datetime.now(UTC) - timedelta(hours=2),
+                )
+            )
+            c.execute(
+                update(Gameweek)
+                .where(Gameweek.gameweek == 8)
+                .values(deadline_utc=datetime.now(UTC) + timedelta(days=3))
+            )
+        body = self.client.get("/v1/status", headers={"Cache-Control": "no-cache"}).json()
+        self.assertEqual(body["snapshot_id"], "20261020T080000Z")
+        self.assertAlmostEqual(body["data_age_seconds"], 7200, delta=60)
+        self.assertEqual(body["next_gameweek"], 8)
+        self.assertEqual(body["next_gameweek_entries"], ["baseline-v1", "form-fixture-v1"])
 
     def test_readyz_is_ok_at_the_latest_migration(self):
         self.assertEqual(self.get("/readyz")["migration"], migrate.head())

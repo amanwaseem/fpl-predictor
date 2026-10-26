@@ -1,0 +1,28 @@
+# Is the API up, and is its data fresh? (#86) Hourly, from outside Fly:
+# /healthz, /v1/status, and the newest loaded snapshot's age against FPL's
+# latest settled gameweek. See tools/check_uptime.py; docs/operations.md has
+# what to do when it fails. GitHub's failed-workflow email is the alert.
+#
+# Hourly rather than every minute: the API's machine stops when idle and Neon
+# suspends an idle database, and a check that kept both awake would cost more
+# than it saved. Each run wakes them once.
+name: Uptime
+
+on:
+  schedule:
+    - cron: "35 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  uptime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/uv
+        with:
+          args: "--no-dev"
+      - run: python tools/check_uptime.py
