@@ -40,8 +40,12 @@ optimise = ["highspy>=1.15,<2"]
 # The API (#81), with the solver /v1/optimise runs (#83).
 api = [{include-group = "db"}, {include-group = "optimise"},
        "fastapi>=0.159,<1", "uvicorn>=0.54,<1"]
+# Training the learned model (#85). Not needed to predict with it: a trained
+# model is evaluated by fpl.models.trees, in plain Python.
+ml = ["lightgbm>=4.7,<5", "numpy>=2.5,<3"]
 dev = [
     {include-group = "api"},
+    {include-group = "ml"},
     "coverage>=7.16,<8",
     "ruff==0.16.10",
     "mypy==2.4.0",
@@ -67,6 +71,8 @@ required-version = ">=0.13.0"
 fpl-fetch = "fpl.ingest.fetch:cli"
 fpl-predict-baseline = "fpl.models.predict_baseline:cli"
 fpl-predict-fixture = "fpl.models.predict_fixture:cli"
+fpl-predict-gbm = "fpl.models.gbm:cli"
+fpl-train-gbm = "fpl.models.train_gbm:cli"
 fpl-verify = "fpl.log.verify_entry:cli"
 fpl-summarise = "fpl.log.summarise:cli"
 fpl-score = "fpl.evaluation.score:cli"

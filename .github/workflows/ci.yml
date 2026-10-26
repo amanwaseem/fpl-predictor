@@ -50,6 +50,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
+      # LightGBM's wheel on macOS needs the OpenMP runtime (#85).
+      - if: runner.os == 'macOS'
+        run: brew install libomp
       - uses: ./.github/actions/uv
       # As a user would meet it: from outside the repository, the package
       # imports and every command answers --help — and a command that would

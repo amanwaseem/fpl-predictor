@@ -16,11 +16,13 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest import mock
 
 from fpl.evaluation import backtest
 from fpl.ingest.snapshot import load_snapshot, usable_rounds
 from fpl.models import predict_baseline
 from tests import fixtures
+from tests.gbm_fixture import tiny_bundle
 
 LATER = "20260922T000000Z"
 CLUBS = 20
@@ -143,6 +145,10 @@ class TestNoLeak(fixtures.TempCwd):
         super().setUp()
         self.pasts = {}
         self.bootstrap, self.fx, self.histories = read(build_season(self.tmp), self.pasts)
+        # gbm-v1 with a tiny model of its own, rather than the released one.
+        patch = mock.patch.object(backtest, "_gbm_bundle", tiny_bundle)
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def test_poisoning_the_future_changes_nothing(self):
         for model in backtest.MODELS:
