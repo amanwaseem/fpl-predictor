@@ -155,7 +155,7 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
 
     # A retired model's record has ended (fpl.log.roles); an entry for it
     # would start a second one under the same name.
-    retired = [m for m, _ in models if roles.last_gameweek(m) is not None]
+    retired = [m for m, _ in models if m in roles.RETIRED]
     if retired:
         raise SystemExit(
             f"Retired, and not logged any more: {', '.join(retired)}. "

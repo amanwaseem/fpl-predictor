@@ -28,12 +28,14 @@ record: how one ends.
   scored gameweeks (0007). The old main model then retires. A challenger
   that does not, retires itself.
 - **Retiring a model ends its record, and keeps it.** It is no longer logged;
-  its entries stay in the log, and its last gameweek is recorded with the
-  reason. The weeks after it are not missed: the scoring harness and
+  its entries stay in the log, and its season and last gameweek are
+  recorded with the reason. The weeks after it are not missed: the scoring harness and
   `/v1/models` say it is retired, and from when.
-- **The rules are tests.** Exactly one baseline, at most one main model and
-  one challenger, every logged model with exactly one role, and none both
-  logged and retired. `fpl-entry` refuses to run a retired model.
+- **The rules are tests.** Exactly one baseline, exactly one main model, at
+  most one challenger, every logged model with exactly one role, and none
+  both logged and retired. `fpl-entry` refuses to run a retired model, the
+  scoring harness refuses a retirement the log contradicts, and a test
+  refuses a `scores/cumulative.json` whose roles are stale.
 - **Now:** `baseline-v1` the baseline, `form-fixture-v1` the main model,
   `gbm-v1` the challenger from GW9. `form-fixture-v1` retires once `gbm-v1`
   has three scored gameweeks and beats it.
@@ -52,4 +54,5 @@ record: how one ends.
 - Two candidates are worth proving at once. The limit of one challenger is
   there so the log stays readable and each comparison is head to head; it
   can be raised for a season with a reason.
-- The log holds more than one season (#72): retirements are then per season.
+- The log holds more than one season (#72): a retirement already names its
+  season, but the roles are declared for the current one only.

@@ -348,9 +348,11 @@ def models(connection, season):
             "first_gameweek": gameweeks[0],
             "gameweeks_logged": gameweeks,
             "gameweeks_scored": scored[model],
-            "gameweeks_missed": missed_gameweeks(gameweeks, settled, roles.last_gameweek(model)),
-            "role": "retired" if roles.last_gameweek(model) is not None else roles.ROLES.get(model),
-            "retired_after": roles.last_gameweek(model),
+            "gameweeks_missed": missed_gameweeks(
+                gameweeks, settled, roles.last_gameweek(model, season)
+            ),
+            "role": roles.role(model, season),
+            "retired_after": roles.last_gameweek(model, season),
         }
         for model, gameweeks in sorted(logged.items())
     ]
