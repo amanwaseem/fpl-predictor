@@ -26,6 +26,7 @@ from fpl.db.models import (
     Team,
 )
 from fpl.evaluation.score import missed_gameweeks, pooled_block
+from fpl.log import roles
 
 
 def not_found(detail):
@@ -347,7 +348,9 @@ def models(connection, season):
             "first_gameweek": gameweeks[0],
             "gameweeks_logged": gameweeks,
             "gameweeks_scored": scored[model],
-            "gameweeks_missed": missed_gameweeks(gameweeks, settled),
+            "gameweeks_missed": missed_gameweeks(gameweeks, settled, roles.last_gameweek(model)),
+            "role": "retired" if roles.last_gameweek(model) is not None else roles.ROLES.get(model),
+            "retired_after": roles.last_gameweek(model),
         }
         for model, gameweeks in sorted(logged.items())
     ]

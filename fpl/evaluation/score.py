@@ -47,6 +47,7 @@ from pathlib import Path
 from fpl.evaluation import metrics
 from fpl.evaluation.xi import best_xi
 from fpl.ingest.snapshot import SNAPSHOT_ID, load_live, load_snapshot
+from fpl.log import roles
 from fpl.log.contract import LOG_DIR_NAME, parse_entry_filename, read_entry
 from fpl.paths import require_project_root
 
@@ -348,13 +349,15 @@ def score_entry(
     return matched, result
 
 
-def missed_gameweeks(logged, settled):
+def missed_gameweeks(logged, settled, last=None):
     """Settled gameweeks from a model's first entry on that it has no entry for.
 
-    `logged` is the model's gameweeks in order; `settled` any collection.
+    `logged` is the model's gameweeks in order; `settled` any collection;
+    `last` the last gameweek a retired model was logged for (fpl.log.roles):
+    the weeks after it are not missed.
     """
-    last_settled = max(settled, default=0)
-    return [gw for gw in range(logged[0], last_settled + 1) if gw in settled and gw not in logged]
+    end = max(settled, default=0) if last is None else min(last, max(settled, default=0))
+    return [gw for gw in range(logged[0], end + 1) if gw in settled and gw not in logged]
 
 
 def pooled_block(groups):
@@ -397,10 +400,13 @@ def cumulative(scored, events, entries):
         with_xi = [res["xi"] for _, _, res in mine if res["xi"]["available"]]
         captured = sum(xi["captured"]["actual"] for xi in with_xi)
         optimum = sum(xi["optimum"]["actual"] for xi in with_xi)
+        last = roles.last_gameweek(model)
         out["models"][model] = {
+            "role": "retired" if last is not None else roles.ROLES.get(model),
+            "retired_after": last,
             "gameweeks_scored": [gw for gw, _, _ in mine],
             "gameweeks_pending": [gw for gw in logged if gw not in settled],
-            "gameweeks_missed": missed_gameweeks(logged, settled),
+            "gameweeks_missed": missed_gameweeks(logged, settled, last),
             "pooled": pooled_block([matched for _, matched, _ in mine]),
             "xi": {
                 "gameweeks": len(with_xi),

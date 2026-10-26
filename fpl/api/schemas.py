@@ -5,7 +5,7 @@ log writes at most two decimal places, which a float carries exactly enough.
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -135,8 +135,14 @@ class Model(BaseModel):
     first_gameweek: int
     gameweeks_logged: list[int]
     gameweeks_scored: list[int]
-    # Settled after the model's first entry, with no entry from it.
+    # Settled after the model's first entry, with no entry from it; for a
+    # retired model, only up to its last gameweek.
     gameweeks_missed: list[int]
+    # baseline, main or challenger while logged (fpl.log.roles); retired, with
+    # the last gameweek it was logged for, once it is not. Null for a model
+    # with entries but no role, which only a test log has.
+    role: Literal["baseline", "main", "challenger", "retired"] | None
+    retired_after: int | None
 
 
 class ModelList(BaseModel):
