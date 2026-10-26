@@ -45,7 +45,12 @@ def pools(draw):
 
 
 def objective(squad, bench_weight=optimise.BENCH_WEIGHT):
-    return squad.expected_points + bench_weight * squad.bench_points
+    """What the optimiser maximises, in its own units: each bench player's points are
+    weighted and rounded to the hundredth one by one, as the model counts them."""
+    xi = sum(optimise.points(p.predicted_points) for p in squad.xi)
+    captain = optimise.points(squad.captain.predicted_points)
+    bench = sum(round(optimise.points(p.predicted_points) * bench_weight) for p in squad.bench)
+    return xi + captain + bench
 
 
 def greedy(pool, budget=optimise.BUDGET):
@@ -92,7 +97,7 @@ class TestProperties(unittest.TestCase):
         best = optimise.best_squad(pool)
         # The greedy squad's own best line-up: the optimiser on just those 15.
         greedy_squad = optimise.best_squad(picked, budget=optimise.BUDGET)
-        self.assertGreaterEqual(objective(best) + 1e-6, objective(greedy_squad))
+        self.assertGreaterEqual(objective(best), objective(greedy_squad))
 
     @PROPERTIES
     @given(pools(), st.integers(0, 30).map(lambda tenths: tenths / 10), st.integers(0, 5))
