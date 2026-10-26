@@ -15,11 +15,11 @@ from alembic import command
 from sqlalchemy import func, insert, select
 
 from fpl.db import backfill
-from fpl.db.models import PlayerFixtureStats, Season, SeasonPlayer, Snapshot
+from fpl.db.models import Player, PlayerFixtureStats, Season, SeasonPlayer, Snapshot
 from fpl.db.session import make_engine
 from fpl.ingest import history
 from tests.database import ROOT, URL, alembic_config, empty_every_table, require_test_database
-from tests.history_files import write_season
+from tests.history_files import season_rows, write_season
 
 REAL = ROOT / history.RAW
 
@@ -57,10 +57,24 @@ class TestSyntheticBackfill(BackfillCase):
 
     def run_backfill(self, expected=None):
         with unittest.mock.patch("builtins.print"):
-            return backfill.backfill(self.engine, ["2016/17"], self.raw, expected or {})
+            return backfill.backfill(
+                self.engine, ["2016/17"], self.raw, expected or {}, verified=True
+            )
 
     def test_a_season_loads_whole(self):
-        self.assertEqual(self.run_backfill(), {"2016/17": (3, 2, 6)})
+        self.assertEqual(
+            self.run_backfill(),
+            {
+                "2016/17": {
+                    "teams": 2,
+                    "season_players": 3,
+                    "gameweeks": 38,
+                    "fixtures": 2,
+                    "player_clubs": 4,
+                    "player_fixture_stats": 6,
+                }
+            },
+        )
 
     def test_loading_again_replaces_rather_than_adds(self):
         self.run_backfill()
@@ -69,8 +83,24 @@ class TestSyntheticBackfill(BackfillCase):
 
     def test_a_count_that_differs_from_the_pinned_one_keeps_nothing(self):
         with self.assertRaises(SystemExit):
-            self.run_backfill({"2016/17": (3, 2, 7)})
+            self.run_backfill({"2016/17": {"player_fixture_stats": 7}})
         self.assertEqual(self.count(SeasonPlayer, "2016/17"), 0)
+
+    def test_the_newest_season_names_a_person_whatever_the_order(self):
+        players, gws = season_rows()
+        renamed = [dict(p, first_name="Later") if p["id"] == 1 else p for p in players]
+        write_season(self.raw, "2017/18", players=renamed, teams_csv=True)
+        for order in (["2016/17", "2017/18"], ["2017/18", "2016/17"]):
+            with self.subTest(order=order), unittest.mock.patch("builtins.print"):
+                empty_every_table(self.engine)
+                backfill.backfill(self.engine, order, self.raw, {}, verified=True)
+                with self.engine.connect() as c:
+                    name = c.scalar(select(Player.first_name).where(Player.code == 1001))
+                self.assertEqual(name, "Later")
+
+    def test_files_are_checked_unless_already_verified(self):
+        with self.assertRaises(SystemExit):
+            backfill.backfill(self.engine, ["2016/17"], self.raw, {})
 
     def test_the_live_season_is_refused(self):
         from datetime import UTC, datetime

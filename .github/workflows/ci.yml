@@ -141,11 +141,15 @@ jobs:
       - uses: ./.github/actions/uv
       # The past seasons (#79), pinned by commit and hash, so the backfill is
       # tested against all ten seasons' real files and their pinned counts.
-      # Cached by the pinned commit: the files cannot change under it.
+      # Cached by the pinned commit, the directory the files live in: they
+      # cannot change under it, and an edit elsewhere in the module keeps it.
+      - name: The archive's pinned commit
+        id: archive
+        run: echo "commit=$(sed -n 's/^COMMIT = "\(.*\)"$/\1/p' fpl/ingest/history.py)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v6
         with:
-          path: data/raw/history
-          key: history-${{ hashFiles('fpl/ingest/history.py') }}
+          path: data/raw/history/${{ steps.archive.outputs.commit }}
+          key: history-${{ steps.archive.outputs.commit }}
       - run: fpl-backfill --download-only
       - run: pytest -v tests/test_db*.py
       # The committed log, projected into an empty schema and checked row by
