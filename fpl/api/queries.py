@@ -14,6 +14,7 @@ from sqlalchemy.orm import aliased
 from fpl.db.models import (
     Fixture,
     Gameweek,
+    IngestCheck,
     Player,
     PlayerClub,
     PlayerFixtureStats,
@@ -69,6 +70,9 @@ def status(connection, season, now):
             Gameweek.season == season, Gameweek.finished, Gameweek.data_checked
         )
     )
+    checked = connection.scalar(
+        select(func.max(IngestCheck.checked_at_utc)).where(IngestCheck.season == season)
+    )
     upcoming = connection.execute(
         select(Gameweek.gameweek, Gameweek.deadline_utc)
         .where(Gameweek.season == season, Gameweek.deadline_utc > now)
@@ -86,6 +90,8 @@ def status(connection, season, now):
         )
     return {
         "season": season,
+        "last_checked_utc": checked,
+        "checked_age_seconds": (now - checked).total_seconds() if checked else None,
         "snapshot_id": snapshot[0] if snapshot else None,
         "snapshot_completed_utc": snapshot[1] if snapshot else None,
         "data_age_seconds": (now - snapshot[1]).total_seconds() if snapshot else None,

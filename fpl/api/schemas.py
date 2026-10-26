@@ -177,7 +177,12 @@ class Status(BaseModel):
     """How fresh production's data is, for the uptime check and the dashboard (#86)."""
 
     season: str
-    # The newest snapshot loaded (by the daily ingest, #93), and how old it is.
+    # When the daily ingest (#93) last compared FPL with the database, and how
+    # long ago: the data is current as of then. A day and a bit at most.
+    last_checked_utc: datetime | None
+    checked_age_seconds: float | None
+    # The newest snapshot loaded, and how old it is: days, between gameweeks,
+    # when the checks have found nothing new to load.
     snapshot_id: str | None
     snapshot_completed_utc: datetime | None
     data_age_seconds: float | None

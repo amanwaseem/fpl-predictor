@@ -128,10 +128,13 @@ def list_models(db: Database, season: SeasonParam = None):
 def get_status(db: Database, season: SeasonParam = None):
     """How fresh the data is: the newest snapshot loaded, the latest settled
     gameweek, and the entries so far for the next deadline."""
+    current = season is None
     with db.connect() as conn:
         season = queries.resolve_season(conn, season)
         body = queries.status(conn, season, datetime.now(UTC))
-    observability.record_freshness(body["data_age_seconds"])
+    # The gauge is production's freshness: the current season's only.
+    if current:
+        observability.record_freshness(body["last_checked_utc"])
     return body
 
 

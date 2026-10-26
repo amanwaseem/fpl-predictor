@@ -3,8 +3,10 @@
 Needs a database; see tests/database.py. Locally: make test-db
 """
 
+import os
 import unittest
 from decimal import Decimal
+from unittest import mock
 
 from alembic import command
 from sqlalchemy import func, select
@@ -15,6 +17,7 @@ from fpl.db import stale
 from fpl.db.load import load
 from fpl.db.models import (
     Base,
+    IngestCheck,
     Player,
     PlayerClub,
     PlayerFixtureStats,
@@ -178,6 +181,22 @@ class TestLoad(TempCwd):
             return stale.differences(
                 stale.from_api(bootstrap, fixtures), stale.from_database(connection, "2026/27")
             )
+
+    def test_every_comparison_is_recorded_as_a_check(self):
+        """Loaded or not: the newest check is how fresh /v1/status says the data is."""
+        self.write(FIRST)
+        self.load(FIRST)
+        with (
+            mock.patch.dict(os.environ, {"DATABASE_URL": URL}),
+            mock.patch("builtins.print"),
+        ):
+            stale.main()
+            stale.main()
+        with self.engine.connect() as c:
+            checks = c.execute(
+                select(IngestCheck.compared_snapshot_id, IngestCheck.load_needed)
+            ).all()
+        self.assertEqual([tuple(r) for r in checks], [(FIRST, False), (FIRST, False)])
 
     def test_a_loaded_snapshot_agrees_with_the_database(self):
         self.write(FIRST)

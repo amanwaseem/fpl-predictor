@@ -21,7 +21,7 @@ API_VERSION = "1"
 # Five minutes keeps clients and CDNs from asking every time without leaving a
 # fresh entry invisible for long; the ETag makes the re-check cheap.
 CACHE_CONTROL = "public, max-age=300"
-LIVE_PREFIXES = ("/v1/entries/",)
+LIVE_PREFIXES = ("/v1/entries/", "/v1/status")
 
 
 def etag_for(body):
@@ -108,6 +108,9 @@ def create_app(engine=None):
     app.middleware("http")(http_caching)
     # Outermost, so its line covers the whole request, caching included.
     app.middleware("http")(observability.request_logging)
+    # Once per process, however the app is started; fpl-serve also formats the
+    # logs, which reach the whole process and so are not set up here.
+    observability.configure_sentry()
     observability.configure_telemetry(app)
     app.openapi = openapi_with_problems(app)
     return app

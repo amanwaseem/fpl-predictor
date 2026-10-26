@@ -18,7 +18,8 @@
 
 Nothing here polls: the machine stops when idle and the database suspends,
 and a metric that woke either every minute would cost more than it told.
-Freshness is the value the last /v1/status request read.
+Freshness is the age of the ingest's latest check, as the last request for
+the current season's /v1/status read it.
 """
 
 import contextvars
@@ -28,14 +29,19 @@ import os
 import sys
 import time
 import uuid
+from datetime import UTC, datetime
 
+import sentry_sdk
 from fastapi import Request
+
+from fpl.api import problems
 
 request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
 log = logging.getLogger("fpl.api")
 
-# The latest freshness read by /v1/status, in seconds, for the gauge.
-_freshness = {"value": None}
+# When the ingest last checked, as /v1/status last read it, for the gauge.
+_freshness: dict[str, datetime | None] = {"checked": None}
+_providers = {"set": False}
 _solver_seconds = None
 
 
@@ -43,8 +49,9 @@ class JSONFormatter(logging.Formatter):
     """A log record as one JSON object, with the request id it belongs to."""
 
     def format(self, record):
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created))
         entry = {
-            "time": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "time": f"{stamp}.{int(record.msecs):03d}Z",
             "level": record.levelname.lower(),
             "logger": record.name,
             "message": record.getMessage(),
@@ -79,8 +86,8 @@ def configure_sentry(environ=os.environ):
     dsn = environ.get("SENTRY_DSN")
     if not dsn:
         return False
-    import sentry_sdk
-
+    if sentry_sdk.get_client().is_active():
+        return True
     sentry_sdk.init(
         dsn=dsn,
         environment=environ.get("FPL_ENVIRONMENT", "production"),
@@ -94,18 +101,31 @@ def configure_sentry(environ=os.environ):
     return True
 
 
-def configure_telemetry(app, engine=None, environ=os.environ):
-    """Traces and metrics over OTLP if an endpoint is set. Returns whether it is on."""
-    global _solver_seconds
+def configure_telemetry(app, environ=os.environ):
+    """Traces and metrics over OTLP if an endpoint is set. Returns whether it is on.
+
+    The providers are the process's, set once however many apps are made (the
+    module's own `app`, then any made for a tool); each app is instrumented.
+    """
     if not environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
         return False
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    if not _providers["set"]:
+        _set_providers(environ)
+    FastAPIInstrumentor.instrument_app(app, excluded_urls="healthz")
+    return True
+
+
+def _set_providers(environ):
+    global _solver_seconds
     # The stable HTTP metric names (http.server.request.duration, in seconds),
-    # which docs/dashboard.json queries, rather than the older ones.
+    # which docs/dashboard.json queries, rather than the older ones. The
+    # instrumentation reads it from the process environment.
     os.environ.setdefault("OTEL_SEMCONV_STABILITY_OPT_IN", "http")
     from opentelemetry import metrics, trace
     from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
     from opentelemetry.sdk.resources import Resource
@@ -126,21 +146,23 @@ def configure_telemetry(app, engine=None, environ=os.environ):
         "fpl.data.age",
         callbacks=[_observe_freshness],
         unit="s",
-        description="Seconds since the newest snapshot was loaded, as /v1/status last read it",
+        description="Seconds since the ingest last checked FPL against the database",
     )
-    FastAPIInstrumentor.instrument_app(app, excluded_urls="healthz")
-    return True
+    _providers["set"] = True
 
 
 def _observe_freshness(options):
     from opentelemetry.metrics import Observation
 
-    value = _freshness["value"]
-    return [] if value is None else [Observation(value)]
+    checked = _freshness["checked"]
+    if checked is None:
+        return []
+    return [Observation((datetime.now(UTC) - checked).total_seconds())]
 
 
-def record_freshness(seconds):
-    _freshness["value"] = seconds
+def record_freshness(checked_at):
+    """The ingest's latest check, as /v1/status read it; the gauge ages from it."""
+    _freshness["checked"] = checked_at
 
 
 def record_solver_time(seconds):
@@ -170,10 +192,19 @@ async def request_logging(request: Request, call_next):
         or uuid.uuid4().hex
     )
     token = request_id.set(rid[:64])
+    sentry_sdk.get_isolation_scope().set_tag("request_id", request_id.get())
     start = time.perf_counter()
     status = 500
     try:
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            # Answered here rather than by Starlette's last-resort handler,
+            # which runs outside this middleware: so the 500 carries the
+            # request id, and so does its log line. Sentry is told first.
+            sentry_sdk.capture_exception()
+            log.exception("unhandled error")
+            response = problems.problem_response(request, 500)
         status = response.status_code
         response.headers["X-Request-ID"] = request_id.get()
         return response
@@ -199,8 +230,6 @@ def check_sentry(environ=os.environ):
     setup end to end from the deployed app: fly ssh console -C fpl-check-sentry."""
     if not configure_sentry(environ):
         raise SystemExit("SENTRY_DSN is not set: nothing to test.")
-    import sentry_sdk
-
     try:
         raise RuntimeError("Induced by fpl-check-sentry (#86)")
     except RuntimeError:

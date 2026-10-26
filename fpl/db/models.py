@@ -281,6 +281,25 @@ class Snapshot(Base):
     )
 
 
+class IngestCheck(Base):
+    """One time the ingest compared the FPL API with the database (#86).
+
+    Written by fpl-stale on every run, whether or not a load followed: most
+    days nothing has changed, and the newest snapshot then stays days old
+    while the data is current. The newest check is how fresh the data is.
+    """
+
+    __tablename__ = "ingest_checks"
+
+    checked_at_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), primary_key=True, server_default=func.now()
+    )
+    season: Mapped[str] = mapped_column(Text)
+    # The bootstrap-only snapshot compared, and whether a full load was needed.
+    compared_snapshot_id: Mapped[str] = mapped_column(Text)
+    load_needed: Mapped[bool] = mapped_column(Boolean)
+
+
 # --- The log ----------------------------------------------------------------
 
 
