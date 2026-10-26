@@ -125,6 +125,20 @@ class TestOptimise(OptimiseCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.headers["retry-after"], "60")
 
+    def test_a_solver_failure_is_503_not_the_requests_fault(self):
+        with mock.patch.object(optimise, "best_squad",
+                               side_effect=optimise.SolverFailure("Interrupted")):
+            response = self.client.post("/v1/optimise", json={})
+        self.assertEqual(response.status_code, 503)
+
+    def test_a_cache_that_cannot_be_written_does_not_fail_the_request(self):
+        """The projection may replace the entry mid-solve, during a deploy."""
+        from sqlalchemy.exc import IntegrityError
+        failing = mock.Mock(side_effect=IntegrityError("insert", {}, Exception("fk")))
+        with mock.patch.object(self.engine, "begin", failing):
+            body = self.post({})
+        self.assertFalse(body["cached"])
+
     def test_over_the_rate_a_client_gets_429(self):
         with mock.patch.object(limits, "solver_window", limits.SlidingWindow((2, 60))):
             self.post({})
@@ -186,8 +200,16 @@ class TestAdvice(OptimiseCase):
         with self.engine.connect() as c:
             self.assertEqual(c.scalar(select(func.count()).select_from(UpstreamResponse)), 4)
 
-    def test_a_team_fpl_does_not_know_is_404(self):
+    def test_a_team_fpl_does_not_know_is_404_and_the_404_is_kept(self):
         self.get("/v1/entries/43/advice", 404)
+        calls = self.get_calls.call_count
+        self.get("/v1/entries/43/advice", 404)
+        self.assertEqual(self.get_calls.call_count, calls)
+
+    def test_advice_is_not_for_a_browser_or_cdn_to_keep(self):
+        response = self.client.get("/v1/entries/42/advice")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertNotIn("etag", response.headers)
 
     def test_fpl_failing_is_502(self):
         self.get_calls.side_effect = upstream.requests.ConnectionError()

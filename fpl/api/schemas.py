@@ -9,6 +9,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from fpl.evaluation.score import BASELINE_MODEL
+
 
 class Gameweek(BaseModel):
     gameweek: int
@@ -196,7 +198,7 @@ class OptimiseRequest(BaseModel):
     gameweek: Annotated[int | None, Field(
         ge=1, le=38, description="Defaults to the model's latest entry.")] = None
     model: Annotated[str, Field(pattern=r"^[A-Za-z0-9.-]{1,40}$",
-                                examples=["baseline-v1"])] = "baseline-v1"
+                                examples=["baseline-v1"])] = BASELINE_MODEL
     squad: Annotated[list[OwnedPlayer] | None, Field(
         min_length=15, max_length=15,
         description="The fifteen owned. Without it, the best squad from scratch.")] = None

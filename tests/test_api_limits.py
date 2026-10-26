@@ -1,7 +1,9 @@
 """The solver routes' rate limit, fpl.api.limits (#83)."""
 
+import io
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 from fpl.api import limits
 
@@ -18,6 +20,16 @@ class TestParse(unittest.TestCase):
 
     def test_a_rate_is_requests_over_seconds(self):
         self.assertEqual(limits.parse("10/60"), (10, 60.0))
+
+    def test_a_setting_that_is_not_a_rate_is_refused(self):
+        for setting in ("10", "ten/60", "10/0", "-1/60"):
+            with self.subTest(setting=setting), self.assertRaises(ValueError):
+                limits.parse(setting)
+
+    def test_an_unreadable_setting_falls_back_to_the_default_rather_than_stop_the_api(self):
+        with mock.patch("sys.stderr", io.StringIO()) as err:
+            self.assertEqual(limits.configured("20"), limits.parse(limits.DEFAULT))
+        self.assertIn("FPL_SOLVER_RATE", err.getvalue())
 
     def test_off_is_no_limit(self):
         for setting in ("off", "OFF", "0", ""):
@@ -57,6 +69,15 @@ class TestSlidingWindow(unittest.TestCase):
         self.clock.now += 60
         self.assertIsNone(self.window.allow("a"))
         self.assertIsNone(self.window.allow("a"))
+
+    def test_clients_gone_from_the_window_are_swept_out(self):
+        with mock.patch.object(limits, "SWEEP_AT", 3):
+            window = limits.SlidingWindow((1, 60), clock=self.clock)
+            for client in "abc":
+                window.allow(client)
+            self.clock.now += 61
+            window.allow("d")
+        self.assertEqual(set(window.seen), {"d"})
 
     def test_no_limit_lets_everything_through(self):
         window = limits.SlidingWindow(None)

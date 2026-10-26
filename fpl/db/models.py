@@ -440,10 +440,19 @@ class OptimiseResult(Base):
 
 
 class UpstreamResponse(Base):
-    """A response from the FPL API, kept for a few minutes (#83)."""
+    """A response from the FPL API, kept for a few minutes (#83).
+
+    A 404 is kept too, with no body, so a team id that does not exist costs
+    FPL one request per few minutes, not one per ask.
+    """
 
     __tablename__ = "upstream_responses"
+    __table_args__ = (
+        CheckConstraint("status IN (200, 404)", name="status"),
+        Index("ix_upstream_responses_fetched_at_utc", "fetched_at_utc"),
+    )
 
     path: Mapped[str] = mapped_column(Text, primary_key=True)
-    body: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    status: Mapped[int] = mapped_column(SmallInteger)
+    body: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     fetched_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
