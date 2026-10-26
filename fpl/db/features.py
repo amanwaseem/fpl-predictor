@@ -39,14 +39,13 @@ from fpl.db.models import (
     SeasonPlayer,
 )
 from fpl.db.session import exits_on_bad_url, make_engine
-from fpl.models.feature_table import FEATURE_VERSION, SeasonData, build_gameweek
+from fpl.models.feature_table import (
+    FEATURE_VERSION,
+    SeasonData,
+    build_gameweek,
+    season_before,
+)
 from fpl.paths import require_project_root
-
-
-def season_before(season):
-    """'2025/26' for '2026/27'."""
-    start = int(season[:4]) - 1
-    return f"{start}/{(start + 1) % 100:02d}"
 
 
 def read_season(connection, season):

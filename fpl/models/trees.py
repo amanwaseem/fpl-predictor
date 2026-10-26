@@ -62,10 +62,17 @@ class Model:
         self.feature_names = fields["feature_names"].split()
         objective = fields["objective"].split()
         self.objective = objective[0]
-        options = dict(o.split(":", 1) for o in objective[1:])
         if self.objective not in ("regression", "binary", "tweedie"):
             raise ValueError(f"objective {self.objective!r} is not supported")
+        # Options are name:value; a bare word (regression's "sqrt") changes the
+        # output's scale, which this does not undo.
+        bare = [o for o in objective[1:] if ":" not in o]
+        if bare:
+            raise ValueError(f"objective option(s) {bare} are not supported")
+        options = dict(o.split(":", 1) for o in objective[1:])
         self.sigmoid = float(options.get("sigmoid", 1.0))
+        if "average_output" in header.split():
+            raise ValueError("averaged output (random forest) is not supported")
         self.trees = [self._tree(block) for block in blocks]
 
     @staticmethod
@@ -74,6 +81,8 @@ class Model:
         fields = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
         if int(fields.get("num_cat", "0")):
             raise ValueError("categorical splits are not supported")
+        if int(fields.get("is_linear", "0")):
+            raise ValueError("linear trees are not supported")
 
         def numbers(key, kind):
             return [kind(v) for v in fields[key].split()] if fields.get(key) else []
