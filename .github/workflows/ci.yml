@@ -118,7 +118,7 @@ jobs:
   # tests/test_db.py skips.
   db:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:17.6
@@ -139,6 +139,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/uv
+      # The past seasons (#79), pinned by commit and hash, so the backfill is
+      # tested against all ten seasons' real files and their pinned counts.
+      # Cached by the pinned commit: the files cannot change under it.
+      - uses: actions/cache@v6
+        with:
+          path: data/raw/history
+          key: history-${{ hashFiles('fpl/ingest/history.py') }}
+      - run: fpl-backfill --download-only
       - run: pytest -v tests/test_db*.py
       # The committed log, projected into an empty schema and checked row by
       # row against git (#80). Proves the projection can always be rebuilt

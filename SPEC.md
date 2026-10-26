@@ -24,7 +24,10 @@ accuracy verifiable.
 - Beating the global FPL rank leaderboard. The measurable target is prediction
   accuracy against a stated baseline, not rank.
 - Real-time in-play updates.
-- Supporting historical seasons before 2026/27.
+- Predicting or logging seasons before 2026/27. Past seasons, 2016/17 to
+  2025/26, are loaded as **training data** only (#79, ADR 0018): models may
+  learn from them, and backtests may replay them, but the log holds 2026/27
+  entries alone, each made before its deadline.
 
 ## 3. Data
 

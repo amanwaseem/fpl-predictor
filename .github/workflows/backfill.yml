@@ -1,0 +1,49 @@
+# Loads the past seasons into production, by hand (#79, ADR 0018). Run once,
+# and again only when fpl/ingest/history.py moves to a new archive commit:
+# each season replaces itself, so a second run changes nothing.
+#
+# Secret, in the `production` environment: DATABASE_URL (docs/deploy.md).
+name: Backfill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never beside the ingest's load or a deploy's migration: one at a time.
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Check the database URL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python3 tools/check_database_url.py \
+            || { echo "::error::The production DATABASE_URL cannot be used. See docs/deploy.md."; exit 1; }
+      - uses: ./.github/actions/uv
+        with:
+          args: "--no-dev --group db"
+      - run: fpl-backfill --download-only
+      - name: The schema is at this code's head
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: fpl-stale --schema-only
+      - name: Load every past season
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: fpl-backfill | tee -a "$GITHUB_STEP_SUMMARY"
