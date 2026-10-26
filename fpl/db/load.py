@@ -122,6 +122,15 @@ def player_elements(bootstrap):
 # once, here.
 
 
+def player_rows(elements):
+    """People, once each by FPL's code, which is stable across seasons."""
+    by_code = {e["code"]: e for e in elements}
+    return [
+        {"code": code, "first_name": e["first_name"], "second_name": e["second_name"]}
+        for code, e in by_code.items()
+    ]
+
+
 def team_rows(season, bootstrap):
     return [
         {
@@ -275,15 +284,7 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
         rows["teams"] = upsert(connection, Team, team_rows(season, bootstrap), report.newest)
 
         elements, report.skipped_elements = player_elements(bootstrap)
-        rows["players"] = upsert(
-            connection,
-            Player,
-            [
-                {"code": e["code"], "first_name": e["first_name"], "second_name": e["second_name"]}
-                for e in elements
-            ],
-            newest_overall,
-        )
+        rows["players"] = upsert(connection, Player, player_rows(elements), newest_overall)
         rows["season_players"] = upsert(
             connection, SeasonPlayer, season_player_rows(season, elements), report.newest
         )
