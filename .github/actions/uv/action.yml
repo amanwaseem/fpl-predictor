@@ -1,0 +1,26 @@
+# The environment every workflow installs (#76): uv, Python 3.13, and uv.lock
+# exactly, with the venv on PATH so later steps run the commands as they are.
+# One place for the uv version, which the Dockerfile pins too.
+#
+# --locked, not --frozen: it also fails when uv.lock no longer matches
+# pyproject.toml, so a dependency added without `uv lock` stops CI.
+name: uv sync
+description: Install uv and sync uv.lock into .venv, activated for later steps
+inputs:
+  args:
+    description: "Arguments for uv sync after --locked, such as --no-dev --group db"
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v10
+      with:
+        version: "0.13.0"
+        python-version: "3.13"
+        enable-cache: true
+        activate-environment: true
+    - shell: bash
+      env:
+        ARGS: ${{ inputs.args }}
+      run: uv sync --locked $ARGS

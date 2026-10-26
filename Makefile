@@ -1,5 +1,5 @@
 # Shortcuts for the local database and the checks. Each command runs through
-# `uv run --frozen`, in the environment uv.lock describes (#76).
+# `uv run --locked`, in the environment uv.lock describes (#76).
 #
 #   make lint           # ruff check, ruff format --check, mypy: what CI's lint job runs
 #   make test           # the suite, by pytest
@@ -15,7 +15,7 @@ FPL_DB_PORT ?= 5432
 DATABASE_URL ?= postgresql+psycopg://fpl:fpl@localhost:$(FPL_DB_PORT)/fpl
 TEST_DATABASE_URL ?= postgresql+psycopg://fpl:fpl@localhost:$(FPL_DB_PORT)/fpl_test
 export FPL_DB_PORT DATABASE_URL
-RUN := uv run --frozen
+RUN := uv run --locked
 
 .PHONY: up down migrate seed reconcile serve openapi fuzz lint test test-db psql
 

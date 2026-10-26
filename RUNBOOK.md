@@ -35,8 +35,10 @@ source .venv/bin/activate
 function as `python -m fpl.<package>.<module>`, so either spelling works.
 
 After pulling a change to `pyproject.toml` or `uv.lock` — the commands are
-declared in one, the versions in the other — run `uv sync --frozen` once, or a
-new command will not exist.
+declared in one, the versions in the other — run `uv sync --locked --no-dev`
+once, or a new command will not exist. `--no-dev` is the entry workflow's
+environment, `requests` alone: an entry made in the development environment
+could import something the workflow's cannot.
 
 Work out three things and write them down:
 
@@ -463,8 +465,10 @@ Before merging:
 
 ```
 python tools/check_log_immutable.py --ref origin/main
-pytest
 ```
+
+The suite runs in CI on the PR, under `ci`; it needs the development
+environment, which an entry is not made in.
 
 `check_log_immutable.py` is the mechanical enforcement of rule 1: it compares
 every entry committed under `predictions/` at the reference commit against the
@@ -567,7 +571,6 @@ fpl-predict-fixture --gw N
 fpl-verify predictions/gwNN_<model>.csv                    # gate: non-zero means do not commit
 fpl-summarise predictions/gwNN_<model>.csv --out reports/
 python tools/check_log_immutable.py --ref origin/main      # rule 1, mechanically
-pytest
 fpl-score                                                  # after GW N settles, not before
 python tools/entry_bot.py decide --prs F --branches F       # what the entry workflow would decide
 ```

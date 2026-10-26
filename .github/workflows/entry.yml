@@ -84,15 +84,9 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-      # uv.lock, exactly (#76); .venv/bin on PATH so the commands run as before.
-      - uses: astral-sh/setup-uv@v10
+      - uses: ./.github/actions/uv
         with:
-          version: "0.13.0"
-          python-version: "3.13"
-          enable-cache: true
-      - run: |
-          uv sync --frozen --no-dev
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          args: "--no-dev"
 
       - name: Decide whether to make an entry now
         id: plan

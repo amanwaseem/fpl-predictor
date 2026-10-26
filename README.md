@@ -148,15 +148,19 @@ two models apart; the cumulative record is `scores/cumulative.json`.
 With [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv sync --frozen && source .venv/bin/activate    # everything, with the test tools
+uv sync --locked && source .venv/bin/activate            # development: everything, with the tests
+uv sync --locked --no-dev && source .venv/bin/activate   # making an entry: requests alone
 ```
 
-`uv sync --frozen --no-dev` installs what a prediction needs and nothing else: `requests`. The
-other commands need more, in dependency groups in `pyproject.toml`: `--group db` for the database
+An entry is made in the second, the environment the entry workflow uses, so a prediction that
+imported anything beyond `requests` would fail there rather than work by accident. The other
+commands need more, in dependency groups in `pyproject.toml`: `--group db` for the database
 commands, `--group optimise` for `fpl-optimise` (the HiGHS solver), and `--group api` for
 `fpl-serve`, which runs the solver too. The default, `dev`, is all of them with the test tools.
+`uv sync` is exact, so name every group wanted: `--no-dev --group db --group optimise`.
 
-Every version, transitive ones included, is in `uv.lock`, and `--frozen` installs exactly those.
+Every version, transitive ones included, is in `uv.lock`, and `--locked` installs exactly those,
+refusing a lock that no longer matches `pyproject.toml`.
 Every entry in the prediction log claims reproducibility from its `snapshot_id`; that claim covers
 the data, and the lock covers the code around it. The package is installed editable, so the commands always run the checkout, never a
 stale copy from before the last `git pull`.

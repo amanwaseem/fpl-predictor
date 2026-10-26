@@ -19,19 +19,22 @@ in the right file, and nothing checked that the files agreed with
 
 - **uv, with a committed `uv.lock`.** `pyproject.toml` states what is
   needed, in ranges; the lock records the exact version and hash of
-  everything, resolved once for every platform. `uv sync --frozen` installs
-  the lock as it is, and fails rather than resolve anew.
+  everything, resolved once for every platform. `uv sync --locked` installs
+  the lock as it is, and fails if it no longer matches `pyproject.toml`, so
+  a dependency added without `uv lock` stops CI.
 - **Dependency groups, by purpose.** `[project] dependencies` is what a
   prediction needs, `requests` alone, as before. `db`, `optimise`, `api` and
   `dev` are groups; `dev`, the default, includes the rest. The entry and
-  deadline workflows install with `--no-dev`, so the runtime that makes a log
-  entry is no bigger than it was. An `ml` group arrives with the learned
+  deadline workflows install with `--no-dev`, and so does the RUNBOOK for an
+  entry made by hand, so the runtime that makes a log entry is no bigger than
+  it was. An `ml` group arrives with the learned
   model (#85), when it has something in it.
 - **The versions did not move.** The first lock was pinned back to every
   version the requirements files held, so the switch changed the tooling and
   nothing it installs. Only the new tools (mypy, pre-commit) are new.
-- **CI and the image install the lock.** `astral-sh/setup-uv` and the
-  Dockerfile pin the same uv, 0.13.0. The image installs the package itself
+- **CI and the image install the lock.** One composite action,
+  `.github/actions/uv`, sets up every workflow; it and the Dockerfile pin the
+  same uv, 0.13.0. The image installs the package itself
   (`--no-editable`), as 0015 allows; a checkout installs it editable, as 0011
   requires.
 - *Rejected:* `pip-tools`, compiling the requirements files from

@@ -51,15 +51,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      # uv.lock, exactly (#76); .venv/bin on PATH so the commands run as before.
-      - uses: astral-sh/setup-uv@v10
+      - uses: ./.github/actions/uv
         with:
-          version: "0.13.0"
-          python-version: "3.13"
-          enable-cache: true
-      - run: |
-          uv sync --frozen --no-dev
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          args: "--no-dev"
       - name: Check the next deadline has an entry
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,15 +74,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      # uv.lock, exactly (#76); .venv/bin on PATH so the commands run as before.
-      - uses: astral-sh/setup-uv@v10
+      - uses: ./.github/actions/uv
         with:
-          version: "0.13.0"
-          python-version: "3.13"
-          enable-cache: true
-      - run: |
-          uv sync --frozen --no-dev
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          args: "--no-dev"
       - name: ENTRY_BOT_TOKEN is set, valid, and not about to expire
         env:
           GH_TOKEN: ${{ secrets.ENTRY_BOT_TOKEN }}

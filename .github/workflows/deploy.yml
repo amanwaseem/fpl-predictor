@@ -74,15 +74,9 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy --remote-only --wait-timeout 300
 
-      # uv.lock, exactly (#76); .venv/bin on PATH so the commands run as before.
-      - uses: astral-sh/setup-uv@v10
+      - uses: ./.github/actions/uv
         with:
-          version: "0.13.0"
-          python-version: "3.13"
-          enable-cache: true
-      - run: |
-          uv sync --frozen --no-dev --group db
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          args: "--no-dev --group db"
 
       - name: Project the committed log into production, and reconcile it
         env:
