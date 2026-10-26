@@ -109,6 +109,25 @@ class TestParseSeason(ArchiveCase):
         with self.assertRaises(SystemExit):
             self.parse(gws=gws + [other])
 
+    def test_two_different_rows_without_results_are_refused(self):
+        players, gws = season_rows()
+        for row in gws:
+            row["team_h_score"] = row["team_a_score"] = ""
+        with self.assertRaises(SystemExit):
+            self.parse(gws=gws + [dict(gws[0], total_points=9)])
+
+    def test_player_rows_that_disagree_about_the_sides_are_refused(self):
+        players, gws = season_rows()
+        gws[2]["opponent_team"] = 3  # player 3 at home, but against a third club
+        with self.assertRaises(SystemExit):
+            self.parse(gws=gws)
+
+    def test_a_person_listed_twice_in_a_season_is_one_player(self):
+        players, gws = season_rows()
+        players.append(dict(players[0], id=4))  # same code as element 1
+        parsed = self.parse(players=players)
+        self.assertEqual([p["code"] for p in parsed.players].count(1001), 1)
+
     def test_an_identical_row_twice_is_dropped(self):
         players, gws = season_rows()
         parsed = self.parse(gws=gws + [dict(gws[0])])

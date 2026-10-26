@@ -42,6 +42,9 @@ from fpl.db.load import (
     LAST_GAMEWEEK,
     POSITIONS,
     club_spells,
+    fixture_rows,
+    gameweek_rows,
+    player_rows,
     season_player_rows,
     stats_row,
     team_rows,
@@ -229,26 +232,25 @@ def parse_season(season, raw=RAW, names=None):
         ]
     }
     result.teams = team_rows(season, bootstrap)
-    result.players = [
-        {"code": e["code"], "first_name": e["first_name"], "second_name": e["second_name"]}
-        for e in players.values()
-    ]
+    result.players = player_rows(players.values())
     result.season_players = season_player_rows(season, [players[p] for p in sorted(players)])
 
-    rows = []
-    for row in read_csv(base / "gws" / "merged_gw.csv"):
+    # Duplicates first, across every row, so the counts say what the archive
+    # holds; then the managers, who are not players.
+    kept = []
+    for row in _deduplicated(season, read_csv(base / "gws" / "merged_gw.csv"), result):
         if int(row["element"]) not in players:
             result.not_players += 1
             continue
-        rows.append(row | {"round": gameweek_of(season, int(row["round"]))})
-    kept = _deduplicated(season, rows, result)
+        kept.append(row | {"round": gameweek_of(season, int(row["round"]))})
 
-    result.fixtures = _fixtures(season, kept)
-    result.gameweeks = _gameweeks(season, result.fixtures)
+    # Fixtures and gameweeks shaped as the API sends them, then built into rows
+    # by the snapshot loader's own builders.
+    fixtures = _fixtures(season, kept)
+    result.fixtures = fixture_rows(season, fixtures)
+    result.gameweeks = gameweek_rows(season, {"events": _events(fixtures)})
 
-    fixtures_by_id = {
-        f["fixture_id"]: {"team_h": f["team_h"], "team_a": f["team_a"]} for f in result.fixtures
-    }
+    fixtures_by_id = {f["id"]: f for f in fixtures}
     typed = [_typed_row(row) for row in kept]
     history = defaultdict(list)
     for row in typed:
@@ -262,13 +264,14 @@ def parse_season(season, raw=RAW, names=None):
     return result
 
 
-def _gameweeks(season, fixtures):
-    """Every gameweek, 1 to 38. A deadline is 90 minutes before the first kick-off;
-    a gameweek with no fixtures (2022/23's GW7, postponed whole) has none to go by,
-    so it is put midway between its neighbours'."""
+def _events(fixtures):
+    """Every gameweek, 1 to 38, as bootstrap-static's events. A deadline is 90
+    minutes before the first kick-off; a gameweek with no fixtures (2022/23's
+    GW7, postponed whole) has none to go by, so it is put between its
+    neighbours'."""
     kickoffs = defaultdict(list)
     for f in fixtures:
-        kickoffs[f["gameweek"]].append(f["kickoff_utc"])
+        kickoffs[f["event"]].append(timestamp(f["kickoff_time"]))
     deadlines = {gw: min(k) - DEADLINE_BEFORE_KICKOFF for gw, k in kickoffs.items()}
     if not deadlines:
         return []
@@ -286,11 +289,10 @@ def _gameweeks(season, fixtures):
             deadlines[gw] = deadlines[after] - timedelta(weeks=after - gw)
     return [
         {
-            "season": season,
-            "gameweek": gw,
+            "id": gw,
+            "deadline_time": deadlines[gw].isoformat(),
             "finished": True,
             "data_checked": True,
-            "deadline_utc": deadlines[gw],
         }
         for gw in range(1, LAST_GAMEWEEK + 1)
     ]
@@ -298,9 +300,9 @@ def _gameweeks(season, fixtures):
 
 def _deduplicated(season, rows, result):
     """One row per (element, fixture). Where the archive has two, they must be the
-    same row twice, or, in 2019/20, a fixture postponed in March and played in
-    June, whose stale row has no score: the row with the result is kept. Any
-    other pair is refused, rather than one of them kept by file order."""
+    same row twice, or a stale row with no result beside one with it, as for
+    2019/20's fixtures postponed in March and played in June: the row with the
+    result is kept. Any other pair is refused, rather than one kept by file order."""
     best = {}
     for row in rows:
         key = (row["element"], row["fixture"])
@@ -308,28 +310,36 @@ def _deduplicated(season, rows, result):
             best[key] = row
             continue
         result.duplicates += 1
-        kept, scored = best[key], row["team_h_score"] != ""
-        if row == kept or not scored:
+        kept = best[key]
+        if row == kept:
             continue
-        if kept["team_h_score"] == "":
+        stale = (_unscored(kept), _unscored(row))
+        if stale == (True, False):
             best[key] = row
-            continue
-        raise SystemExit(
-            f"{season}: two different rows for element {key[0]} in fixture "
-            f"{key[1]}, both with a result. Not choosing between them."
-        )
+        elif stale != (False, True):
+            raise SystemExit(
+                f"{season}: two different rows for element {key[0]} in fixture {key[1]}, "
+                "and not a stale one beside its result. Not choosing between them."
+            )
     return list(best.values())
 
 
+def _unscored(row):
+    return row["team_h_score"] == "" and row["team_a_score"] == ""
+
+
 def _fixtures(season, rows):
-    """Fixtures from the player rows, every row of a fixture agreeing about it."""
+    """Fixtures as the API's fixtures endpoint gives them, from the player rows.
+    Every row of a fixture must agree about it, its two sides included."""
     sides = defaultdict(dict)
     facts = {}
     for row in rows:
         fid = int(row["fixture"])
-        fixture = sides[fid]
         # A home player's opponent is the away side, and the other way round.
-        fixture["team_a" if row["was_home"] == "True" else "team_h"] = int(row["opponent_team"])
+        side = "team_a" if row["was_home"] == "True" else "team_h"
+        opponent = int(row["opponent_team"])
+        if sides[fid].setdefault(side, opponent) != opponent:
+            raise SystemExit(f"{season} fixture {fid}: player rows disagree about its {side}.")
         fact = (row["kickoff_time"], row["round"], row["team_h_score"], row["team_a_score"])
         if facts.setdefault(fid, fact) != fact:
             raise SystemExit(
@@ -345,10 +355,9 @@ def _fixtures(season, rows):
             raise SystemExit(f"{season} fixture {fid} has no result.")
         fixtures.append(
             {
-                "season": season,
-                "fixture_id": fid,
-                "gameweek": gameweek,
-                "kickoff_utc": timestamp(kickoff),
+                "id": fid,
+                "event": gameweek,
+                "kickoff_time": kickoff,
                 "team_h": f["team_h"],
                 "team_a": f["team_a"],
                 "team_h_score": int(home),

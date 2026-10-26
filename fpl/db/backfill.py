@@ -22,7 +22,7 @@ import sys
 from sqlalchemy import delete, exists, func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from fpl.db.load import LOAD_LOCK
+from fpl.db.load import LAST_GAMEWEEK, LOAD_LOCK
 from fpl.db.models import (
     Fixture,
     Gameweek,
@@ -38,97 +38,30 @@ from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.ingest import history
 from fpl.paths import require_project_root
 
-# Rows per season once loaded, table by table (COUNTED), counted from the
-# pinned files when they were first loaded. Every table the backfill writes is
-# counted, so a change to any of its parsing, or to the builders it shares with
-# the snapshot loader, shows up here.
+# Rows per season once loaded, for every table the backfill writes, counted
+# from the pinned files when they were first loaded: a change to any of its
+# parsing, or to the builders it shares with the snapshot loader, shows up.
+# Every season has 20 clubs, 38 gameweeks and 380 fixtures; the rest differ.
+EVERY_SEASON = {"teams": 20, "gameweeks": LAST_GAMEWEEK, "fixtures": 380}
 EXPECTED: dict[str, dict[str, int]] = {
-    "2016/17": {
-        "teams": 20,
-        "season_players": 683,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 718,
-        "player_fixture_stats": 23679,
-    },
-    "2017/18": {
-        "teams": 20,
-        "season_players": 647,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 674,
-        "player_fixture_stats": 22467,
-    },
-    "2018/19": {
-        "teams": 20,
-        "season_players": 624,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 628,
-        "player_fixture_stats": 21790,
-    },
-    "2019/20": {
-        "teams": 20,
-        "season_players": 666,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 674,
-        "player_fixture_stats": 22501,
-    },
-    "2020/21": {
-        "teams": 20,
-        "season_players": 713,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 726,
-        "player_fixture_stats": 24365,
-    },
-    "2021/22": {
-        "teams": 20,
-        "season_players": 737,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 751,
-        "player_fixture_stats": 25447,
-    },
-    "2022/23": {
-        "teams": 20,
-        "season_players": 778,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 807,
-        "player_fixture_stats": 26505,
-    },
-    "2023/24": {
-        "teams": 20,
-        "season_players": 865,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 890,
-        "player_fixture_stats": 29725,
-    },
-    "2024/25": {
-        "teams": 20,
-        "season_players": 784,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 815,
-        "player_fixture_stats": 27283,
-    },
-    "2025/26": {
-        "teams": 20,
-        "season_players": 841,
-        "gameweeks": 38,
-        "fixtures": 380,
-        "player_clubs": 870,
-        "player_fixture_stats": 29747,
-    },
+    season: EVERY_SEASON | counts
+    for season, counts in {
+        "2016/17": {"season_players": 683, "player_clubs": 718, "player_fixture_stats": 23679},
+        "2017/18": {"season_players": 647, "player_clubs": 674, "player_fixture_stats": 22467},
+        "2018/19": {"season_players": 624, "player_clubs": 628, "player_fixture_stats": 21790},
+        "2019/20": {"season_players": 666, "player_clubs": 674, "player_fixture_stats": 22501},
+        "2020/21": {"season_players": 713, "player_clubs": 726, "player_fixture_stats": 24365},
+        "2021/22": {"season_players": 737, "player_clubs": 751, "player_fixture_stats": 25447},
+        "2022/23": {"season_players": 778, "player_clubs": 807, "player_fixture_stats": 26505},
+        "2023/24": {"season_players": 865, "player_clubs": 890, "player_fixture_stats": 29725},
+        "2024/25": {"season_players": 784, "player_clubs": 815, "player_fixture_stats": 27283},
+        "2025/26": {"season_players": 841, "player_clubs": 870, "player_fixture_stats": 29747},
+    }.items()
 }
 
 # Children before parents, so a season can be deleted in this order.
 TABLES = [PlayerFixtureStats, PlayerClub, Fixture, Gameweek, SeasonPlayer, Team]
 COUNTED = {model.__tablename__: model for model in reversed(TABLES)}
-LOCK = 79
 
 
 def load_season(connection, parsed):
@@ -145,21 +78,24 @@ def load_season(connection, parsed):
     # People are not per season. A name is taken from this season unless a
     # later one, past or live, already has the person: the newest name wins,
     # whatever order the seasons are loaded in.
+    # player_rows lists each person once, as one statement cannot update a row
+    # twice.
     statement = insert(Player)
     later = exists().where(
         SeasonPlayer.player_code == statement.excluded.code, SeasonPlayer.season > season
     )
-    connection.execute(
-        statement.on_conflict_do_update(
-            index_elements=["code"],
-            set_={
-                "first_name": statement.excluded.first_name,
-                "second_name": statement.excluded.second_name,
-            },
-            where=~later,
-        ),
-        parsed.players,
-    )
+    if parsed.players:
+        connection.execute(
+            statement.on_conflict_do_update(
+                index_elements=["code"],
+                set_={
+                    "first_name": statement.excluded.first_name,
+                    "second_name": statement.excluded.second_name,
+                },
+                where=~later,
+            ),
+            parsed.players,
+        )
     for model, rows in (
         (Team, parsed.teams),
         (SeasonPlayer, parsed.season_players),
@@ -174,12 +110,20 @@ def load_season(connection, parsed):
 
 
 def counts(connection, season):
-    return {
-        name: connection.scalar(
-            select(func.count()).select_from(model).where(model.season == season)
+    """{table: rows for `season`}, in one query."""
+    row = connection.execute(
+        select(
+            *(
+                select(func.count())
+                .select_from(model)
+                .where(model.season == season)
+                .scalar_subquery()
+                .label(name)
+                for name, model in COUNTED.items()
+            )
         )
-        for name, model in COUNTED.items()
-    }
+    ).one()
+    return dict(row._mapping)
 
 
 def backfill(engine, seasons, raw=history.RAW, expected=None, verified=False):
@@ -193,10 +137,10 @@ def backfill(engine, seasons, raw=history.RAW, expected=None, verified=False):
     for season in seasons:
         parsed = history.parse_season(season, raw, names)
         with engine.begin() as connection:
-            # The snapshot loader's lock too: the check that a season has no
-            # snapshots, then its delete, must not interleave with an fpl-load.
+            # The snapshot loader's lock: the check that a season has no
+            # snapshots, then its delete, must not interleave with an fpl-load,
+            # and two backfills take it one at a time too.
             connection.execute(select(func.pg_advisory_xact_lock(LOAD_LOCK)))
-            connection.execute(select(func.pg_advisory_xact_lock(LOCK)))
             load_season(connection, parsed)
             found = counts(connection, season)
             want = expected.get(season)
