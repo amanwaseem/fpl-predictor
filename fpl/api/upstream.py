@@ -46,35 +46,45 @@ def fetch(engine, path):
     """The JSON at BASE/path, from the cache if it is fresh enough.
 
     A 404 from FPL is the caller's (no such team, or no picks for that
-    gameweek), and is raised as one; anything else that goes wrong upstream is
-    a 502, since the request itself was fine.
+    gameweek), and is raised as one, and kept like an answer; anything else
+    that goes wrong upstream is a 502, since the request itself was fine.
     """
     now = datetime.now(UTC)
     with engine.connect() as connection:
-        row = connection.execute(select(UpstreamResponse.body, UpstreamResponse.fetched_at_utc)
-                                 .where(UpstreamResponse.path == path)).first()
+        row = connection.execute(
+            select(UpstreamResponse.status, UpstreamResponse.body,
+                   UpstreamResponse.fetched_at_utc)
+            .where(UpstreamResponse.path == path)).first()
     if row is not None and now - row.fetched_at_utc < timedelta(seconds=CACHE_SECONDS):
-        return row.body
+        status, body = row.status, row.body
+    else:
+        status, body = _get(path)
+        with engine.begin() as connection:
+            values = {"status": status, "body": body, "fetched_at_utc": now}
+            connection.execute(insert(UpstreamResponse).values(path=path, **values)
+                               .on_conflict_do_update(index_elements=["path"], set_=values))
+            # Kept small: anything older than a day will never be served again.
+            connection.execute(UpstreamResponse.__table__.delete().where(
+                UpstreamResponse.fetched_at_utc < now - timedelta(days=1)))
+    if status == 404:
+        raise HTTPException(404, f"The FPL API has nothing at {path}.")
+    return body
+
+
+def _get(path):
+    """(200, body) or (404, None) from the FPL API; HTTPException(502) otherwise."""
     try:
         response = requests.get(f"{BASE}/{path}", headers=HEADERS, timeout=TIMEOUT)
     except requests.RequestException:
         raise HTTPException(502, "The FPL API did not answer.") from None
     if response.status_code == 404:
-        raise HTTPException(404, f"The FPL API has nothing at {path}.")
+        return 404, None
     if response.status_code != 200:
         raise HTTPException(502, f"The FPL API answered {response.status_code}.")
     try:
-        body = response.json()
+        return 200, response.json()
     except ValueError:
         raise HTTPException(502, "The FPL API's answer was not JSON.") from None
-    with engine.begin() as connection:
-        connection.execute(insert(UpstreamResponse).values(
-            path=path, body=body, fetched_at_utc=now).on_conflict_do_update(
-            index_elements=["path"], set_={"body": body, "fetched_at_utc": now}))
-        # Kept small: anything older than a day will never be served again.
-        connection.execute(UpstreamResponse.__table__.delete().where(
-            UpstreamResponse.fetched_at_utc < now - timedelta(days=1)))
-    return body
 
 
 def free_transfers(history, chips, through):

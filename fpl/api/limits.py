@@ -13,19 +13,36 @@ socket's peer is used.
 """
 
 import os
+import sys
 import threading
 import time
 from collections import defaultdict, deque
 
 from fastapi import HTTPException, Request
 
+DEFAULT = "10/60"
+# Clients remembered before the stale ones are swept out.
+SWEEP_AT = 10_000
+
 
 def parse(setting):
-    """(requests, seconds) from '10/60', or None for 'off'."""
+    """(requests, seconds) from '10/60', or None for 'off'. ValueError if neither."""
     if setting.strip().lower() in ("off", "0", ""):
         return None
-    count, _, seconds = setting.partition("/")
+    count, slash, seconds = setting.partition("/")
+    if not slash or int(count) < 1 or float(seconds) <= 0:
+        raise ValueError(f"{setting!r} is not a rate: want requests/seconds, like 10/60, or off")
     return int(count), float(seconds)
+
+
+def configured(setting):
+    """The limit from FPL_SOLVER_RATE. A setting that cannot be read falls back to the
+    default with a warning, rather than stopping every route from starting."""
+    try:
+        return parse(setting)
+    except ValueError as e:
+        print(f"FPL_SOLVER_RATE: {e}; using {DEFAULT}.", file=sys.stderr)
+        return parse(DEFAULT)
 
 
 class SlidingWindow:
@@ -34,6 +51,7 @@ class SlidingWindow:
         self.clock = clock
         self.seen = defaultdict(deque)
         self.lock = threading.Lock()
+        self.sweep_at = SWEEP_AT
 
     def allow(self, client):
         """None if `client` may go ahead, else the seconds until it may."""
@@ -48,14 +66,20 @@ class SlidingWindow:
             if len(times) >= count:
                 return times[0] + seconds - now
             times.append(now)
-            # Forget clients with nothing in the window, so memory stays bounded.
-            if len(self.seen) > 10_000:
-                for key in [k for k, v in self.seen.items() if not v]:
-                    del self.seen[key]
+            if len(self.seen) > self.sweep_at:
+                self._sweep(now - seconds)
             return None
 
+    def _sweep(self, cutoff):
+        """Forget every client with nothing left in the window, so memory stays bounded.
+        The next sweep waits until the clients still here have doubled, so a crowd that
+        is all active costs one sweep per doubling, not one per request."""
+        for key in [k for k, v in self.seen.items() if not v or v[-1] <= cutoff]:
+            del self.seen[key]
+        self.sweep_at = max(SWEEP_AT, 2 * len(self.seen))
 
-solver_window = SlidingWindow(parse(os.environ.get("FPL_SOLVER_RATE", "10/60")))
+
+solver_window = SlidingWindow(configured(os.environ.get("FPL_SOLVER_RATE", DEFAULT)))
 
 
 def client_of(request: Request, environ=os.environ):

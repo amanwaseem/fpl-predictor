@@ -127,8 +127,7 @@ def post_optimise(db: Database, body: schemas.OptimiseRequest):
 def get_advice(
     db: Database,
     fpl_team_id: Annotated[int, PathParam(ge=1, le=100_000_000, examples=[1])],
-    model: Annotated[str, Query(pattern=r"^[A-Za-z0-9.-]{1,40}$",
-                                examples=["baseline-v1"])] = solver.DEFAULT_MODEL,
+    model: ModelParam = solver.DEFAULT_MODEL,
     gameweek: Annotated[int | None, Query(
         ge=1, le=38, description="Defaults to the model's latest entry.")] = None,
     season: SeasonParam = None,
@@ -143,14 +142,13 @@ def get_advice(
     """
     with db.connect() as conn:
         season = queries.resolve_season(conn, season)
-        gameweek, _ = solver.entry_for(conn, season, gameweek, model)
-        prices = {r["player_id"]: r["price"]
-                  for r in solver.predictions(conn, season, gameweek, model)}
+        entry = solver.entry_for(conn, season, gameweek, model)
+        rows = solver.predictions(conn, season, entry[0], model)
     squad, bank, estimated, picks_gameweek = upstream.manager_squad(
-        db, season, fpl_team_id, gameweek, prices)
-    result = solver.solve(db, season, gameweek, model, squad=squad, bank=bank,
+        db, season, fpl_team_id, entry[0], {r["player_id"]: r["price"] for r in rows})
+    result = solver.solve(db, season, entry[0], model, squad=squad, bank=bank,
                           free_transfers=estimated if free_transfers is None else free_transfers,
-                          include_unavailable=include_unavailable)
+                          include_unavailable=include_unavailable, entry=entry, rows=rows)
     return result | {
         "fpl_team_id": fpl_team_id, "picks_gameweek": picks_gameweek,
         "estimates": {

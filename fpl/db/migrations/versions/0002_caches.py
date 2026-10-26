@@ -2,7 +2,7 @@
 
 Revision ID: 0002
 Revises: 0001
-Created: 2026-10-25 16:38:48.799857
+Created: 2026-10-25 16:57:38.156449
 """
 
 from collections.abc import Sequence
@@ -21,9 +21,17 @@ def upgrade() -> None:
     op.create_table(
         "upstream_responses",
         sa.Column("path", sa.Text(), nullable=False),
-        sa.Column("body", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("status", sa.SmallInteger(), nullable=False),
+        sa.Column("body", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("fetched_at_utc", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("status IN (200, 404)", name=op.f("ck_upstream_responses_status")),
         sa.PrimaryKeyConstraint("path", name=op.f("pk_upstream_responses")),
+    )
+    op.create_index(
+        "ix_upstream_responses_fetched_at_utc",
+        "upstream_responses",
+        ["fetched_at_utc"],
+        unique=False,
     )
     op.create_table(
         "optimise_results",
@@ -57,4 +65,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("optimise_results")
+    op.drop_index("ix_upstream_responses_fetched_at_utc", table_name="upstream_responses")
     op.drop_table("upstream_responses")

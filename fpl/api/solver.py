@@ -10,10 +10,12 @@ import hashlib
 import json
 import os
 from dataclasses import asdict
+from datetime import UTC, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 
 from fpl import optimise
 from fpl.db.models import OptimiseResult, Prediction, PredictionEntry
@@ -64,41 +66,42 @@ def cached(connection, key):
                              .where(OptimiseResult.request_hash == key))
 
 
-def store(connection, key, season, gameweek, model, result):
-    connection.execute(insert(OptimiseResult).values(
-        request_hash=key, season=season, gameweek=gameweek, model_version=model,
-        result=result).on_conflict_do_nothing())
+def store(engine, key, season, gameweek, model, result):
+    """Keep a result. A cache that cannot be written is no reason to fail the request:
+    the projection may have replaced the entry mid-solve, during a deploy."""
+    try:
+        with engine.begin() as connection:
+            connection.execute(insert(OptimiseResult).values(
+                request_hash=key, season=season, gameweek=gameweek, model_version=model,
+                result=result).on_conflict_do_nothing())
+    except IntegrityError:
+        pass
 
 
 def solve(engine, season, gameweek, model, *, squad=None, bank=None, free_transfers=None,
-          budget=optimise.BUDGET, include_unavailable=False):
+          budget=optimise.BUDGET, include_unavailable=False, entry=None, rows=None):
     """A result dict shaped like fpl.api.schemas.OptimiseResult.
 
     With `squad` ({player_id: selling_price}), the best transfers from it;
-    without, the best squad from scratch within `budget`.
+    without, the best squad from scratch within `budget`. A caller that has
+    already read the entry passes `entry` (gameweek, deadline) and its `rows`.
     """
     with engine.connect() as connection:
-        gameweek, deadline = entry_for(connection, season, gameweek, model)
+        gameweek, deadline = entry or entry_for(connection, season, gameweek, model)
         key = request_hash(
             season=season, gameweek=gameweek, model=model, budget=budget,
             include_unavailable=include_unavailable, bank=bank, free_transfers=free_transfers,
             squad=sorted(squad.items()) if squad is not None else None)
         result = cached(connection, key)
-        if result is None:
+        if result is None and rows is None:
             rows = predictions(connection, season, gameweek, model)
 
-    if result is None:
+    hit = result is not None
+    if not hit:
         result = _solve(rows, squad, bank, free_transfers, budget, include_unavailable)
-        with engine.begin() as connection:
-            store(connection, key, season, gameweek, model, result)
-        hit = False
-    else:
-        hit = True
-
-    with engine.connect() as connection:
-        now = connection.scalar(select(func.now()))
+        store(engine, key, season, gameweek, model, result)
     return {"season": season, "gameweek": gameweek, "model_version": model,
-            "deadline_utc": deadline, "deadline_passed": now >= deadline,
+            "deadline_utc": deadline, "deadline_passed": datetime.now(UTC) >= deadline,
             "cached": hit} | result
 
 
@@ -115,6 +118,9 @@ def _solve(rows, squad, bank, free_transfers, budget, include_unavailable):
         return {"squad": plan.pop("squad"), "plan": plan}
     except optimise.SolverTimeout:
         raise HTTPException(503, f"The solver did not finish within {TIME_LIMIT:g} seconds.",
+                            headers={"Retry-After": "60"}) from None
+    except optimise.SolverFailure as e:
+        raise HTTPException(503, f"The solver failed: {e}.",
                             headers={"Retry-After": "60"}) from None
     except ValueError as e:
         # The squad or the pool cannot be solved: the request's fault, said why.

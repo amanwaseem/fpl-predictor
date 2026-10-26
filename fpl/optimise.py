@@ -139,6 +139,10 @@ class SolverTimeout(Exception):
     """The solver ran out of time before it proved an optimum."""
 
 
+class SolverFailure(Exception):
+    """The solver stopped for a reason that is not the request's: not infeasible, not time."""
+
+
 def _deadline(time_limit):
     """A monotonic deadline `time_limit` seconds away, or None for no limit."""
     return None if time_limit is None else time.monotonic() + time_limit
@@ -301,9 +305,15 @@ def _solve(pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=
 
     limit_time()
     model.maximize(value)
-    if model.getModelStatus() == highspy.HighsModelStatus.kTimeLimit:
+    status = model.getModelStatus()
+    if status == highspy.HighsModelStatus.kTimeLimit:
         raise SolverTimeout("the solver's time limit was reached before it proved an optimum")
-    if model.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+    # Every variable is bounded, so "unbounded or infeasible" can only be infeasible.
+    if status not in (highspy.HighsModelStatus.kOptimal, highspy.HighsModelStatus.kInfeasible,
+                      highspy.HighsModelStatus.kUnboundedOrInfeasible):
+        raise SolverFailure(f"the solver stopped without an answer: "
+                            f"{model.modelStatusToString(status)}")
+    if status != highspy.HighsModelStatus.kOptimal:
         raise ValueError(
             f"no legal squad within £{budget / 10:.1f}m: each rule can be met alone, but not "
             "together; the budget and the three-per-club cap leave no squad (solver: "
@@ -623,7 +633,7 @@ def main(entry, budget, bench_weight, as_json, include_unavailable=False, squad_
             result = best_transfers(rows, current, bank, free_transfers,
                                     bench_weight=bench_weight,
                                     include_unavailable=include_unavailable)
-    except (ValueError, ImportError) as e:
+    except (ValueError, ImportError, SolverFailure) as e:
         raise SystemExit(str(e)) from None
     if as_json:
         print(json.dumps(asdict(result), indent=2))

@@ -21,6 +21,7 @@ API_VERSION = "1"
 # Five minutes keeps clients and CDNs from asking every time without leaving a
 # fresh entry invisible for long; the ETag makes the re-check cheap.
 CACHE_CONTROL = "public, max-age=300"
+LIVE_PREFIXES = ("/v1/entries/",)
 
 
 def etag_for(body):
@@ -36,9 +37,12 @@ def matches(if_none_match, etag):
 async def http_caching(request: Request, call_next):
     """ETag and Cache-Control on successful /v1 reads; 304 when the client is current."""
     response = await call_next(request)
+    # Advice is from a manager's live squad, which changes with every transfer
+    # they make: not for a browser or CDN to keep.
+    live = request.url.path.startswith(LIVE_PREFIXES)
     if request.method != "GET" or response.status_code != 200 \
-            or not request.url.path.startswith("/v1/"):
-        if request.url.path in ("/healthz", "/readyz"):
+            or not request.url.path.startswith("/v1/") or live:
+        if request.url.path in ("/healthz", "/readyz") or live:
             response.headers["Cache-Control"] = "no-store"
         return response
 

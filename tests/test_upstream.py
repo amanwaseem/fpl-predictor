@@ -67,6 +67,13 @@ class TestPurchasePrices(unittest.TestCase):
         chips = [{"name": "freehit", "event": 4}]
         self.assertEqual(upstream.purchase_prices({7}, transfers, chips, through=5), {7: 50})
 
+    def test_a_player_owned_before_a_free_hit_keeps_his_earlier_price(self):
+        """Bought, sold, bought back in a free hit: the free hit squad reverts, and with
+        it the player; what he cost is the purchase before."""
+        transfers = [self.transfer(7, 50, 2, "2026-08-20"), self.transfer(7, 58, 5, "2026-09-17")]
+        chips = [{"name": "freehit", "event": 5}]
+        self.assertEqual(upstream.purchase_prices({7}, transfers, chips, through=6), {7: 50})
+
     def test_players_not_in_the_squad_and_later_gameweeks_are_ignored(self):
         transfers = [self.transfer(8, 50, 2, "2026-08-20"), self.transfer(7, 55, 6, "2026-09-30")]
         self.assertEqual(upstream.purchase_prices({7}, transfers, [], through=5), {})

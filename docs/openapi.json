@@ -1514,13 +1514,16 @@
             }
           },
           {
+            "description": "A model_version.",
             "in": "query",
             "name": "model",
             "required": false,
             "schema": {
               "default": "baseline-v1",
+              "description": "A model_version.",
               "examples": [
-                "baseline-v1"
+                "baseline-v1",
+                "form-fixture-v1"
               ],
               "pattern": "^[A-Za-z0-9.-]{1,40}$",
               "title": "Model",
