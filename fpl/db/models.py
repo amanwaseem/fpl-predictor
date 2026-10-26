@@ -472,6 +472,26 @@ class PlayerGameweekFeatures(Base):
     expected_clean_sheets: Mapped[float | None] = mapped_column(Float)
 
 
+class FeatureBuild(Base):
+    """When a season's features were built, and from what (#84).
+
+    `inputs` is a fingerprint of everything the rows are built from: the
+    season's results and fixtures, which rounds have settled, the committed
+    entries, and the season before, whose totals are the last-season columns.
+    fpl-features rebuilds a season when it, or the feature version, changes.
+    """
+
+    __tablename__ = "feature_builds"
+
+    season: Mapped[str] = mapped_column(ForeignKey("seasons.season"), primary_key=True)
+    feature_version: Mapped[str] = mapped_column(Text)
+    inputs: Mapped[str] = mapped_column(Text)
+    rows: Mapped[int] = mapped_column(Integer)
+    built_at_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 # --- Caches -----------------------------------------------------------------
 
 
