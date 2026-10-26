@@ -13,7 +13,8 @@
 #      It stops with an error if the schema is behind this code, which
 #      happens while a deploy is still to migrate it.
 #   3. Otherwise take a full snapshot (about six minutes), check the schema
-#      again, and load it (fpl-load).
+#      again, load it (fpl-load), and rebuild the live season's features
+#      (fpl-features, #84).
 #
 # The loader is idempotent and newest-wins (#78): a snapshot already loaded
 # changes nothing, and an older one only fills gaps. A mid-gameweek snapshot is
@@ -130,7 +131,7 @@ jobs:
         run: |
           # Again: the full fetch took minutes, and main may have moved.
           status=0
-          { fpl-stale --schema-only && fpl-load; } > "$RUNNER_TEMP/load.txt" 2>&1 || status=$?
+          { fpl-stale --schema-only && fpl-load && fpl-features; } > "$RUNNER_TEMP/load.txt" 2>&1 || status=$?
           cat "$RUNNER_TEMP/load.txt"
           { echo '```'; cat "$RUNNER_TEMP/load.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit $status

@@ -124,6 +124,8 @@ two models apart; the cumulative record is `scores/cumulative.json`.
   the transfers that pay for themselves after free transfers and hits
 - Past seasons as training data: 2016/17 to 2025/26, about 254,000 player-fixture rows, loaded
   from a pinned archive by `fpl-backfill` and checked against pinned counts (ADR 0018)
+- A feature table: one row per player per gameweek, from data before its deadline, for all ten
+  past seasons and this one (`fpl-features`), leak-tested by corrupting everything after the cut
 - "Optimise my team" on the API: `POST /v1/optimise` for a squad sent in, and
   `GET /v1/entries/{id}/advice`, which reads an FPL team's squad from the FPL API first
 
@@ -131,7 +133,7 @@ two models apart; the cumulative record is `scores/cumulative.json`.
 
 - Automated entries: a scheduled workflow that makes each entry and opens its PR before the
   deadline (#68)
-- A learned model on past seasons: a feature table, then gbm-v1 (#84, #85)
+- A learned model on past seasons, gbm-v1 (#85)
 
 **Planned** (tracked in #75)
 
@@ -186,6 +188,7 @@ so they run anywhere, including the deployed image.
 | `fpl-optimise` | The best legal squad, XI and captain for one entry's predictions, under the £100m budget, by integer programming (`--squad FILE`: the best transfers from a squad you own, net of hits) |
 | `fpl-backtest` | Replay settled gameweeks offline, without leaking the future (`--held-out`: the gate for a new factor) |
 | `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
+| `fpl-features` | Build `player_gameweek_features`, one row of pre-deadline model inputs per player per gameweek, for every season in the database (`--rebuild`: all of it) |
 | `fpl-backfill` | Load 2016/17 to 2025/26 into Postgres as training data, from a pinned archive (`--download-only`: fetch and check the files) |
 | `fpl-stale` | Whether the database is behind a bootstrap-only snapshot, and whether its schema is at this code's head; the scheduled ingest's first check |
 | `fpl-project` | Rebuild the database's copy of the log from `predictions/` and `scores/` |

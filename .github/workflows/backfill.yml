@@ -47,3 +47,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: fpl-backfill | tee -a "$GITHUB_STEP_SUMMARY"
+      # A season backfilled again loses its features; this builds what is
+      # missing or out of date (#84).
+      - name: Build the feature table
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: fpl-features | tee -a "$GITHUB_STEP_SUMMARY"
