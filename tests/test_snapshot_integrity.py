@@ -77,9 +77,11 @@ class TestAtomicWrite(TempCwd):
 class TestBacktestGuard(unittest.TestCase):
     """Hard rule 2: bootstrap fields are snapshot-time and unbounded."""
 
-    FORWARD = [{"id": 1, "is_next": False, "finished": True, "deadline_time": "t"},
-               {"id": 2, "is_next": False, "finished": True, "deadline_time": "t"},
-               {"id": 3, "is_next": True, "finished": False, "deadline_time": "t"}]
+    FORWARD = [
+        {"id": 1, "is_next": False, "finished": True, "deadline_time": "t"},
+        {"id": 2, "is_next": False, "finished": True, "deadline_time": "t"},
+        {"id": 3, "is_next": True, "finished": False, "deadline_time": "t"},
+    ]
 
     def test_past_gameweek_refused(self):
         with self.assertRaises(SystemExit):
@@ -96,16 +98,18 @@ class TestBacktestGuard(unittest.TestCase):
         news. Previously allowed; the forward direction was unguarded while
         the backward one refused.
         """
-        events = self.FORWARD + [{"id": 4, "is_next": False, "finished": False,
-                                  "deadline_time": "t"}]
+        events = self.FORWARD + [
+            {"id": 4, "is_next": False, "finished": False, "deadline_time": "t"}
+        ]
         with self.assertRaises(SystemExit) as cm:
             resolve_target_gw(events, 4)
         self.assertIn("chance_of_playing_next_round", str(cm.exception))
 
     def test_the_snapshots_own_next_gameweek_is_the_only_target(self):
         """Both directions away from is_next are refused, one gameweek apart."""
-        events = self.FORWARD + [{"id": 4, "is_next": False, "finished": False,
-                                  "deadline_time": "t"}]
+        events = self.FORWARD + [
+            {"id": 4, "is_next": False, "finished": False, "deadline_time": "t"}
+        ]
         self.assertEqual(resolve_target_gw(events, 3)[0], 3)
         for beyond in (2, 4):
             with self.assertRaises(SystemExit):
@@ -113,14 +117,12 @@ class TestBacktestGuard(unittest.TestCase):
 
     def test_guard_holds_when_is_next_absent(self):
         """The bug review found: a missing flag skipped the check entirely."""
-        events = [{"id": i, "finished": i < 3, "deadline_time": "t"}
-                  for i in range(1, 5)]
+        events = [{"id": i, "finished": i < 3, "deadline_time": "t"} for i in range(1, 5)]
         with self.assertRaises(SystemExit):
             resolve_target_gw(events, 2)
 
     def test_refuses_everything_when_season_over(self):
-        events = [{"id": i, "finished": True, "deadline_time": "t"}
-                  for i in range(1, 5)]
+        events = [{"id": i, "finished": True, "deadline_time": "t"} for i in range(1, 5)]
         with self.assertRaises(SystemExit):
             resolve_target_gw(events, 4)
 
@@ -141,24 +143,26 @@ class TestLoadSnapshot(TempCwd):
         self.assertIn("manifest", str(cm.exception))
 
     def test_missing_player_files_refused(self):
-        self.snap("20260910T000000Z", players=1, elements=[1, 2, 3],
-                  manifest={"has_players": True, "element_count": 3})
+        self.snap(
+            "20260910T000000Z",
+            players=1,
+            elements=[1, 2, 3],
+            manifest={"has_players": True, "element_count": 3},
+        )
         self.point_at("20260910T000000Z")
         with self.assertRaises(SystemExit) as cm:
             load_snapshot()
         self.assertIn("missing", str(cm.exception))
 
     def test_skip_players_snapshot_refused_with_right_advice(self):
-        self.snap("20260910T000000Z", players=0, elements=[1],
-                  manifest={"has_players": False})
+        self.snap("20260910T000000Z", players=0, elements=[1], manifest={"has_players": False})
         self.point_at("20260910T000000Z")
         with self.assertRaises(SystemExit) as cm:
             load_snapshot()
         self.assertIn("--skip-players", str(cm.exception))
 
     def test_complete_snapshot_loads(self):
-        self.snap("20260910T000000Z", players=2,
-                  manifest={"has_players": True, "element_count": 2})
+        self.snap("20260910T000000Z", players=2, manifest={"has_players": True, "element_count": 2})
         self.point_at("20260910T000000Z")
         snap, bootstrap, fixture_list, players_dir = load_snapshot()
         self.assertEqual(len(bootstrap["elements"]), 2)
@@ -177,10 +181,8 @@ class TestLoadSnapshot(TempCwd):
 
     def test_named_snapshot_loads_instead_of_latest(self):
         """What the verifier relies on: an entry names its own snapshot."""
-        self.snap("20260101T000000Z", players=2,
-                  manifest={"has_players": True, "element_count": 2})
-        self.snap("20260910T000000Z", players=2,
-                  manifest={"has_players": True, "element_count": 2})
+        self.snap("20260101T000000Z", players=2, manifest={"has_players": True, "element_count": 2})
+        self.snap("20260910T000000Z", players=2, manifest={"has_players": True, "element_count": 2})
         self.point_at("20260910T000000Z")
         snap, _, _, _ = load_snapshot("20260101T000000Z")
         self.assertEqual(snap.name, "20260101T000000Z")
@@ -190,4 +192,3 @@ class TestLoadSnapshot(TempCwd):
         with self.assertRaises(SystemExit) as cm:
             load_snapshot("20260101T000000Z")
         self.assertIn("No snapshot at", str(cm.exception))
-

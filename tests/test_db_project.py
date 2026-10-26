@@ -83,15 +83,19 @@ class TestProjection(DatabaseCase):
         self.project()
         write_entry(self.tmp, "late-v1")
         found = self.differences()
-        self.assertTrue(any("'late-v1'" in line and "not in the database" in line
-                            for line in found))
+        self.assertTrue(
+            any("'late-v1'" in line and "not in the database" in line for line in found)
+        )
         self.project()
         self.assertEqual(self.differences(), [])
 
     def test_an_edited_value_is_reported_with_both_sides(self):
         self.project()
-        self.execute(update(Prediction).where(Prediction.player_id == 1)
-                     .values(predicted_points=Prediction.predicted_points + Decimal("0.01")))
+        self.execute(
+            update(Prediction)
+            .where(Prediction.player_id == 1)
+            .values(predicted_points=Prediction.predicted_points + Decimal("0.01"))
+        )
         found = self.differences()
         self.assertEqual(len(found), 2)
         self.assertTrue(all("predicted_points" in line and "in git" in line for line in found))
@@ -106,8 +110,7 @@ class TestProjection(DatabaseCase):
         with self.engine.begin() as connection:
             row = dict(connection.execute(select(Prediction.__table__).limit(1)).one()._mapping)
             connection.execute(insert(Prediction).values(row | {"player_id": 999}))
-        self.assertTrue(any("999" in line and "not in git" in line
-                            for line in self.differences()))
+        self.assertTrue(any("999" in line and "not in git" in line for line in self.differences()))
 
     def test_a_score_error_that_disagrees_with_its_columns_is_reported(self):
         path = self.tmp / "scores/gw08_baseline-v1.csv"
@@ -150,5 +153,6 @@ class TestTheCommittedLog(DatabaseCase):
         os.chdir(ROOT)
         self.project()
         self.assertEqual(self.differences(), [])
-        self.assertEqual(self.count(PredictionEntry),
-                         len(list((ROOT / "predictions").glob("*.csv"))))
+        self.assertEqual(
+            self.count(PredictionEntry), len(list((ROOT / "predictions").glob("*.csv")))
+        )

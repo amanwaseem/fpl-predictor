@@ -19,13 +19,22 @@ SOFT = [(1, 3), (2, 4)]
 
 
 def past(minutes=3000, total_points=150, **fields):
-    return [dict({"season_name": "2025/26", "minutes": minutes,
-                  "total_points": total_points, "goals_scored": 0, "assists": 0,
-                  "clean_sheets": 0}, **fields)]
+    return [
+        dict(
+            {
+                "season_name": "2025/26",
+                "minutes": minutes,
+                "total_points": total_points,
+                "goals_scored": 0,
+                "assists": 0,
+                "clean_sheets": 0,
+            },
+            **fields,
+        )
+    ]
 
 
 class TestSlope(unittest.TestCase):
-
     def test_least_squares(self):
         self.assertAlmostEqual(candidates.slope([(4, 3.0), (5, 3.5), (6, 4.0)]), 0.5)
 
@@ -34,18 +43,24 @@ class TestSlope(unittest.TestCase):
 
 
 class TestPriceFit(unittest.TestCase):
-
     def bootstrap(self, n):
-        return {"element_types": fixtures.ELEMENT_TYPES, "events": EVENTS,
-                "elements": [fixtures.element(pid, element_type=3, now_cost=50 + 10 * pid)
-                             for pid in range(1, n + 1)]}
+        return {
+            "element_types": fixtures.ELEMENT_TYPES,
+            "events": EVENTS,
+            "elements": [
+                fixtures.element(pid, element_type=3, now_cost=50 + 10 * pid)
+                for pid in range(1, n + 1)
+            ],
+        }
 
     def test_fitted_on_usable_seasons_centred_on_the_rest(self):
         bootstrap = self.bootstrap(7)
         # £6m to £10m earned 3 to 5 per 90. £11m and £12m have no usable
         # season: they are left out of the fit, and the centre is theirs.
-        pasts = {pid: past(minutes=2700, total_points=int(30 * (3 + (pid - 1) * 0.5)))
-                 for pid in range(1, 6)}
+        pasts = {
+            pid: past(minutes=2700, total_points=int(30 * (3 + (pid - 1) * 0.5)))
+            for pid in range(1, 6)
+        }
         pasts[6] = past(minutes=900, total_points=0)
         slopes, centres = candidates.price_fit(bootstrap, pasts)
         self.assertAlmostEqual(slopes["MID"][0], 0.5)
@@ -104,43 +119,52 @@ class TestPricePrior(unittest.TestCase):
 
 
 class TestHook(unittest.TestCase):
-
     def test_not_called_for_a_player_with_a_usable_last_season(self):
         league = League()
-        league.pasts[1] = past(goals_scored=20, expected_goals="18.0",
-                               expected_assists="4.0")
+        league.pasts[1] = past(goals_scored=20, expected_goals="18.0", expected_assists="4.0")
         called = []
-        league.predict(SOFT, positional_prior=lambda pl, pos, pr, m, _: (
-            called.append(pl["id"]), (pr, m))[1])
+        league.predict(
+            SOFT, positional_prior=lambda pl, pos, pr, m, _: (called.append(pl["id"]), (pr, m))[1]
+        )
         self.assertNotIn(1, called)
         self.assertIn(3, called)
 
     def test_a_dearer_squad_player_is_predicted_higher(self):
         league = League()
-        cheap = league.predict(SOFT, positional_prior=candidates.price_prior(
-            {"FWD": (1.0, 0.5, 0.0)}, {"FWD": 7.0}, 270))
-        league.elements = [dict(e, now_cost=90) if e["id"] == 3 else e
-                           for e in league.elements]
-        dear = league.predict(SOFT, positional_prior=candidates.price_prior(
-            {"FWD": (1.0, 0.5, 0.0)}, {"FWD": 7.0}, 270))
+        cheap = league.predict(
+            SOFT,
+            positional_prior=candidates.price_prior({"FWD": (1.0, 0.5, 0.0)}, {"FWD": 7.0}, 270),
+        )
+        league.elements = [dict(e, now_cost=90) if e["id"] == 3 else e for e in league.elements]
+        dear = league.predict(
+            SOFT,
+            positional_prior=candidates.price_prior({"FWD": (1.0, 0.5, 0.0)}, {"FWD": 7.0}, 270),
+        )
         self.assertGreater(dear[3]["predicted_points"], cheap[3]["predicted_points"])
 
 
 class TestControl(unittest.TestCase):
-
     def test_moves_only_players_on_the_positional_prior(self):
         """flat-prior-weight reweights the flat prior and touches nothing else."""
         league = League()
         league.pasts[1] = past(goals_scored=20, expected_goals="18.0", expected_assists="4.0")
         usable, _ = usable_rounds(EVENTS, 4)
-        fx = league.history_fixtures + [{"id": 40, "event": 4, "team_h": 1, "team_a": 3},
-                                        {"id": 41, "event": 4, "team_h": 2, "team_a": 4}]
-        control = {r["player_id"]: r for r in candidates.flat_prior_rows(
-            league.bootstrap(), fx, league.histories, 4, league.pasts,
-            price_prior_minutes=3600)}
-        v2 = {r["player_id"]: r for r in candidates.fixture_rows(
-            league.bootstrap(), fx, league.histories, league.pasts, 4, usable,
-            goalkeeping=True)}
+        fx = league.history_fixtures + [
+            {"id": 40, "event": 4, "team_h": 1, "team_a": 3},
+            {"id": 41, "event": 4, "team_h": 2, "team_a": 4},
+        ]
+        control = {
+            r["player_id"]: r
+            for r in candidates.flat_prior_rows(
+                league.bootstrap(), fx, league.histories, 4, league.pasts, price_prior_minutes=3600
+            )
+        }
+        v2 = {
+            r["player_id"]: r
+            for r in candidates.fixture_rows(
+                league.bootstrap(), fx, league.histories, league.pasts, 4, usable, goalkeeping=True
+            )
+        }
         self.assertEqual(control[1], v2[1])
         self.assertNotEqual(control[3], v2[3])
 

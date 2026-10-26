@@ -47,22 +47,30 @@ def at(hours):
 def bootstrap(gameweek, hours_away, earlier=None):
     """GW `gameweek` is next, `hours_away` from NOW. `earlier` maps past GWs to deadlines."""
     earlier = earlier or {gameweek - 1: datetime(2026, 10, 23, 17, 30, tzinfo=UTC)}
-    events = [{"id": gw, "deadline_time": d.strftime(STAMP), "is_next": False}
-              for gw, d in sorted(earlier.items())]
-    events.append({"id": gameweek, "deadline_time": at(hours_away).strftime(STAMP),
-                   "is_next": True})
+    events = [
+        {"id": gw, "deadline_time": d.strftime(STAMP), "is_next": False}
+        for gw, d in sorted(earlier.items())
+    ]
+    events.append(
+        {"id": gameweek, "deadline_time": at(hours_away).strftime(STAMP), "is_next": True}
+    )
     return {"events": events}
 
 
 def pr(number, *paths, state="OPEN", branch="some-branch"):
     """A PR as `gh pr list --state all --json number,state,headRefName,files` lists it."""
-    return {"number": number, "state": state, "headRefName": branch,
-            "files": [{"path": p, "additions": 1, "deletions": 0} for p in paths]}
+    return {
+        "number": number,
+        "state": state,
+        "headRefName": branch,
+        "files": [{"path": p, "additions": 1, "deletions": 0} for p in paths],
+    }
 
 
 def write_entry(directory, name, deadline):
     (Path(directory) / name).write_text(
-        "gameweek,player_id,deadline_utc\n9,1," + deadline.strftime(STAMP) + "\n")
+        "gameweek,player_id,deadline_utc\n9,1," + deadline.strftime(STAMP) + "\n"
+    )
 
 
 class LogDir(unittest.TestCase):
@@ -76,12 +84,13 @@ class LogDir(unittest.TestCase):
 
 
 class TestWindow(LogDir):
-
     def test_acts_inside_the_window(self):
         out = self.decide(hours=6)
         self.assertEqual(out["action"], entry_bot.ACT)
-        self.assertEqual((out["gameweek"], out["deadline"], out["season"], out["branch"]),
-                         (9, "2026-10-31T05:00:00Z", SEASON, BOT))
+        self.assertEqual(
+            (out["gameweek"], out["deadline"], out["season"], out["branch"]),
+            (9, "2026-10-31T05:00:00Z", SEASON, BOT),
+        )
         self.assertIn("GW09", out["why"])
 
     def test_the_window_edge_is_inside(self):
@@ -110,8 +119,9 @@ class TestWindow(LogDir):
         self.assertEqual(self.decide(hours=-1, ignore_window=True)["action"], entry_bot.SKIP)
 
     def test_no_next_gameweek_skips(self):
-        season_over = {"events": [{"id": 38, "deadline_time": "2027-05-23T13:30:00Z",
-                                   "is_next": False}]}
+        season_over = {
+            "events": [{"id": 38, "deadline_time": "2027-05-23T13:30:00Z", "is_next": False}]
+        }
         out = self.decide(boot=season_over)
         self.assertEqual((out["action"], out["gameweek"]), (entry_bot.SKIP, None))
 
@@ -121,15 +131,14 @@ class TestWindow(LogDir):
         self.assertIn("malformed", out["why"])
 
     def test_the_season_is_the_deadlines(self):
-        out = self.decide(boot={"events": [
-            {"id": 30, "deadline_time": "2027-03-13T13:30:00Z", "is_next": True}]},
-            ignore_window=True)
-        self.assertEqual((out["season"], out["branch"]),
-                         ("2026-27", "entry-bot/2026-27-gw30"))
+        out = self.decide(
+            boot={"events": [{"id": 30, "deadline_time": "2027-03-13T13:30:00Z", "is_next": True}]},
+            ignore_window=True,
+        )
+        self.assertEqual((out["season"], out["branch"]), ("2026-27", "entry-bot/2026-27-gw30"))
 
 
 class TestNoDuplicates(LogDir):
-
     def test_an_entry_on_main_skips(self):
         write_entry(self.log, "gw09_baseline-v1.csv", at(6))
         out = self.decide()
@@ -160,8 +169,9 @@ class TestNoDuplicates(LogDir):
         self.assertEqual(self.decide()["action"], entry_bot.FAIL)
 
     def test_an_open_pr_from_this_workflow_skips(self):
-        prs = [pr(80, "predictions/gw09_baseline-v1.csv", "reports/gw09_baseline-v1.md",
-                  branch=BOT)]
+        prs = [
+            pr(80, "predictions/gw09_baseline-v1.csv", "reports/gw09_baseline-v1.md", branch=BOT)
+        ]
         out = self.decide(prs=prs, branches=["main", BOT])
         self.assertEqual(out["action"], entry_bot.SKIP)
         self.assertIn("#80", out["why"])
@@ -173,20 +183,30 @@ class TestNoDuplicates(LogDir):
         self.assertIn("#81", out["why"])
 
     def test_an_open_pr_for_another_gameweek_does_not_count(self):
-        self.assertEqual(self.decide(prs=[pr(82, "predictions/gw10_baseline-v1.csv")])
-                         ["action"], entry_bot.ACT)
+        self.assertEqual(
+            self.decide(prs=[pr(82, "predictions/gw10_baseline-v1.csv")])["action"], entry_bot.ACT
+        )
 
     def test_closed_and_merged_prs_do_not_count_as_pending(self):
-        prs = [pr(83, "predictions/gw09_baseline-v1.csv", state="CLOSED"),
-               pr(84, "predictions/gw09_baseline-v1.csv", state="MERGED")]
+        prs = [
+            pr(83, "predictions/gw09_baseline-v1.csv", state="CLOSED"),
+            pr(84, "predictions/gw09_baseline-v1.csv", state="MERGED"),
+        ]
         self.assertEqual(self.decide(prs=prs)["action"], entry_bot.ACT)
 
     def test_only_a_file_directly_in_predictions_is_an_entry(self):
         """tests/fixtures/predictions/ is not the log, and must not suppress the entry."""
-        prs = [pr(85, "reports/gw09_baseline-v1.md", "scratch/gw09_baseline-v1.csv",
-                  "tests/fixtures/predictions/gw09_baseline-v1.csv",
-                  "scratch/predictions/gw09_baseline-v1.csv",
-                  "predictions/gw9_baseline-v1.csv", "predictions/gw09_base_line.csv")]
+        prs = [
+            pr(
+                85,
+                "reports/gw09_baseline-v1.md",
+                "scratch/gw09_baseline-v1.csv",
+                "tests/fixtures/predictions/gw09_baseline-v1.csv",
+                "scratch/predictions/gw09_baseline-v1.csv",
+                "predictions/gw9_baseline-v1.csv",
+                "predictions/gw09_base_line.csv",
+            )
+        ]
         self.assertEqual(self.decide(prs=prs)["action"], entry_bot.ACT)
 
     def test_duplicates_are_checked_even_outside_the_window(self):
@@ -195,7 +215,6 @@ class TestNoDuplicates(LogDir):
 
 
 class TestBranches(LogDir):
-
     def test_own_branch_with_no_pr_resumes(self):
         out = self.decide(branches=["main", BOT])
         self.assertEqual(out["action"], entry_bot.RESUME)
@@ -215,13 +234,13 @@ class TestBranches(LogDir):
 
     def test_own_branch_with_an_open_pr_adding_no_entry_fails(self):
         prs = [pr(88, "README.md", branch=BOT)]
-        self.assertEqual(self.decide(prs=prs, branches=["main", BOT])["action"],
-                         entry_bot.FAIL)
+        self.assertEqual(self.decide(prs=prs, branches=["main", BOT])["action"], entry_bot.FAIL)
 
     def test_last_seasons_own_branch_does_not_count(self):
         """Branch names carry the season, so last season's gw09 cannot block this one."""
-        self.assertEqual(self.decide(branches=["main", "entry-bot/2025-26-gw09"])["action"],
-                         entry_bot.ACT)
+        self.assertEqual(
+            self.decide(branches=["main", "entry-bot/2025-26-gw09"])["action"], entry_bot.ACT
+        )
 
     def test_a_hand_branch_with_no_pr_fails_inside_the_window(self):
         out = self.decide(branches=["main", "predict/gw09"])
@@ -230,21 +249,25 @@ class TestBranches(LogDir):
 
     def test_a_hand_branch_with_no_pr_does_not_fail_days_out(self):
         """Pushed on a Tuesday before its PR: not worth an hourly email for four days."""
-        self.assertEqual(self.decide(hours=96, branches=["main", "predict/gw09"])["action"],
-                         entry_bot.SKIP)
+        self.assertEqual(
+            self.decide(hours=96, branches=["main", "predict/gw09"])["action"], entry_bot.SKIP
+        )
 
     def test_a_hand_branch_with_no_pr_does_not_fail_after_the_deadline(self):
-        self.assertEqual(self.decide(hours=-3, branches=["main", "predict/gw09"])["action"],
-                         entry_bot.SKIP)
+        self.assertEqual(
+            self.decide(hours=-3, branches=["main", "predict/gw09"])["action"], entry_bot.SKIP
+        )
 
     def test_a_hand_branch_with_any_past_pr_is_history(self):
         """Branches are kept: last season's predict/gw09, merged, must not block this one."""
         for state in ("MERGED", "CLOSED"):
             with self.subTest(state=state):
-                prs = [pr(89, "predictions/gw09_baseline-v1.csv", state=state,
-                          branch="predict/gw09")]
-                self.assertEqual(self.decide(prs=prs, branches=["main", "predict/gw09"])
-                                 ["action"], entry_bot.ACT)
+                prs = [
+                    pr(89, "predictions/gw09_baseline-v1.csv", state=state, branch="predict/gw09")
+                ]
+                self.assertEqual(
+                    self.decide(prs=prs, branches=["main", "predict/gw09"])["action"], entry_bot.ACT
+                )
 
     def test_other_gameweeks_branches_do_not_count(self):
         branches = ["main", "predict/gw04", "predict/gw08", f"entry-bot/{SEASON}-gw08"]
@@ -252,7 +275,6 @@ class TestBranches(LogDir):
 
 
 class TestLatePrs(LogDir):
-
     def test_an_open_pr_for_a_passed_deadline_is_late(self):
         prs = [pr(90, "predictions/gw08_baseline-v1.csv")]
         self.assertEqual(self.decide(hours=48, prs=prs)["late"], [(90, 8)])
@@ -267,9 +289,11 @@ class TestLatePrs(LogDir):
         self.assertEqual(self.decide(prs=prs)["late"], [])
 
     def test_closed_merged_and_non_log_prs_are_not_late(self):
-        prs = [pr(92, "predictions/gw08_baseline-v1.csv", state="MERGED"),
-               pr(93, "predictions/gw08_baseline-v1.csv", state="CLOSED"),
-               pr(94, "reports/gw08_baseline-v1.md")]
+        prs = [
+            pr(92, "predictions/gw08_baseline-v1.csv", state="MERGED"),
+            pr(93, "predictions/gw08_baseline-v1.csv", state="CLOSED"),
+            pr(94, "reports/gw08_baseline-v1.md"),
+        ]
         self.assertEqual(self.decide(prs=prs)["late"], [])
 
     def test_a_gameweek_bootstrap_does_not_know_is_not_late(self):
@@ -295,8 +319,10 @@ class TestDecideCommand(unittest.TestCase):
         self.branches.write_text("main\npredict/gw08\n")
         self.summary = self.dir / "summary.md"
         self.outputs = self.dir / "outputs"
-        patcher = mock.patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(self.summary),
-                                               "GITHUB_OUTPUT": str(self.outputs)})
+        patcher = mock.patch.dict(
+            os.environ,
+            {"GITHUB_STEP_SUMMARY": str(self.summary), "GITHUB_OUTPUT": str(self.outputs)},
+        )
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -304,8 +330,16 @@ class TestDecideCommand(unittest.TestCase):
         shutil.rmtree(self.dir, ignore_errors=True)
 
     def invoke(self, *extra):
-        argv = ["decide", "--predictions", str(self.predictions), "--prs", str(self.prs),
-                "--branches", str(self.branches), *extra]
+        argv = [
+            "decide",
+            "--predictions",
+            str(self.predictions),
+            "--prs",
+            str(self.prs),
+            "--branches",
+            str(self.branches),
+            *extra,
+        ]
         out = io.StringIO()
         with redirect_stdout(out), mock.patch.object(entry_bot, "datetime", FrozenTime):
             code = entry_bot.cli(argv)
@@ -317,9 +351,17 @@ class TestDecideCommand(unittest.TestCase):
     def test_acting_writes_the_outputs_the_workflow_reads(self):
         code, _ = self.invoke("--fake-deadline-hours", "6", "--fake-gameweek", "9")
         self.assertEqual(code, 0)
-        self.assertEqual(self.outputs_written(), {
-            "action": "act", "gameweek": "9", "deadline": "2026-10-31T05:00:00Z",
-            "season": SEASON, "branch": BOT, "late": ""})
+        self.assertEqual(
+            self.outputs_written(),
+            {
+                "action": "act",
+                "gameweek": "9",
+                "deadline": "2026-10-31T05:00:00Z",
+                "season": SEASON,
+                "branch": BOT,
+                "late": "",
+            },
+        )
         self.assertIn("ACT", self.summary.read_text())
 
     def test_skipping_writes_action_skip(self):
@@ -347,8 +389,9 @@ class TestDecideCommand(unittest.TestCase):
 
     def test_a_list_as_long_as_the_limit_fails(self):
         """A truncated list could hide the PR that already adds this entry."""
-        self.prs.write_text(json.dumps([pr(n, "README.md", state="MERGED")
-                                        for n in range(entry_bot.PR_LIMIT)]))
+        self.prs.write_text(
+            json.dumps([pr(n, "README.md", state="MERGED") for n in range(entry_bot.PR_LIMIT)])
+        )
         code, out = self.invoke("--fake-deadline-hours", "6", "--fake-gameweek", "9")
         self.assertEqual(code, 1)
         self.assertIn("truncated", out)
@@ -361,8 +404,7 @@ class TestDecideCommand(unittest.TestCase):
 
     def test_late_prs_are_written_out(self):
         self.prs.write_text(json.dumps([pr(97, "predictions/gw08_baseline-v1.csv")]))
-        with mock.patch.object(check_deadline, "get",
-                               return_value=bootstrap(9, 48)):
+        with mock.patch.object(check_deadline, "get", return_value=bootstrap(9, 48)):
             code, out = self.invoke()
         self.assertEqual(code, 0)
         self.assertEqual(self.outputs_written()["late"], "97")
@@ -378,8 +420,17 @@ class TestDecideCommand(unittest.TestCase):
     def test_fake_flags_go_together(self):
         with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", io.StringIO()):
             with self.assertRaises(SystemExit):
-                entry_bot.cli(["decide", "--prs", str(self.prs), "--branches",
-                               str(self.branches), "--fake-deadline-hours", "6"])
+                entry_bot.cli(
+                    [
+                        "decide",
+                        "--prs",
+                        str(self.prs),
+                        "--branches",
+                        str(self.branches),
+                        "--fake-deadline-hours",
+                        "6",
+                    ]
+                )
 
 
 class FrozenTime(datetime):
@@ -391,7 +442,6 @@ class FrozenTime(datetime):
 
 
 class TestCheckSnapshot(fixtures.TempCwd):
-
     def setUp(self):
         super().setUp()
         self.id = "20261030T225500Z"
@@ -422,90 +472,140 @@ class TestCheckSnapshot(fixtures.TempCwd):
         self.assertIn("cannot be predicted from", self.problem("20261030T225900Z"))
 
     def test_the_command(self):
-        with redirect_stdout(io.StringIO()) as out, \
-                mock.patch.object(entry_bot, "datetime", FrozenTime):
+        with (
+            redirect_stdout(io.StringIO()) as out,
+            mock.patch.object(entry_bot, "datetime", FrozenTime),
+        ):
             code = entry_bot.cli(["check-snapshot", "--snapshot", self.id, "--gameweek", "9"])
         self.assertEqual(code, 0, out.getvalue())
 
 
 class TestCheckChanges(unittest.TestCase):
-
     def problems(self, *lines, gameweek=9):
         return entry_bot.unexpected_changes(lines, gameweek)
 
     def test_entries_with_their_digests_pass(self):
-        self.assertEqual(self.problems(
-            "A\tpredictions/gw09_baseline-v1.csv", "A\treports/gw09_baseline-v1.md",
-            "A\tpredictions/gw09_form-fixture-v1.csv", "A\treports/gw09_form-fixture-v1.md",
-            ""), [])
+        self.assertEqual(
+            self.problems(
+                "A\tpredictions/gw09_baseline-v1.csv",
+                "A\treports/gw09_baseline-v1.md",
+                "A\tpredictions/gw09_form-fixture-v1.csv",
+                "A\treports/gw09_form-fixture-v1.md",
+                "",
+            ),
+            [],
+        )
 
     def test_a_changed_committed_entry_is_refused(self):
         """Rule 1: an earlier entry modified alongside is never part of an entry PR."""
-        found = self.problems("A\tpredictions/gw09_baseline-v1.csv",
-                              "A\treports/gw09_baseline-v1.md",
-                              "M\tpredictions/gw08_baseline-v1.csv")
+        found = self.problems(
+            "A\tpredictions/gw09_baseline-v1.csv",
+            "A\treports/gw09_baseline-v1.md",
+            "M\tpredictions/gw08_baseline-v1.csv",
+        )
         self.assertTrue(any("'M'" in p for p in found))
 
     def test_deletions_and_renames_are_refused(self):
-        for line in ("D\tpredictions/gw08_baseline-v1.csv",
-                     "R100\tpredictions/gw08_a.csv\tpredictions/gw09_a.csv"):
+        for line in (
+            "D\tpredictions/gw08_baseline-v1.csv",
+            "R100\tpredictions/gw08_a.csv\tpredictions/gw09_a.csv",
+        ):
             with self.subTest(line=line):
-                self.assertTrue(self.problems("A\tpredictions/gw09_baseline-v1.csv",
-                                              "A\treports/gw09_baseline-v1.md", line))
+                self.assertTrue(
+                    self.problems(
+                        "A\tpredictions/gw09_baseline-v1.csv",
+                        "A\treports/gw09_baseline-v1.md",
+                        line,
+                    )
+                )
 
     def test_another_gameweeks_entry_is_refused(self):
-        self.assertTrue(self.problems("A\tpredictions/gw09_baseline-v1.csv",
-                                      "A\treports/gw09_baseline-v1.md",
-                                      "A\tpredictions/gw10_baseline-v1.csv"))
+        self.assertTrue(
+            self.problems(
+                "A\tpredictions/gw09_baseline-v1.csv",
+                "A\treports/gw09_baseline-v1.md",
+                "A\tpredictions/gw10_baseline-v1.csv",
+            )
+        )
 
     def test_anything_outside_the_entry_is_refused(self):
-        for path in ("scores/cumulative.json", "fpl/log/entry.py", ".github/workflows/ci.yml",
-                     "predictions/gw09_baseline-v1.csv.tmp", "predictions/sub/gw09_x.csv",
-                     "data/raw/LATEST"):
+        for path in (
+            "scores/cumulative.json",
+            "fpl/log/entry.py",
+            ".github/workflows/ci.yml",
+            "predictions/gw09_baseline-v1.csv.tmp",
+            "predictions/sub/gw09_x.csv",
+            "data/raw/LATEST",
+        ):
             with self.subTest(path=path):
-                self.assertTrue(self.problems("A\tpredictions/gw09_baseline-v1.csv",
-                                              "A\treports/gw09_baseline-v1.md", f"A\t{path}"))
+                self.assertTrue(
+                    self.problems(
+                        "A\tpredictions/gw09_baseline-v1.csv",
+                        "A\treports/gw09_baseline-v1.md",
+                        f"A\t{path}",
+                    )
+                )
 
     def test_no_entry_at_all_is_refused(self):
         self.assertIn("no predictions/gw09_*.csv among the changes", self.problems())
 
     def test_an_entry_without_its_digest_is_refused(self):
-        found = self.problems("A\tpredictions/gw09_baseline-v1.csv",
-                              "A\tpredictions/gw09_form-fixture-v1.csv",
-                              "A\treports/gw09_baseline-v1.md")
-        self.assertEqual(found, ["gw09_form-fixture-v1.csv has no "
-                                 "reports/gw09_form-fixture-v1.md"])
+        found = self.problems(
+            "A\tpredictions/gw09_baseline-v1.csv",
+            "A\tpredictions/gw09_form-fixture-v1.csv",
+            "A\treports/gw09_baseline-v1.md",
+        )
+        self.assertEqual(found, ["gw09_form-fixture-v1.csv has no reports/gw09_form-fixture-v1.md"])
 
     def test_a_digest_without_its_entry_is_refused(self):
-        self.assertTrue(self.problems("A\tpredictions/gw09_baseline-v1.csv",
-                                      "A\treports/gw09_baseline-v1.md",
-                                      "A\treports/gw09_other-v1.md"))
+        self.assertTrue(
+            self.problems(
+                "A\tpredictions/gw09_baseline-v1.csv",
+                "A\treports/gw09_baseline-v1.md",
+                "A\treports/gw09_other-v1.md",
+            )
+        )
 
     def test_the_command_reads_stdin(self):
-        with mock.patch("sys.stdin", io.StringIO("A\tscores/x.json\n")), \
-                redirect_stdout(io.StringIO()) as out:
+        with (
+            mock.patch("sys.stdin", io.StringIO("A\tscores/x.json\n")),
+            redirect_stdout(io.StringIO()) as out,
+        ):
             code = entry_bot.cli(["check-changes", "--gameweek", "9"])
         self.assertEqual(code, 1)
         self.assertIn("UNEXPECTED", out.getvalue())
 
 
 class TestCommitMessageAndTrailers(unittest.TestCase):
-
     def message(self, models=("baseline-v1", "form-fixture-v1")):
-        return entry_bot.commit_message(9, "2026-10-31T11:00:00Z", "20261030T230000Z",
-                                        "snapshot-20261030T230000Z", SHA, list(models))
+        return entry_bot.commit_message(
+            9,
+            "2026-10-31T11:00:00Z",
+            "20261030T230000Z",
+            "snapshot-20261030T230000Z",
+            SHA,
+            list(models),
+        )
 
     def test_the_subject_names_the_models(self):
-        self.assertTrue(self.message().startswith(
-            "Log GW9 predictions: baseline-v1 and form-fixture-v1, from one snapshot\n"))
+        self.assertTrue(
+            self.message().startswith(
+                "Log GW9 predictions: baseline-v1 and form-fixture-v1, from one snapshot\n"
+            )
+        )
         self.assertIn("a, b and c,", self.message(["a", "b", "c"]))
         self.assertIn("predictions: a, from", self.message(["a"]))
 
     def test_trailers_round_trip(self):
         found = entry_bot.read_trailers(self.message())
-        self.assertEqual(found, {"Entry-Made-By": "entry-automation",
-                                 "Snapshot-Release": "snapshot-20261030T230000Z",
-                                 "Snapshot-SHA256": SHA})
+        self.assertEqual(
+            found,
+            {
+                "Entry-Made-By": "entry-automation",
+                "Snapshot-Release": "snapshot-20261030T230000Z",
+                "Snapshot-SHA256": SHA,
+            },
+        )
 
     def test_a_commit_not_made_by_the_workflow_is_refused(self):
         """A person's commit on the bot branch is not resumed as if it were the bot's."""
@@ -515,10 +615,12 @@ class TestCommitMessageAndTrailers(unittest.TestCase):
             entry_bot.read_trailers("Log GW9 predictions\n")
 
     def test_missing_or_malformed_snapshot_trailers_are_refused(self):
-        for old, new in (("Snapshot-SHA256: " + SHA, ""),
-                         ("Snapshot-Release: snapshot-20261030T230000Z", ""),
-                         (SHA, "not-a-sha"),
-                         ("snapshot-20261030T230000Z\n", "snapshot-../x\n")):
+        for old, new in (
+            ("Snapshot-SHA256: " + SHA, ""),
+            ("Snapshot-Release: snapshot-20261030T230000Z", ""),
+            (SHA, "not-a-sha"),
+            ("snapshot-20261030T230000Z\n", "snapshot-../x\n"),
+        ):
             with self.subTest(old=old):
                 with self.assertRaises(ValueError):
                     entry_bot.read_trailers(self.message().replace(old, new))
@@ -526,40 +628,61 @@ class TestCommitMessageAndTrailers(unittest.TestCase):
     def test_the_read_trailers_command_writes_outputs(self):
         outputs = Path(tempfile.mkdtemp()) / "out"
         self.addCleanup(shutil.rmtree, outputs.parent)
-        with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(outputs)}), \
-                mock.patch("sys.stdin", io.StringIO(self.message())), \
-                redirect_stdout(io.StringIO()):
+        with (
+            mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(outputs)}),
+            mock.patch("sys.stdin", io.StringIO(self.message())),
+            redirect_stdout(io.StringIO()),
+        ):
             self.assertEqual(entry_bot.cli(["read-trailers"]), 0)
         self.assertIn("snapshot=20261030T230000Z", outputs.read_text())
         with mock.patch("sys.stdin", io.StringIO("nothing")), redirect_stdout(io.StringIO()):
             self.assertEqual(entry_bot.cli(["read-trailers"]), 1)
 
     def test_plain_prints_only_the_tag_and_sha(self):
-        with mock.patch("sys.stdin", io.StringIO(self.message())), \
-                redirect_stdout(io.StringIO()) as out:
+        with (
+            mock.patch("sys.stdin", io.StringIO(self.message())),
+            redirect_stdout(io.StringIO()) as out,
+        ):
             self.assertEqual(entry_bot.cli(["read-trailers", "--plain"]), 0)
         self.assertEqual(out.getvalue(), f"snapshot-20261030T230000Z {SHA}\n")
 
     def test_plain_prints_nothing_to_stdout_when_refused(self):
         """The shell reads stdout: a refusal must leave it empty, not half-filled."""
-        with mock.patch("sys.stdin", io.StringIO("nothing")), \
-                redirect_stdout(io.StringIO()) as out, mock.patch("sys.stderr", io.StringIO()):
+        with (
+            mock.patch("sys.stdin", io.StringIO("nothing")),
+            redirect_stdout(io.StringIO()) as out,
+            mock.patch("sys.stderr", io.StringIO()),
+        ):
             self.assertEqual(entry_bot.cli(["read-trailers", "--plain"]), 1)
         self.assertEqual(out.getvalue(), "")
 
 
 class TestPrBody(unittest.TestCase):
-
     def body(self, resumed=False):
-        return entry_bot.pr_body(9, "2026-10-31T11:00:00Z", "20261030T230000Z",
-                                 "snapshot-20261030T230000Z", SHA, "https://r", "https://run",
-                                 "## GW9 entry\n\nincluded: 1, 2\n", resumed)
+        return entry_bot.pr_body(
+            9,
+            "2026-10-31T11:00:00Z",
+            "20261030T230000Z",
+            "snapshot-20261030T230000Z",
+            SHA,
+            "https://r",
+            "https://run",
+            "## GW9 entry\n\nincluded: 1, 2\n",
+            resumed,
+        )
 
     def test_carries_the_deadline_snapshot_checklist_and_digest(self):
         body = self.body()
-        for text in ("Merge before `2026-10-31T11:00:00Z`", "`20261030T230000Z`",
-                     "[`snapshot-20261030T230000Z`](https://r)", SHA, "https://run",
-                     "- [ ] `ci` is green", "## GW9 entry", "included: 1, 2"):
+        for text in (
+            "Merge before `2026-10-31T11:00:00Z`",
+            "`20261030T230000Z`",
+            "[`snapshot-20261030T230000Z`](https://r)",
+            SHA,
+            "https://run",
+            "- [ ] `ci` is green",
+            "## GW9 entry",
+            "included: 1, 2",
+        ):
             self.assertIn(text, body)
         self.assertNotIn("later run", body)
 
@@ -571,12 +694,12 @@ class TestPrBody(unittest.TestCase):
 
 
 class TestBeforeDeadline(unittest.TestCase):
-
     def invoke(self, minutes_left, margin=2):
         deadline = (NOW + timedelta(minutes=minutes_left)).strftime(STAMP)
         with redirect_stdout(io.StringIO()), mock.patch.object(entry_bot, "datetime", FrozenTime):
-            return entry_bot.cli(["before-deadline", "--deadline", deadline,
-                                  "--margin-minutes", str(margin)])
+            return entry_bot.cli(
+                ["before-deadline", "--deadline", deadline, "--margin-minutes", str(margin)]
+            )
 
     def test_well_before_passes(self):
         self.assertEqual(self.invoke(60), 0)
@@ -588,11 +711,12 @@ class TestBeforeDeadline(unittest.TestCase):
 
 
 class TestTokenExpiry(unittest.TestCase):
-
     def invoke(self, headers, fail_days=7):
-        with mock.patch("sys.stdin", io.StringIO(headers)), \
-                redirect_stdout(io.StringIO()) as out, \
-                mock.patch.object(entry_bot, "datetime", FrozenTime):
+        with (
+            mock.patch("sys.stdin", io.StringIO(headers)),
+            redirect_stdout(io.StringIO()) as out,
+            mock.patch.object(entry_bot, "datetime", FrozenTime),
+        ):
             code = entry_bot.cli(["token-expiry", "--fail-days", str(fail_days)])
         return code, out.getvalue()
 
@@ -645,6 +769,7 @@ class TestWorkflow(unittest.TestCase):
 
     def test_every_subcommand_it_calls_exists(self):
         import re
+
         called = set(re.findall(r"tools/entry_bot\.py ([a-z-]+)", self.WORKFLOW))
         self.assertTrue(called)
         with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", io.StringIO()):

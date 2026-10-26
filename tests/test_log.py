@@ -37,9 +37,16 @@ def rows(n=3):
     """Model-supplied rows, as predict_baseline builds them: no provenance."""
     return [
         {
-            "gameweek": 4, "player_id": i, "web_name": f"P{i}", "team": "ARS",
-            "position": "MID", "price": 5.0, "predicted_points": 1.0,
-            "expected_minutes": 90.0, "points_per_90": 1.0, "n_fixtures": 1,
+            "gameweek": 4,
+            "player_id": i,
+            "web_name": f"P{i}",
+            "team": "ARS",
+            "position": "MID",
+            "price": 5.0,
+            "predicted_points": 1.0,
+            "expected_minutes": 90.0,
+            "points_per_90": 1.0,
+            "n_fixtures": 1,
             "status": "a",
         }
         for i in range(n)
@@ -50,11 +57,14 @@ def stamped(n=3, **overrides):
     """Complete rows, as validate_rows sees them just before the write."""
     out = []
     for row in rows(n):
-        row.update({
-            "model_version": "baseline-v1", "snapshot_id": "20260907T141922Z",
-            "generated_at_utc": "2026-09-10T09:00:00Z",
-            "deadline_utc": "2026-09-12T12:30:00Z",
-        })
+        row.update(
+            {
+                "model_version": "baseline-v1",
+                "snapshot_id": "20260907T141922Z",
+                "generated_at_utc": "2026-09-10T09:00:00Z",
+                "deadline_utc": "2026-09-12T12:30:00Z",
+            }
+        )
         row.update(overrides)
         out.append(row)
     return out
@@ -72,8 +82,9 @@ class TestWriteEntry(unittest.TestCase):
         self.out = Path(tempfile.mkdtemp())
 
     def write(self, data):
-        return write_entry(data, self.out, 4, "baseline-v1", "20260907T141922Z",
-                           "2026-09-12T12:30:00Z")
+        return write_entry(
+            data, self.out, 4, "baseline-v1", "20260907T141922Z", "2026-09-12T12:30:00Z"
+        )
 
     def test_writes_the_declared_schema(self):
         path = self.write(rows())
@@ -123,8 +134,10 @@ class TestWriteEntry(unittest.TestCase):
         data[1]["web_name"] = Boom()
         with self.assertRaises(RuntimeError):
             self.write(data)
-        self.assertFalse((self.out / "gw04_baseline-v1.csv").exists(),
-                         "a partial entry was left at the final path")
+        self.assertFalse(
+            (self.out / "gw04_baseline-v1.csv").exists(),
+            "a partial entry was left at the final path",
+        )
 
     def test_failure_mid_write_leaves_no_temp_file(self):
         data = rows()
@@ -284,8 +297,7 @@ class TestSortOrderContract(unittest.TestCase):
 
 class TestParseEntryFilename(unittest.TestCase):
     def test_round_trips_a_valid_name(self):
-        self.assertEqual(parse_entry_filename("gw04_baseline-v1.csv"),
-                         (4, "baseline-v1"))
+        self.assertEqual(parse_entry_filename("gw04_baseline-v1.csv"), (4, "baseline-v1"))
 
     def test_round_trips_from_a_full_path(self):
         self.assertEqual(
@@ -309,8 +321,7 @@ class TestParseEntryFilename(unittest.TestCase):
 
     def test_matches_what_write_entry_produces(self):
         out = Path(tempfile.mkdtemp())
-        path = write_entry(rows(), out, 4, "baseline-v1", "snap",
-                           "2026-09-12T12:30:00Z")
+        path = write_entry(rows(), out, 4, "baseline-v1", "snap", "2026-09-12T12:30:00Z")
         self.assertEqual(parse_entry_filename(path), (4, "baseline-v1"))
 
 
@@ -318,8 +329,7 @@ class TestModelVersionAtWriteTime(unittest.TestCase):
     def test_refuses_an_underscore_in_the_model_version(self):
         out = Path(tempfile.mkdtemp())
         with self.assertRaises(SystemExit) as cm:
-            write_entry(rows(), out, 4, "baseline_v1", "snap",
-                        "2026-09-12T12:30:00Z")
+            write_entry(rows(), out, 4, "baseline_v1", "snap", "2026-09-12T12:30:00Z")
         self.assertIn("two readings", str(cm.exception))
         self.assertEqual(list(out.iterdir()), [])
 
@@ -354,24 +364,24 @@ class TestPostDeadlineGuard(TempCwd):
 
     def test_refuses_a_late_write_to_the_prediction_log(self):
         with self.assertRaises(SystemExit) as cm:
-            write_entry(rows(), "predictions", 4, "baseline-v1", "snap",
-                        self.PAST)
+            write_entry(rows(), "predictions", 4, "baseline-v1", "snap", self.PAST)
         self.assertIn("after the GW4 deadline", str(cm.exception))
-        self.assertFalse((self.tmp / "predictions").exists(),
-                         "a late run created predictions/ anyway")
+        self.assertFalse(
+            (self.tmp / "predictions").exists(), "a late run created predictions/ anyway"
+        )
 
     def test_warns_but_proceeds_for_an_exploratory_run(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            path = write_entry(rows(), "scratch", 4, "baseline-v1", "snap",
-                               self.PAST)
+            path = write_entry(rows(), "scratch", 4, "baseline-v1", "snap", self.PAST)
         self.assertIn("WARNING", out.getvalue())
         self.assertTrue(path.exists())
 
     def test_allows_a_write_before_the_deadline(self):
         ahead = datetime.now(UTC) + timedelta(days=1)
-        path = write_entry(rows(), "predictions", 4, "baseline-v1", "snap",
-                           ahead.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        path = write_entry(
+            rows(), "predictions", 4, "baseline-v1", "snap", ahead.strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
         self.assertTrue(path.exists())
 
     def test_refuses_a_malformed_deadline(self):
@@ -385,8 +395,7 @@ class TestWriteEntryValidates(unittest.TestCase):
         self.out = Path(tempfile.mkdtemp())
 
     def write(self, data):
-        return write_entry(data, self.out, 4, "baseline-v1", "snap",
-                           "2026-09-12T12:30:00Z")
+        return write_entry(data, self.out, 4, "baseline-v1", "snap", "2026-09-12T12:30:00Z")
 
     def test_refuses_a_malformed_entry_before_creating_the_file(self):
         bad = rows()
@@ -527,13 +536,11 @@ class TestLogDirectoryIsRecognisedFromAnywhere(TempCwd):
         (self.tmp / "sub").mkdir()
         os.chdir(self.tmp / "sub")
         with self.assertRaises(SystemExit):
-            write_entry(rows(), "../predictions", 4, "baseline-v1", "snap",
-                        self.PAST)
+            write_entry(rows(), "../predictions", 4, "baseline-v1", "snap", self.PAST)
 
     def test_scratch_is_still_only_advisory(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            path = write_entry(rows(), "scratch", 4, "baseline-v1", "snap",
-                               self.PAST)
+            path = write_entry(rows(), "scratch", 4, "baseline-v1", "snap", self.PAST)
         self.assertIn("WARNING", out.getvalue())
         self.assertTrue(path.exists())

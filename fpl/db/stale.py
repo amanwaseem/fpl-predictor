@@ -59,8 +59,7 @@ def _split(model):
 def _keyed(model, rows):
     """Rows as {key: every other column}. A column the row lacks is None, as loaded."""
     keys, values = _split(model)
-    return {tuple(r[c.name] for c in keys): tuple(r.get(c.name) for c in values)
-            for r in rows}
+    return {tuple(r[c.name] for c in keys): tuple(r.get(c.name) for c in values) for r in rows}
 
 
 def from_api(bootstrap, fixtures):
@@ -89,13 +88,15 @@ def from_database(connection, season):
     for table, model in TABLES.items():
         keys, values = _split(model)
         rows = connection.execute(select(*keys, *values).where(model.season == season))
-        found[table] = {tuple(r[:len(keys)]): tuple(r[len(keys):]) for r in rows}
+        found[table] = {tuple(r[: len(keys)]): tuple(r[len(keys) :]) for r in rows}
     # The latest spell is the current club: the load ends every spell at the
     # next one and gives the current club the last.
-    latest = (select(PlayerClub.element_id, PlayerClub.team_id)
-              .where(PlayerClub.season == season)
-              .order_by(PlayerClub.element_id, func.lower(PlayerClub.gameweeks).desc())
-              .distinct(PlayerClub.element_id))
+    latest = (
+        select(PlayerClub.element_id, PlayerClub.team_id)
+        .where(PlayerClub.season == season)
+        .order_by(PlayerClub.element_id, func.lower(PlayerClub.gameweeks).desc())
+        .distinct(PlayerClub.element_id)
+    )
     found["clubs"] = {(r[0],): (r[1],) for r in connection.execute(latest)}
     return found
 
@@ -126,11 +127,15 @@ def schema_problem(at, latest):
     except CommandError:
         known = False
     if at is None or known:
-        return (f"The database schema is at {at or 'nothing'}, and this code needs {latest}. "
-                "The deploy migrates it; loading now could fail part-way, so this waits "
-                "for the deploy rather than racing it. The next run loads.")
-    return (f"The database schema is at {at}, newer than this code knows ({latest}): main "
-            "has moved on since this run checked it out. The next run loads, with that code.")
+        return (
+            f"The database schema is at {at or 'nothing'}, and this code needs {latest}. "
+            "The deploy migrates it; loading now could fail part-way, so this waits "
+            "for the deploy rather than racing it. The next run loads."
+        )
+    return (
+        f"The database schema is at {at}, newer than this code knows ({latest}): main "
+        "has moved on since this run checked it out. The next run loads, with that code."
+    )
 
 
 def newest_snapshot():
@@ -139,8 +144,9 @@ def newest_snapshot():
     Not LATEST: a bootstrap-only fetch leaves that pointer alone, and the
     bootstrap-only one is the one to compare.
     """
-    complete = sorted(p for p in RAW.iterdir() if (p / "manifest.json").exists()) \
-        if RAW.is_dir() else []
+    complete = (
+        sorted(p for p in RAW.iterdir() if (p / "manifest.json").exists()) if RAW.is_dir() else []
+    )
     if not complete:
         raise SystemExit("No complete snapshot under data/raw/. Run: fpl-fetch --skip-players")
     return complete[-1]
@@ -171,8 +177,12 @@ def main(schema_only=False):
             bootstrap = json.loads((snap / "bootstrap.json").read_text())
             fixtures = json.loads((snap / "fixtures.json").read_text())
             season = season_of(bootstrap["events"])
-            loaded = connection.scalar(select(Snapshot.snapshot_id).where(
-                Snapshot.season == season).order_by(Snapshot.snapshot_id.desc()).limit(1))
+            loaded = connection.scalar(
+                select(Snapshot.snapshot_id)
+                .where(Snapshot.season == season)
+                .order_by(Snapshot.snapshot_id.desc())
+                .limit(1)
+            )
             if loaded is None:
                 found = [f"nothing is loaded for {season}"]
             else:
@@ -195,8 +205,11 @@ def main(schema_only=False):
 def cli(argv=None):
     """`fpl-stale`, or `python -m fpl.db.stale`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--schema-only", action="store_true",
-                    help="only check that the schema is at this code's head")
+    ap.add_argument(
+        "--schema-only",
+        action="store_true",
+        help="only check that the schema is at this code's head",
+    )
     args = ap.parse_args(argv)
     require_project_root()
     return main(args.schema_only)

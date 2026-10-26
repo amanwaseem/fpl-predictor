@@ -90,8 +90,7 @@ def next_deadline(bootstrap):
     try:
         deadline = datetime.strptime(event["deadline_time"], TIMESTAMP).replace(tzinfo=UTC)
     except (KeyError, TypeError, ValueError):
-        raise Malformed(
-            f"GW{gameweek} has deadline_time {event.get('deadline_time')!r}") from None
+        raise Malformed(f"GW{gameweek} has deadline_time {event.get('deadline_time')!r}") from None
     return gameweek, deadline
 
 
@@ -171,8 +170,11 @@ def prs_adding(gameweek, prs):
     for pr in prs:
         if pr.get("state", "OPEN") != "OPEN":
             continue
-        names = [Path(f["path"]).name for f in pr.get("files", [])
-                 if Path(f["path"]).parent == Path(LOG_DIR_NAME)]
+        names = [
+            Path(f["path"]).name
+            for f in pr.get("files", [])
+            if Path(f["path"]).parent == Path(LOG_DIR_NAME)
+        ]
         entries = entries_for(gameweek, names)
         if entries:
             found.append((pr["number"], entries))
@@ -219,8 +221,10 @@ def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS):
     try:
         upcoming = next_deadline(bootstrap)
     except Malformed as e:
-        return FAIL, (f"bootstrap-static is malformed ({e}). The API's schema may have "
-                      "changed; fpl-fetch is likely broken too. Check by hand.")
+        return FAIL, (
+            f"bootstrap-static is malformed ({e}). The API's schema may have "
+            "changed; fpl-fetch is likely broken too. Check by hand."
+        )
     if upcoming is None:
         return PASS, "No next gameweek in bootstrap-static: nothing to warn about."
     gameweek, deadline = upcoming
@@ -231,14 +235,16 @@ def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS):
 
     entries = classified["current"] + classified["moved"]
     if entries:
-        moved = (f" Made for a deadline FPL has since moved: {', '.join(classified['moved'])}."
-                 if classified["moved"] else "")
+        moved = (
+            f" Made for a deadline FPL has since moved: {', '.join(classified['moved'])}."
+            if classified["moved"]
+            else ""
+        )
         return PASS, f"{when}. Entry in predictions/: {', '.join(entries)}.{moved}"
 
     notes = ""
     if classified["other_season"]:
-        notes += (f" Not counted, made for another season: "
-                  f"{', '.join(classified['other_season'])}.")
+        notes += f" Not counted, made for another season: {', '.join(classified['other_season'])}."
     if classified["unreadable"]:
         notes += f" Not counted, no readable deadline_utc: {', '.join(classified['unreadable'])}."
     pending = prs_adding(gameweek, prs)
@@ -251,11 +257,15 @@ def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS):
         return PASS, f"{when}. No entry on main yet; over {alarm_hours}h. {status_line}{notes}"
     if pending:
         numbers = ", ".join(f"#{n}" for n, _ in pending)
-        return FAIL, (f"{when}, and main has no gw{gameweek:02d}_*.csv. {status_line} "
-                      f"Read and merge {numbers} before the deadline.{notes}")
-    return FAIL, (f"{when}, main has no gw{gameweek:02d}_*.csv, and no open PR adds one: "
-                  "the entry workflow has not made it. Make the entry by hand now: see "
-                  f"RUNBOOK.md. A missed deadline stays missed.{notes}")
+        return FAIL, (
+            f"{when}, and main has no gw{gameweek:02d}_*.csv. {status_line} "
+            f"Read and merge {numbers} before the deadline.{notes}"
+        )
+    return FAIL, (
+        f"{when}, main has no gw{gameweek:02d}_*.csv, and no open PR adds one: "
+        "the entry workflow has not made it. Make the entry by hand now: see "
+        f"RUNBOOK.md. A missed deadline stays missed.{notes}"
+    )
 
 
 def report(status, message, title="Deadline watchdog"):
@@ -272,32 +282,57 @@ def main(predictions_dir, prs_file=None, now=None, fake_hours=None, fake_gamewee
     now = now or datetime.now(UTC)
     bootstrap, unreadable = load_bootstrap(now, fake_hours, fake_gameweek)
     if unreadable:
-        report(PASS, f"Could not check: {unreadable}. "
-                     "Not a missed deadline, but check the next one by hand.")
+        report(
+            PASS,
+            f"Could not check: {unreadable}. "
+            "Not a missed deadline, but check the next one by hand.",
+        )
         return 0
     prs = load_prs(prs_file)
     status, message = check(
-        bootstrap, lambda gw, deadline: classify_entries(gw, deadline, predictions_dir),
-        prs, now)
+        bootstrap, lambda gw, deadline: classify_entries(gw, deadline, predictions_dir), prs, now
+    )
     report(status, message)
     return 0 if status == PASS else 1
 
 
 def cli(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--predictions", default=LOG_DIR_NAME, metavar="DIR",
-                    help=f"the log directory to look in (default: {LOG_DIR_NAME}/)")
-    ap.add_argument("--prs", default=None, metavar="FILE",
-                    help="gh pr list --state all --json number,state,headRefName,files")
-    ap.add_argument("--fake-deadline-hours", type=float, default=None, metavar="H",
-                    help="skip the API: pretend the next deadline is H hours away")
-    ap.add_argument("--fake-gameweek", type=int, default=None, metavar="N",
-                    help="the gameweek of the fake deadline (with --fake-deadline-hours)")
+    ap.add_argument(
+        "--predictions",
+        default=LOG_DIR_NAME,
+        metavar="DIR",
+        help=f"the log directory to look in (default: {LOG_DIR_NAME}/)",
+    )
+    ap.add_argument(
+        "--prs",
+        default=None,
+        metavar="FILE",
+        help="gh pr list --state all --json number,state,headRefName,files",
+    )
+    ap.add_argument(
+        "--fake-deadline-hours",
+        type=float,
+        default=None,
+        metavar="H",
+        help="skip the API: pretend the next deadline is H hours away",
+    )
+    ap.add_argument(
+        "--fake-gameweek",
+        type=int,
+        default=None,
+        metavar="N",
+        help="the gameweek of the fake deadline (with --fake-deadline-hours)",
+    )
     args = ap.parse_args(argv)
     if (args.fake_deadline_hours is None) != (args.fake_gameweek is None):
         ap.error("--fake-deadline-hours and --fake-gameweek go together.")
-    return main(args.predictions, args.prs, fake_hours=args.fake_deadline_hours,
-                fake_gameweek=args.fake_gameweek)
+    return main(
+        args.predictions,
+        args.prs,
+        fake_hours=args.fake_deadline_hours,
+        fake_gameweek=args.fake_gameweek,
+    )
 
 
 if __name__ == "__main__":

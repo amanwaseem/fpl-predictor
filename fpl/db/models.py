@@ -204,9 +204,7 @@ class PlayerFixtureStats(Base):
         ForeignKeyConstraint(
             ["season", "element_id"], ["season_players.season", "season_players.element_id"]
         ),
-        ForeignKeyConstraint(
-            ["season", "fixture_id"], ["fixtures.season", "fixtures.fixture_id"]
-        ),
+        ForeignKeyConstraint(["season", "fixture_id"], ["fixtures.season", "fixtures.fixture_id"]),
         CheckConstraint("minutes >= 0", name="minutes"),
         Index("ix_player_fixture_stats_fixture", "season", "fixture_id"),
         Index("ix_player_fixture_stats_snapshot", "snapshot_id"),
@@ -268,18 +266,14 @@ class Snapshot(Base):
     """A snapshot that has been loaded, with what its manifest says it holds."""
 
     __tablename__ = "snapshots"
-    __table_args__ = (
-        CheckConstraint(r"snapshot_id ~ '^\d{8}T\d{6}Z$'", name="format"),
-    )
+    __table_args__ = (CheckConstraint(r"snapshot_id ~ '^\d{8}T\d{6}Z$'", name="format"),)
 
     snapshot_id: Mapped[str] = mapped_column(Text, primary_key=True)
     season: Mapped[str] = mapped_column(ForeignKey("seasons.season"))
     completed_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     element_count: Mapped[int] = mapped_column(Integer)
     has_players: Mapped[bool] = mapped_column(Boolean)
-    live_gameweeks: Mapped[list[int]] = mapped_column(
-        ARRAY(SmallInteger), server_default="{}"
-    )
+    live_gameweeks: Mapped[list[int]] = mapped_column(ARRAY(SmallInteger), server_default="{}")
     loaded_at_utc: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -299,8 +293,9 @@ class PredictionEntry(Base):
     __tablename__ = "prediction_entries"
     __table_args__ = (
         CheckConstraint(r"snapshot_id ~ '^\d{8}T\d{6}Z$'", name="snapshot_id"),
-        CheckConstraint("model_version <> '' AND strpos(model_version, '_') = 0",
-                        name="model_version"),
+        CheckConstraint(
+            "model_version <> '' AND strpos(model_version, '_') = 0", name="model_version"
+        ),
         # An entry made after its deadline is not evidence of anything (SPEC 5).
         CheckConstraint("generated_at_utc < deadline_utc", name="before_deadline"),
     )
@@ -320,14 +315,18 @@ class Prediction(Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ["season", "gameweek", "model_version"],
-            ["prediction_entries.season", "prediction_entries.gameweek",
-             "prediction_entries.model_version"],
+            [
+                "prediction_entries.season",
+                "prediction_entries.gameweek",
+                "prediction_entries.model_version",
+            ],
             ondelete="CASCADE",
         ),
         CheckConstraint(one_of("position", POSITIONS), name="position"),
         CheckConstraint(one_of("status", STATUSES), name="status"),
-        CheckConstraint("price >= 0 AND expected_minutes >= 0 AND n_fixtures >= 0",
-                        name="non_negative"),
+        CheckConstraint(
+            "price >= 0 AND expected_minutes >= 0 AND n_fixtures >= 0", name="non_negative"
+        ),
         Index("ix_predictions_player", "season", "player_id"),
     )
 
@@ -360,8 +359,11 @@ class ScoreEntry(Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ["season", "gameweek", "model_version"],
-            ["prediction_entries.season", "prediction_entries.gameweek",
-             "prediction_entries.model_version"],
+            [
+                "prediction_entries.season",
+                "prediction_entries.gameweek",
+                "prediction_entries.model_version",
+            ],
             ondelete="CASCADE",
         ),
         CheckConstraint(r"actuals_snapshot_id ~ '^\d{8}T\d{6}Z$'", name="actuals_snapshot_id"),
@@ -422,8 +424,11 @@ class OptimiseResult(Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ["season", "gameweek", "model_version"],
-            ["prediction_entries.season", "prediction_entries.gameweek",
-             "prediction_entries.model_version"],
+            [
+                "prediction_entries.season",
+                "prediction_entries.gameweek",
+                "prediction_entries.model_version",
+            ],
             ondelete="CASCADE",
         ),
         CheckConstraint(r"request_hash ~ '^[0-9a-f]{64}$'", name="request_hash"),

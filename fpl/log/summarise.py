@@ -53,8 +53,7 @@ def _cell(value):
 
 
 def _table(headers, aligns, rows):
-    out = ["| " + " | ".join(headers) + " |",
-           "|" + "|".join(aligns) + "|"]
+    out = ["| " + " | ".join(headers) + " |", "|" + "|".join(aligns) + "|"]
     out += ["| " + " | ".join(_cell(c) for c in row) + " |" for row in rows]
     return "\n".join(out)
 
@@ -71,8 +70,7 @@ def read_entry(path):
     if not rows:
         raise SystemExit(f"{path} has no rows to summarise.")
     for row in rows:
-        for field in ("price", "predicted_points", "expected_minutes",
-                      "points_per_90"):
+        for field in ("price", "predicted_points", "expected_minutes", "points_per_90"):
             row[field] = float(row[field])
         row["n_fixtures"] = int(row["n_fixtures"])
     return rows
@@ -84,8 +82,7 @@ def summarise(rows):
     # that is not, so this changes nothing for the real case. It matters for an
     # exploratory run in scratch/, where nothing has checked the order and a
     # silently wrong "Top 20" would be worse than no digest at all.
-    rows = sorted(rows, key=lambda r: (-r["predicted_points"],
-                                       int(r["player_id"])))
+    rows = sorted(rows, key=lambda r: (-r["predicted_points"], int(r["player_id"])))
     first = rows[0]
     gameweek = first["gameweek"]
     scoring = [r for r in rows if r["predicted_points"] > 0]
@@ -111,52 +108,87 @@ def summarise(rows):
     ]
 
     top = rows[:TOP_N]
-    parts.append(_table(
-        ["#", "Player", "Team", "Pos", "£m", "Pred", "xMins"],
-        ["--:", "---", "---", "---", "--:", "--:", "--:"],
-        [[i, r["web_name"], r["team"], r["position"], f"{r['price']:.1f}",
-          f"{r['predicted_points']:.2f}", f"{r['expected_minutes']:.0f}"]
-         for i, r in enumerate(top, 1)],
-    ))
+    parts.append(
+        _table(
+            ["#", "Player", "Team", "Pos", "£m", "Pred", "xMins"],
+            ["--:", "---", "---", "---", "--:", "--:", "--:"],
+            [
+                [
+                    i,
+                    r["web_name"],
+                    r["team"],
+                    r["position"],
+                    f"{r['price']:.1f}",
+                    f"{r['predicted_points']:.2f}",
+                    f"{r['expected_minutes']:.0f}",
+                ]
+                for i, r in enumerate(top, 1)
+            ],
+        )
+    )
 
     parts += ["", "## Best in each position", ""]
     best = []
     for position in ("GKP", "DEF", "MID", "FWD"):
         pick = next((r for r in rows if r["position"] == position), None)
         if pick:
-            best.append([position, pick["web_name"], pick["team"],
-                         f"{pick['price']:.1f}",
-                         f"{pick['predicted_points']:.2f}"])
-    parts.append(_table(["Pos", "Player", "Team", "£m", "Pred"],
-                        ["---", "---", "---", "--:", "--:"], best))
+            best.append(
+                [
+                    position,
+                    pick["web_name"],
+                    pick["team"],
+                    f"{pick['price']:.1f}",
+                    f"{pick['predicted_points']:.2f}",
+                ]
+            )
+    parts.append(
+        _table(["Pos", "Player", "Team", "£m", "Pred"], ["---", "---", "---", "--:", "--:"], best)
+    )
 
     value = sorted(
         (r for r in rows if r["predicted_points"] >= VALUE_FLOOR),
         key=lambda r: (-(r["predicted_points"] / r["price"]), r["player_id"]),
     )[:VALUE_N]
     if value:
-        parts += ["", f"## Best value (predicted points per £m, "
-                      f"{VALUE_FLOOR:.1f}+ predicted)", ""]
-        parts.append(_table(
-            ["Player", "Team", "Pos", "£m", "Pred", "Per £m"],
-            ["---", "---", "---", "--:", "--:", "--:"],
-            [[r["web_name"], r["team"], r["position"], f"{r['price']:.1f}",
-              f"{r['predicted_points']:.2f}",
-              f"{r['predicted_points'] / r['price']:.2f}"] for r in value],
-        ))
+        parts += ["", f"## Best value (predicted points per £m, {VALUE_FLOOR:.1f}+ predicted)", ""]
+        parts.append(
+            _table(
+                ["Player", "Team", "Pos", "£m", "Pred", "Per £m"],
+                ["---", "---", "---", "--:", "--:", "--:"],
+                [
+                    [
+                        r["web_name"],
+                        r["team"],
+                        r["position"],
+                        f"{r['price']:.1f}",
+                        f"{r['predicted_points']:.2f}",
+                        f"{r['predicted_points'] / r['price']:.2f}",
+                    ]
+                    for r in value
+                ],
+            )
+        )
 
     counts = Counter(r["status"] for r in rows)
     parts += ["", "## Availability at the time of prediction", ""]
-    parts.append(_table(
-        ["Flag", "Meaning", "Players"], ["---", "---", "--:"],
-        [[f"`{flag}`", STATUS_MEANING.get(flag, "unknown"), counts[flag]]
-         for flag in sorted(counts, key=lambda f: -counts[f])],
-    ))
+    parts.append(
+        _table(
+            ["Flag", "Meaning", "Players"],
+            ["---", "---", "--:"],
+            [
+                [f"`{flag}`", STATUS_MEANING.get(flag, "unknown"), counts[flag]]
+                for flag in sorted(counts, key=lambda f: -counts[f])
+            ],
+        )
+    )
 
     if blanking:
         teams = ", ".join(sorted({r["team"] for r in blanking}))
-        parts += ["", f"{len(blanking)} players have no GW{gameweek} fixture "
-                      f"and are predicted zero: {teams}."]
+        parts += [
+            "",
+            f"{len(blanking)} players have no GW{gameweek} fixture "
+            f"and are predicted zero: {teams}.",
+        ]
 
     parts += [
         "",
@@ -195,12 +227,11 @@ def main(entry, out_dir=None):
 
 def cli(argv=None):
     """`fpl-summarise`, or `python -m fpl.log.summarise`."""
-    ap = argparse.ArgumentParser(
-        description="Write the readable digest of a prediction log entry."
-    )
+    ap = argparse.ArgumentParser(description="Write the readable digest of a prediction log entry.")
     ap.add_argument("entry", help="path to a predictions/gw<NN>_<model>.csv")
-    ap.add_argument("--out", default=None, metavar="DIR",
-                    help="write <entry>.md here instead of printing")
+    ap.add_argument(
+        "--out", default=None, metavar="DIR", help="write <entry>.md here instead of printing"
+    )
     args = ap.parse_args(argv)
     # It only reads the entry it is given, but --out reports/ from the wrong
     # directory would write a reports/ that is not the repository's.

@@ -20,27 +20,34 @@ from fpl import optimise
 
 CLUBS = ["ARS", "AVL", "BOU", "BRE", "BHA", "CHE", "CRY", "EVE", "FUL", "LIV", "MCI", "MUN"]
 QUOTA = optimise.SQUAD
-PROPERTIES = settings(max_examples=40, deadline=None,
-                      suppress_health_check=[HealthCheck.too_slow])
+PROPERTIES = settings(max_examples=40, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 
 
 @st.composite
 def pools(draw):
     players = []
-    for position, (low, high) in {"GKP": (2, 4), "DEF": (5, 9), "MID": (5, 9),
-                                  "FWD": (3, 6)}.items():
+    for position, (low, high) in {
+        "GKP": (2, 4),
+        "DEF": (5, 9),
+        "MID": (5, 9),
+        "FWD": (3, 6),
+    }.items():
         for _ in range(draw(st.integers(low, high))):
-            players.append({
-                "player_id": len(players) + 1,
-                "web_name": f"p{len(players) + 1}",
-                "team": draw(st.sampled_from(CLUBS)),
-                "position": position,
-                # Mostly cheap, as in FPL, so most pools have a squad within budget.
-                "price": draw(st.one_of(st.integers(40, 60), st.integers(40, 60),
-                                        st.integers(61, 130))) / 10,
-                "predicted_points": draw(st.integers(-100, 1200)) / 100,
-                "status": draw(st.sampled_from("aaaad")),
-            })
+            players.append(
+                {
+                    "player_id": len(players) + 1,
+                    "web_name": f"p{len(players) + 1}",
+                    "team": draw(st.sampled_from(CLUBS)),
+                    "position": position,
+                    # Mostly cheap, as in FPL, so most pools have a squad within budget.
+                    "price": draw(
+                        st.one_of(st.integers(40, 60), st.integers(40, 60), st.integers(61, 130))
+                    )
+                    / 10,
+                    "predicted_points": draw(st.integers(-100, 1200)) / 100,
+                    "status": draw(st.sampled_from("aaaad")),
+                }
+            )
     return players
 
 
@@ -57,16 +64,17 @@ def greedy(pool, budget=optimise.BUDGET):
     """Highest points first, wherever it still leaves room to fill the squad. Or None."""
     chosen = []
     for player in sorted(pool, key=lambda p: (-p["predicted_points"], p["player_id"])):
-        open_slots = {pos: QUOTA[pos] - sum(c["position"] == pos for c in chosen)
-                      for pos in QUOTA}
+        open_slots = {pos: QUOTA[pos] - sum(c["position"] == pos for c in chosen) for pos in QUOTA}
         if open_slots[player["position"]] == 0:
             continue
         if sum(c["team"] == player["team"] for c in chosen) >= optimise.MAX_PER_CLUB:
             continue
         open_slots[player["position"]] -= 1
         rest = [p for p in pool if p not in chosen and p is not player]
-        fill = sum(sum(sorted(p["price"] for p in rest if p["position"] == pos)[:n])
-                   for pos, n in open_slots.items())
+        fill = sum(
+            sum(sorted(p["price"] for p in rest if p["position"] == pos)[:n])
+            for pos, n in open_slots.items()
+        )
         if sum(c["price"] for c in chosen) + player["price"] + fill <= budget + 1e-9:
             chosen.append(player)
     return chosen if len(chosen) == 15 else None
@@ -77,7 +85,6 @@ def solvable(pool):
 
 
 class TestProperties(unittest.TestCase):
-
     @PROPERTIES
     @given(pools())
     def test_every_squad_returned_is_legal(self, pool):

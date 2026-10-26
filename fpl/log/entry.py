@@ -128,8 +128,18 @@ def digest(snapshot_id, target_gw, deadline, outputs):
         "Every model was run by `fpl-entry` from this one snapshot.",
     ]
     for model, (predicted, verified) in outputs.items():
-        lines += ["", f"### {model}", "", "```", predicted.strip(), "```",
-                  "", "```", verified.strip(), "```"]
+        lines += [
+            "",
+            f"### {model}",
+            "",
+            "```",
+            predicted.strip(),
+            "```",
+            "",
+            "```",
+            verified.strip(),
+            "```",
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -137,8 +147,9 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
     # Checked first: discovering it after the entries are written would leave
     # them in predictions/ with no digest for the PR.
     if digest_out is not None and not Path(digest_out).parent.is_dir():
-        raise SystemExit(f"--digest {digest_out}: {Path(digest_out).parent} does not "
-                         "exist. Nothing was run.")
+        raise SystemExit(
+            f"--digest {digest_out}: {Path(digest_out).parent} does not exist. Nothing was run."
+        )
 
     # Resolved once here, then passed to every model by id: each reads exactly
     # this snapshot, whatever LATEST says by the time it runs.
@@ -151,34 +162,42 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
     # a past gameweek gets replayed, and it should still say whether the real
     # run would be refused.
     names = [f"gw{target_gw:02d}_{m}.csv" for m, _ in models]
-    taken = [str(Path("predictions") / n) for n in names
-             if (Path("predictions") / n).exists()]
+    taken = [str(Path("predictions") / n) for n in names if (Path("predictions") / n).exists()]
     if taken:
-        refusal = (f"Already in the log: {', '.join(taken)}.\n"
-                   "fpl-entry writes every model or none. If a file there was "
-                   "never committed, it is from an earlier run that stopped: "
-                   "delete it and run again.")
+        refusal = (
+            f"Already in the log: {', '.join(taken)}.\n"
+            "fpl-entry writes every model or none. If a file there was "
+            "never committed, it is from an earlier run that stopped: "
+            "delete it and run again."
+        )
         if not dry_run:
             raise SystemExit(refusal + "\nNothing was run.")
         print(f"WARNING: the real run would refuse. {refusal}\n")
     if datetime.now(UTC) >= datetime.strptime(deadline, TIMESTAMP).replace(tzinfo=UTC):
         late = f"The GW{target_gw} deadline {deadline} has passed."
         if not dry_run:
-            raise SystemExit(late + " Nothing was run: an entry made now is not "
-                             "evidence of anything.")
+            raise SystemExit(
+                late + " Nothing was run: an entry made now is not evidence of anything."
+            )
         print(f"WARNING: {late} fpl-verify will refuse these entries.\n")
 
     # Its own directory per run, so the scratch runs never meet an earlier
     # run's files, which write_entry would refuse to overwrite.
     Path("scratch").mkdir(exist_ok=True)
-    run_dir = Path(tempfile.mkdtemp(
-        prefix=f"entry-gw{target_gw:02d}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-", dir="scratch"))
+    run_dir = Path(
+        tempfile.mkdtemp(
+            prefix=f"entry-gw{target_gw:02d}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-", dir="scratch"
+        )
+    )
     check_dir = run_dir / "check"
     # Not named predictions/ under scratch: log.write_entry treats any
     # directory of that name as the log, and would refuse a dry run past its
     # deadline.
-    log_dir, reports_dir = ((run_dir / "entry", run_dir / "reports") if dry_run
-                            else (Path("predictions"), Path("reports")))
+    log_dir, reports_dir = (
+        (run_dir / "entry", run_dir / "reports")
+        if dry_run
+        else (Path("predictions"), Path("reports"))
+    )
     entries = {m: log_dir / n for (m, _), n in zip(models, names, strict=True)}
 
     print(f"snapshot:  {snapshot_id}")
@@ -195,8 +214,7 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
         for model, predict in models:
             entry = entries[model]
             predicted = _run(model, "write", predict, None, log_dir, snapshot_id)
-            _run(model, "same as the scratch run", _same_as_scratch,
-                 entry, check_dir / entry.name)
+            _run(model, "same as the scratch run", _same_as_scratch, entry, check_dir / entry.name)
             verified = _run(model, "verify", verify_entry.main, entry)
             _run(model, "summarise", summarise.main, entry, reports_dir)
             reports.append(reports_dir / f"{entry.stem}.md")
@@ -207,9 +225,13 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
         # now are this run's.
         written = [str(p) for p in [*entries.values(), *reports] if p.exists()]
         if written and not dry_run:
-            print("Written by this run but not committed: " + ", ".join(written)
-                  + "\nDo not commit a partial set. Fix the cause, delete these, "
-                  "and run again.", file=sys.stderr)
+            print(
+                "Written by this run but not committed: "
+                + ", ".join(written)
+                + "\nDo not commit a partial set. Fix the cause, delete these, "
+                "and run again.",
+                file=sys.stderr,
+            )
         return 1
 
     text = digest(snapshot_id, target_gw, deadline, outputs)
@@ -232,16 +254,25 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
 def cli(argv=None):
     """`fpl-entry`, or `python -m fpl.log.entry`."""
     ap = argparse.ArgumentParser(
-        description="Write, verify and summarise every logged model's entry "
-                    "from one snapshot."
+        description="Write, verify and summarise every logged model's entry from one snapshot."
     )
-    ap.add_argument("--snapshot", default=None, metavar="ID",
-                    help="snapshot id under data/raw/ (default: LATEST)")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="write entries and reports under scratch/ instead of "
-                         "predictions/ and reports/")
-    ap.add_argument("--digest", default=None, metavar="PATH",
-                    help="also write the digest to PATH, on success only")
+    ap.add_argument(
+        "--snapshot",
+        default=None,
+        metavar="ID",
+        help="snapshot id under data/raw/ (default: LATEST)",
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="write entries and reports under scratch/ instead of predictions/ and reports/",
+    )
+    ap.add_argument(
+        "--digest",
+        default=None,
+        metavar="PATH",
+        help="also write the digest to PATH, on success only",
+    )
     args = ap.parse_args(argv)
     require_project_root()
     return main(args.snapshot, args.dry_run, digest_out=args.digest)

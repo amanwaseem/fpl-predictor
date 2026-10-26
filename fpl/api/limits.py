@@ -92,5 +92,8 @@ def solver_rate(request: Request):
     """A dependency for the solver routes: 429 with Retry-After once over the rate."""
     wait = solver_window.allow(client_of(request))
     if wait is not None:
-        raise HTTPException(429, "Too many optimiser requests; try again shortly.",
-                            headers={"Retry-After": str(max(1, int(wait + 0.999)))})
+        raise HTTPException(
+            429,
+            "Too many optimiser requests; try again shortly.",
+            headers={"Retry-After": str(max(1, int(wait + 0.999)))},
+        )

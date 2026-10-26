@@ -16,13 +16,22 @@ from fpl.db import migrate
 # is refused here as a 422 rather than reaching the database as a 500.
 # Examples are real values, so a client generated from the OpenAPI, or a
 # fuzzer reading it, reaches data rather than only 404s.
-SeasonParam = Annotated[str | None, Query(
-    pattern=r"^\d{4}/\d{2}$", examples=["2026/27"],
-    description="Defaults to the latest season.")]
+SeasonParam = Annotated[
+    str | None,
+    Query(
+        pattern=r"^\d{4}/\d{2}$", examples=["2026/27"], description="Defaults to the latest season."
+    ),
+]
 GameweekParam = Annotated[int, PathParam(ge=1, le=38, examples=[6])]
-ModelParam = Annotated[str, Query(pattern=r"^[A-Za-z0-9.-]{1,40}$",
-                                  examples=["baseline-v1", "form-fixture-v1"],
-                                  description="A model_version.")]
+ModelParam = Annotated[
+    str,
+    Query(
+        pattern=r"^[A-Za-z0-9.-]{1,40}$",
+        examples=["baseline-v1", "form-fixture-v1"],
+        description="A model_version.",
+    ),
+]
+
 
 def database(request: Request) -> Engine:
     """The engine, not a connection: each route connects only once its parameters
@@ -34,8 +43,11 @@ Database = Annotated[Engine, Depends(database)]
 
 v1 = APIRouter(responses=responses(404, 422))
 # The routes that run the solver: rate-limited, and able to run out of time.
-optimiser = APIRouter(tags=["optimise"], dependencies=[Depends(solver_rate)],
-                      responses=responses(400, 404, 422, 429, 503))
+optimiser = APIRouter(
+    tags=["optimise"],
+    dependencies=[Depends(solver_rate)],
+    responses=responses(400, 404, 422, 429, 503),
+)
 health = APIRouter(tags=["health"])
 
 
@@ -54,8 +66,9 @@ def get_gameweek(db: Database, gameweek: GameweekParam, season: SeasonParam = No
         return queries.gameweek(conn, queries.resolve_season(conn, season), gameweek)
 
 
-@v1.get("/gameweeks/{gameweek}/predictions", response_model=schemas.PredictionPage,
-        tags=["gameweeks"])
+@v1.get(
+    "/gameweeks/{gameweek}/predictions", response_model=schemas.PredictionPage, tags=["gameweeks"]
+)
 def list_predictions(
     db: Database,
     gameweek: GameweekParam,
@@ -65,22 +78,38 @@ def list_predictions(
     team: Annotated[str | None, Query(pattern=r"^[A-Z]{3}$", examples=["ARS"])] = None,
     max_price: Annotated[float | None, Query(ge=0, le=20, description="£m")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 50,
-    after: Annotated[str | None, Query(
-        pattern=r"^-?\d{1,20}(\.\d{1,30})?:\d{1,9}$", examples=["6.94:124"],
-        description="next_cursor from the previous page: its last row's "
-                    "predicted_points:player_id")] = None,
+    after: Annotated[
+        str | None,
+        Query(
+            pattern=r"^-?\d{1,20}(\.\d{1,30})?:\d{1,9}$",
+            examples=["6.94:124"],
+            description="next_cursor from the previous page: its last row's "
+            "predicted_points:player_id",
+        ),
+    ] = None,
 ):
     """One committed entry's predictions, highest first, with actual points once scored."""
     with db.connect() as conn:
         season = queries.resolve_season(conn, season)
-        return queries.predictions(conn, season, gameweek, model, position=position,
-                                   team=team, max_price=max_price, limit=limit, after=after)
+        return queries.predictions(
+            conn,
+            season,
+            gameweek,
+            model,
+            position=position,
+            team=team,
+            max_price=max_price,
+            limit=limit,
+            after=after,
+        )
 
 
 @v1.get("/players/{player_id}", response_model=schemas.Player, tags=["players"])
-def get_player(db: Database,
-               player_id: Annotated[int, PathParam(ge=1, le=100_000, examples=[411])],
-               season: SeasonParam = None):
+def get_player(
+    db: Database,
+    player_id: Annotated[int, PathParam(ge=1, le=100_000, examples=[411])],
+    season: SeasonParam = None,
+):
     """A player's clubs, matches and every prediction made for them, with actuals."""
     with db.connect() as conn:
         return queries.player(conn, queries.resolve_season(conn, season), player_id)
@@ -112,27 +141,44 @@ def post_optimise(db: Database, body: schemas.OptimiseRequest):
     with db.connect() as conn:
         season = queries.resolve_season(conn, body.season)
     if body.squad is None:
-        return solver.solve(db, season, body.gameweek, body.model, budget=body.budget,
-                            include_unavailable=body.include_unavailable)
+        return solver.solve(
+            db,
+            season,
+            body.gameweek,
+            body.model,
+            budget=body.budget,
+            include_unavailable=body.include_unavailable,
+        )
     squad = {p.player_id: p.selling_price for p in body.squad}
     if len(squad) != len(body.squad):
         raise HTTPException(422, "The squad lists the same player more than once.")
-    return solver.solve(db, season, body.gameweek, body.model, squad=squad, bank=body.bank,
-                        free_transfers=body.free_transfers,
-                        include_unavailable=body.include_unavailable)
+    return solver.solve(
+        db,
+        season,
+        body.gameweek,
+        body.model,
+        squad=squad,
+        bank=body.bank,
+        free_transfers=body.free_transfers,
+        include_unavailable=body.include_unavailable,
+    )
 
 
-@optimiser.get("/entries/{fpl_team_id}/advice", response_model=schemas.Advice,
-               responses=responses(409, 502))
+@optimiser.get(
+    "/entries/{fpl_team_id}/advice", response_model=schemas.Advice, responses=responses(409, 502)
+)
 def get_advice(
     db: Database,
     fpl_team_id: Annotated[int, PathParam(ge=1, le=100_000_000, examples=[1])],
     model: ModelParam = solver.DEFAULT_MODEL,
-    gameweek: Annotated[int | None, Query(
-        ge=1, le=38, description="Defaults to the model's latest entry.")] = None,
+    gameweek: Annotated[
+        int | None, Query(ge=1, le=38, description="Defaults to the model's latest entry.")
+    ] = None,
     season: SeasonParam = None,
-    free_transfers: Annotated[int | None, Query(
-        ge=0, le=5, description="Overrides the estimate from the manager's history.")] = None,
+    free_transfers: Annotated[
+        int | None,
+        Query(ge=0, le=5, description="Overrides the estimate from the manager's history."),
+    ] = None,
     include_unavailable: bool = False,
 ):
     """Optimise my team: an FPL team's squad, read from the FPL API, then optimised.
@@ -145,18 +191,32 @@ def get_advice(
         entry = solver.entry_for(conn, season, gameweek, model)
         rows = solver.predictions(conn, season, entry[0], model)
     squad, bank, estimated, picks_gameweek = upstream.manager_squad(
-        db, season, fpl_team_id, entry[0], {r["player_id"]: r["price"] for r in rows})
-    result = solver.solve(db, season, entry[0], model, squad=squad, bank=bank,
-                          free_transfers=estimated if free_transfers is None else free_transfers,
-                          include_unavailable=include_unavailable, entry=entry, rows=rows)
+        db, season, fpl_team_id, entry[0], {r["player_id"]: r["price"] for r in rows}
+    )
+    result = solver.solve(
+        db,
+        season,
+        entry[0],
+        model,
+        squad=squad,
+        bank=bank,
+        free_transfers=estimated if free_transfers is None else free_transfers,
+        include_unavailable=include_unavailable,
+        entry=entry,
+        rows=rows,
+    )
     return result | {
-        "fpl_team_id": fpl_team_id, "picks_gameweek": picks_gameweek,
+        "fpl_team_id": fpl_team_id,
+        "picks_gameweek": picks_gameweek,
         "estimates": {
             "selling_prices": "purchase price from the manager's transfers, or the price in "
-                              "their first gameweek, plus half of any rise since",
-            "free_transfers": ("given" if free_transfers is not None else
-                               "from the manager's history: one a gameweek, banked up to "
-                               "five, none used by a wildcard or free hit"),
+            "their first gameweek, plus half of any rise since",
+            "free_transfers": (
+                "given"
+                if free_transfers is not None
+                else "from the manager's history: one a gameweek, banked up to "
+                "five, none used by a wildcard or free hit"
+            ),
         },
     }
 

@@ -28,7 +28,6 @@ NOWHERE = "postgresql+psycopg://nobody@127.0.0.1:1/nothing?connect_timeout=1"
 
 
 class TestWithoutADatabase(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine(NOWHERE)
@@ -78,11 +77,16 @@ class TestWithoutADatabase(unittest.TestCase):
 
 
 class TestConditionalRequests(unittest.TestCase):
-
     def test_if_none_match_is_a_list_of_tags(self):
         etag = '"abc"'
-        for header, expected in [('"abc"', True), ('"x", W/"abc"', True), ("*", True),
-                                 ('"xabcx"', False), ('"abcd"', False), ("", False)]:
+        for header, expected in [
+            ('"abc"', True),
+            ('"x", W/"abc"', True),
+            ("*", True),
+            ('"xabcx"', False),
+            ('"abcd"', False),
+            ("", False),
+        ]:
             with self.subTest(header=header):
                 self.assertEqual(matches(header, etag), expected)
 
@@ -103,7 +107,6 @@ class TestConditionalRequests(unittest.TestCase):
 
 
 class TestCursor(unittest.TestCase):
-
     def test_every_cursor_issued_matches_the_pattern_it_comes_back_through(self):
         document = json.loads(export_openapi.document())
         parameters = document["paths"]["/v1/gameweeks/{gameweek}/predictions"]["get"]
@@ -117,12 +120,14 @@ class TestCursor(unittest.TestCase):
 
 
 class TestOpenAPI(unittest.TestCase):
-
     def test_the_committed_document_matches_the_code(self):
         """A change to the API's contract has to arrive with its diff to docs/openapi.json."""
         committed = (ROOT / "docs" / "openapi.json").read_text()
-        self.assertEqual(json.loads(committed), json.loads(export_openapi.document()),
-                         "docs/openapi.json is stale. Regenerate it with: make openapi")
+        self.assertEqual(
+            json.loads(committed),
+            json.loads(export_openapi.document()),
+            "docs/openapi.json is stale. Regenerate it with: make openapi",
+        )
 
     def test_every_error_response_is_documented_as_a_problem(self):
         document = json.loads(export_openapi.document())

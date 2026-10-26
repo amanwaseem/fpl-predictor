@@ -30,9 +30,9 @@ class ScoringCase(fixtures.TempCwd):
         self.pred_snap = self.league(PREDICTED_AT, target_gw=4, latest=False)
         bootstrap = json.loads((self.pred_snap / "bootstrap.json").read_text())
         fixtures_ = json.loads((self.pred_snap / "fixtures.json").read_text())
-        self.rows = fixtures.entry_rows(bootstrap, fixtures_, 4,
-                                        "2026-09-12T12:30:00Z",
-                                        snapshot_id=PREDICTED_AT)
+        self.rows = fixtures.entry_rows(
+            bootstrap, fixtures_, 4, "2026-09-12T12:30:00Z", snapshot_id=PREDICTED_AT
+        )
         for row in self.rows:
             row["predicted_points"] = float(row["player_id"] % 5)
         self.rows.sort(key=lambda r: (-r["predicted_points"], r["player_id"]))
@@ -43,8 +43,7 @@ class ScoringCase(fixtures.TempCwd):
         self.results = {pid: (pid % 5 + (8 if pid == 1 else 0), 90) for pid in self.ids}
 
     def write_entry(self, rows=None, name="gw04_baseline-v1.csv"):
-        return fixtures.write_csv(Path("predictions") / name,
-                                  self.rows if rows is None else rows)
+        return fixtures.write_csv(Path("predictions") / name, self.rows if rows is None else rows)
 
     def run_harness(self, actuals=None):
         fixtures.live(self.actual_snap, 4, self.results)
@@ -56,7 +55,6 @@ class ScoringCase(fixtures.TempCwd):
 
 
 class TestGolden(ScoringCase):
-
     def test_hand_computed_metrics(self):
         """80 players, one error of 8: MAE 0.1, RMSE sqrt(0.8), bias -0.1."""
         self.write_entry()
@@ -64,21 +62,23 @@ class TestGolden(ScoringCase):
         m = self.metrics()["metrics"]["all"]
         self.assertEqual(m["n"], 80)
         self.assertAlmostEqual(m["mae"], 0.1)
-        self.assertAlmostEqual(m["rmse"], round(0.8 ** 0.5, 4))
+        self.assertAlmostEqual(m["rmse"], round(0.8**0.5, 4))
         self.assertAlmostEqual(m["bias"], -0.1)
 
     def test_output_files(self):
         self.write_entry()
         self.run_harness()
         names = sorted(p.name for p in Path("scores").iterdir())
-        self.assertEqual(names, ["cumulative.json", "gw04_baseline-v1.csv",
-                                 "gw04_baseline-v1.json"])
+        self.assertEqual(
+            names, ["cumulative.json", "gw04_baseline-v1.csv", "gw04_baseline-v1.json"]
+        )
         rows = fixtures.read_csv("scores/gw04_baseline-v1.csv")
         self.assertEqual(len(rows), 80)
         self.assertEqual(list(rows[0]), score.SCORE_FIELDS)
         one = next(r for r in rows if r["player_id"] == "1")
-        self.assertEqual((one["predicted_points"], one["actual_points"], one["error"]),
-                         ("1.0", "9", "-8.0"))
+        self.assertEqual(
+            (one["predicted_points"], one["actual_points"], one["error"]), ("1.0", "9", "-8.0")
+        )
 
     def test_provenance_stamped(self):
         self.write_entry()
@@ -100,20 +100,27 @@ class TestGolden(ScoringCase):
 
 
 class TestSettlement(ScoringCase):
-
     def test_unsettled_gameweek_refused(self):
         events = fixtures.season(5, fixtures.future_deadline(), checked_through=3)
         matched_rows = self.rows
         with self.assertRaises(SystemExit):
-            score.score_entry(matched_rows, 4, "baseline-v1", events,
-                              {pid: {"points": 0, "minutes": 0} for pid in self.ids},
-                              None)
+            score.score_entry(
+                matched_rows,
+                4,
+                "baseline-v1",
+                events,
+                {pid: {"points": 0, "minutes": 0} for pid in self.ids},
+                None,
+            )
 
     def test_unsettled_entry_is_pending_not_scored(self):
         # Replace the actuals snapshot with one where GW4 is still provisional.
         self.actual_snap = self.league(
-            "20260921T000000Z", target_gw=5, latest=True,
-            events=fixtures.season(5, fixtures.future_deadline(), checked_through=3))
+            "20260921T000000Z",
+            target_gw=5,
+            latest=True,
+            events=fixtures.season(5, fixtures.future_deadline(), checked_through=3),
+        )
         self.write_entry()
         self.run_harness()
         self.assertFalse(Path("scores/gw04_baseline-v1.json").exists())
@@ -127,14 +134,12 @@ class TestSettlement(ScoringCase):
 
 
 class TestJoin(ScoringCase):
-
     def test_log_only_player_is_bucketed_not_zeroed(self):
         del self.results[self.ids[0]]
         self.write_entry()
         self.run_harness()
         m = self.metrics()
-        self.assertEqual(m["join"]["missing_actual"],
-                         {"count": 1, "player_ids": [self.ids[0]]})
+        self.assertEqual(m["join"]["missing_actual"], {"count": 1, "player_ids": [self.ids[0]]})
         self.assertEqual(m["metrics"]["all"]["n"], 79)
 
     def test_actuals_only_player_is_bucketed(self):
@@ -142,14 +147,12 @@ class TestJoin(ScoringCase):
         self.write_entry()
         self.run_harness()
         m = self.metrics()
-        self.assertEqual(m["join"]["missing_prediction"],
-                         {"count": 1, "player_ids": [999]})
+        self.assertEqual(m["join"]["missing_prediction"], {"count": 1, "player_ids": [999]})
         self.assertEqual(m["metrics"]["all"]["n"], 80)
         self.assertLess(m["metrics"]["all"]["mae"], 1, "999's 12 points were not scored")
 
 
 class TestComparisons(ScoringCase):
-
     def test_comparators_read_the_prediction_snapshot(self):
         self.write_entry()
         self.run_harness()
@@ -211,7 +214,6 @@ class TestComparisons(ScoringCase):
 
 
 class TestCumulative(ScoringCase):
-
     def test_missed_gameweek_is_listed(self):
         """Entries for GW2 and GW4 with GW3 settled: GW3 is missed, not skipped."""
         self.write_entry()
@@ -229,18 +231,20 @@ class TestCumulative(ScoringCase):
         self.write_entry(gw2, "gw02_baseline-v1.csv")
         fixtures.live(self.actual_snap, 2, {pid: (pid % 5, 90) for pid in self.ids})
         self.run_harness()
-        pooled = json.loads(Path("scores/cumulative.json").read_text())[
-            "models"]["baseline-v1"]["pooled"]["all"]
+        pooled = json.loads(Path("scores/cumulative.json").read_text())["models"]["baseline-v1"][
+            "pooled"
+        ]["all"]
         # GW2 perfect, GW4 one error of 8: 8 over 160 rows.
         self.assertEqual(pooled["n"], 160)
         self.assertAlmostEqual(pooled["mae"], 0.05)
 
 
 class TestLogUntouched(ScoringCase):
-
     def digest(self):
-        return {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                for p in sorted(Path("predictions").iterdir())}
+        return {
+            p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(Path("predictions").iterdir())
+        }
 
     def test_predictions_are_byte_identical_after_a_run(self):
         self.write_entry()
@@ -290,8 +294,9 @@ class TestRareGameweeks(ScoringCase):
         self.results[1] = (-1, 60)
         self.write_entry()
         self.run_harness()
-        row = next(r for r in fixtures.read_csv("scores/gw04_baseline-v1.csv")
-                   if r["player_id"] == "1")
+        row = next(
+            r for r in fixtures.read_csv("scores/gw04_baseline-v1.csv") if r["player_id"] == "1"
+        )
         self.assertEqual((row["actual_points"], row["error"]), ("-1", "2.0"))
 
     def test_double_gameweek_actuals_taken_whole(self):
@@ -299,8 +304,9 @@ class TestRareGameweeks(ScoringCase):
         self.results[2] = (15, 180)
         self.write_entry()
         self.run_harness()
-        row = next(r for r in fixtures.read_csv("scores/gw04_baseline-v1.csv")
-                   if r["player_id"] == "2")
+        row = next(
+            r for r in fixtures.read_csv("scores/gw04_baseline-v1.csv") if r["player_id"] == "2"
+        )
         self.assertEqual((row["actual_points"], row["actual_minutes"]), ("15", "180"))
 
     def test_nobody_scored(self):
@@ -331,7 +337,6 @@ class TestRareGameweeks(ScoringCase):
 
 
 class TestPartialData(ScoringCase):
-
     def test_too_few_joined_players_for_an_xi(self):
         """A truncated actuals file: the XI is unavailable, the rest still scores."""
         self.results = dict(list(self.results.items())[:8])
@@ -360,7 +365,6 @@ class TestPartialData(ScoringCase):
 
 
 class TestBadEntries(ScoringCase):
-
     def test_two_snapshot_ids_refused(self):
         self.rows[5]["snapshot_id"] = "20260101T000000Z"
         self.write_entry()
@@ -385,7 +389,6 @@ class TestBadEntries(ScoringCase):
 
 
 class TestManyEntries(ScoringCase):
-
     def test_explicit_actuals_snapshot_overrides_latest(self):
         self.write_entry()
         fixtures.live(self.actual_snap, 4, self.results)
@@ -433,10 +436,15 @@ class TestCommandLine(ScoringCase):
     def run_cli(self, *args):
         import subprocess
         import sys
+
         repo = Path(__file__).resolve().parent.parent
         env = dict(os.environ, PYTHONPATH=str(repo))
-        return subprocess.run([sys.executable, "-m", "fpl.evaluation.score", *args],
-                              capture_output=True, text=True, env=env)
+        return subprocess.run(
+            [sys.executable, "-m", "fpl.evaluation.score", *args],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
 
     def test_exit_zero_and_reports_what_it_did(self):
         self.write_entry()

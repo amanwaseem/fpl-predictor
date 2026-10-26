@@ -62,14 +62,21 @@ class Report:
     def __str__(self):
         if self.already_loaded:
             return f"Snapshot {self.snapshot_id} is already loaded. Nothing changed."
-        mode = ("newest for the season: rows updated" if self.newest
-                else "older than one already loaded: only missing rows added")
-        lines = [f"Loaded snapshot {self.snapshot_id} ({self.season}), {mode}.",
-                 "Rows in the snapshot, per table:"]
+        mode = (
+            "newest for the season: rows updated"
+            if self.newest
+            else "older than one already loaded: only missing rows added"
+        )
+        lines = [
+            f"Loaded snapshot {self.snapshot_id} ({self.season}), {mode}.",
+            "Rows in the snapshot, per table:",
+        ]
         lines += [f"  {table:<22}{count:>7}" for table, count in self.rows.items()]
         if self.skipped_elements:
-            lines.append(f"Skipped {len(self.skipped_elements)} elements that are not "
-                         f"players (element_type outside 1-4): {self.skipped_elements}")
+            lines.append(
+                f"Skipped {len(self.skipped_elements)} elements that are not "
+                f"players (element_type outside 1-4): {self.skipped_elements}"
+            )
         return "\n".join(lines)
 
 
@@ -90,8 +97,11 @@ def upsert(connection, model, rows, newest):
     table = model.__table__
     keys = [c.name for c in table.primary_key]
     statement = insert(model)
-    updates = {c.name: statement.excluded[c.name] for c in table.columns
-               if c.name not in keys and c.name in rows[0]}
+    updates = {
+        c.name: statement.excluded[c.name]
+        for c in table.columns
+        if c.name not in keys and c.name in rows[0]
+    }
     if newest and updates:
         statement = statement.on_conflict_do_update(index_elements=keys, set_=updates)
     else:
@@ -111,29 +121,61 @@ def player_elements(bootstrap):
 # fpl.db.stale compares the same rows with the database, so they are built
 # once, here.
 
+
 def team_rows(season, bootstrap):
-    return [{"season": season, "team_id": t["id"], "code": t["code"], "name": t["name"],
-             "short_name": t["short_name"]} for t in bootstrap["teams"]]
+    return [
+        {
+            "season": season,
+            "team_id": t["id"],
+            "code": t["code"],
+            "name": t["name"],
+            "short_name": t["short_name"],
+        }
+        for t in bootstrap["teams"]
+    ]
 
 
 def season_player_rows(season, elements):
-    return [{"season": season, "element_id": e["id"], "player_code": e["code"],
-             "web_name": e["web_name"], "position": POSITIONS[e["element_type"]]}
-            for e in elements]
+    return [
+        {
+            "season": season,
+            "element_id": e["id"],
+            "player_code": e["code"],
+            "web_name": e["web_name"],
+            "position": POSITIONS[e["element_type"]],
+        }
+        for e in elements
+    ]
 
 
 def gameweek_rows(season, bootstrap):
-    return [{"season": season, "gameweek": e["id"], "deadline_utc": timestamp(e["deadline_time"]),
-             "finished": e["finished"], "data_checked": e["data_checked"]}
-            for e in bootstrap["events"]]
+    return [
+        {
+            "season": season,
+            "gameweek": e["id"],
+            "deadline_utc": timestamp(e["deadline_time"]),
+            "finished": e["finished"],
+            "data_checked": e["data_checked"],
+        }
+        for e in bootstrap["events"]
+    ]
 
 
 def fixture_rows(season, fixtures):
-    return [{"season": season, "fixture_id": f["id"], "gameweek": f["event"],
-             "kickoff_utc": timestamp(f["kickoff_time"]), "team_h": f["team_h"],
-             "team_a": f["team_a"], "team_h_score": f["team_h_score"],
-             "team_a_score": f["team_a_score"], "finished": f["finished"]}
-            for f in fixtures]
+    return [
+        {
+            "season": season,
+            "fixture_id": f["id"],
+            "gameweek": f["event"],
+            "kickoff_utc": timestamp(f["kickoff_time"]),
+            "team_h": f["team_h"],
+            "team_a": f["team_a"],
+            "team_h_score": f["team_h_score"],
+            "team_a_score": f["team_a_score"],
+            "finished": f["finished"],
+        }
+        for f in fixtures
+    ]
 
 
 def club_spells(history, fixtures_by_id, current_team, next_gameweek):
@@ -175,8 +217,12 @@ def club_spells(history, fixtures_by_id, current_team, next_gameweek):
 
 def stats_row(season, snapshot_id, history_row):
     """A history row as a player_fixture_stats row: same column names as the API."""
-    row = {"season": season, "element_id": history_row["element"],
-           "fixture_id": history_row["fixture"], "snapshot_id": snapshot_id}
+    row = {
+        "season": season,
+        "element_id": history_row["element"],
+        "fixture_id": history_row["fixture"],
+        "snapshot_id": snapshot_id,
+    }
     for column in PlayerFixtureStats.__table__.columns:
         if column.name in row:
             continue
@@ -198,13 +244,15 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
         # One load at a time: which snapshot is newest is read below and acted
         # on before commit, so two loads at once could both think they were.
         connection.execute(select(func.pg_advisory_xact_lock(LOAD_LOCK)))
-        if connection.scalar(select(Snapshot.snapshot_id).where(
-                Snapshot.snapshot_id == snapshot_id)):
+        if connection.scalar(
+            select(Snapshot.snapshot_id).where(Snapshot.snapshot_id == snapshot_id)
+        ):
             report.already_loaded = True
             return report
 
         latest = connection.scalar(
-            select(func.max(Snapshot.snapshot_id)).where(Snapshot.season == season))
+            select(func.max(Snapshot.snapshot_id)).where(Snapshot.season == season)
+        )
         report.newest = latest is None or snapshot_id > latest
         # Players are not per season, so only a snapshot newer than every one
         # loaded, of any season, may rename them.
@@ -212,25 +260,39 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
         newest_overall = latest_any is None or snapshot_id > latest_any
 
         connection.execute(insert(Season).values(season=season).on_conflict_do_nothing())
-        connection.execute(insert(Snapshot).values(
-            snapshot_id=snapshot_id, season=season,
-            completed_at_utc=timestamp(manifest["completed_at_utc"]),
-            element_count=manifest["element_count"], has_players=manifest["has_players"],
-            live_gameweeks=manifest.get("live_gameweeks", [])))
+        connection.execute(
+            insert(Snapshot).values(
+                snapshot_id=snapshot_id,
+                season=season,
+                completed_at_utc=timestamp(manifest["completed_at_utc"]),
+                element_count=manifest["element_count"],
+                has_players=manifest["has_players"],
+                live_gameweeks=manifest.get("live_gameweeks", []),
+            )
+        )
 
         rows = report.rows
         rows["teams"] = upsert(connection, Team, team_rows(season, bootstrap), report.newest)
 
         elements, report.skipped_elements = player_elements(bootstrap)
-        rows["players"] = upsert(connection, Player, [
-            {"code": e["code"], "first_name": e["first_name"], "second_name": e["second_name"]}
-            for e in elements], newest_overall)
-        rows["season_players"] = upsert(connection, SeasonPlayer,
-                                        season_player_rows(season, elements), report.newest)
-        rows["gameweeks"] = upsert(connection, Gameweek, gameweek_rows(season, bootstrap),
-                                   report.newest)
-        rows["fixtures"] = upsert(connection, Fixture, fixture_rows(season, fixtures),
-                                  report.newest)
+        rows["players"] = upsert(
+            connection,
+            Player,
+            [
+                {"code": e["code"], "first_name": e["first_name"], "second_name": e["second_name"]}
+                for e in elements
+            ],
+            newest_overall,
+        )
+        rows["season_players"] = upsert(
+            connection, SeasonPlayer, season_player_rows(season, elements), report.newest
+        )
+        rows["gameweeks"] = upsert(
+            connection, Gameweek, gameweek_rows(season, bootstrap), report.newest
+        )
+        rows["fixtures"] = upsert(
+            connection, Fixture, fixture_rows(season, fixtures), report.newest
+        )
 
         fixtures_by_id = {f["id"]: f for f in fixtures}
         unfinished = [e["id"] for e in bootstrap["events"] if not e["finished"]]
@@ -238,12 +300,20 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
         spells, stats = [], []
         for e in elements:
             history = json.loads((players_dir / f"{e['id']}.json").read_text())["history"]
-            for team, gameweeks in club_spells(history, fixtures_by_id, e["team"],
-                                               next_gameweek):
-                spells.append({"season": season, "element_id": e["id"], "team_id": team,
-                               "gameweeks": gameweeks})
-            stats += [stats_row(season, snapshot_id, h) for h in history
-                      if fixtures_by_id.get(h["fixture"], {}).get("finished")]
+            for team, gameweeks in club_spells(history, fixtures_by_id, e["team"], next_gameweek):
+                spells.append(
+                    {
+                        "season": season,
+                        "element_id": e["id"],
+                        "team_id": team,
+                        "gameweeks": gameweeks,
+                    }
+                )
+            stats += [
+                stats_row(season, snapshot_id, h)
+                for h in history
+                if fixtures_by_id.get(h["fixture"], {}).get("finished")
+            ]
 
         # Spells are derived whole from one snapshot's histories, so the newest
         # snapshot replaces them rather than merging with an older derivation.
@@ -251,12 +321,12 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
         if report.newest:
             connection.execute(delete(PlayerClub).where(PlayerClub.season == season))
         else:
-            have_spells = set(connection.scalars(
-                select(PlayerClub.element_id).where(PlayerClub.season == season)))
+            have_spells = set(
+                connection.scalars(select(PlayerClub.element_id).where(PlayerClub.season == season))
+            )
             spells = [s for s in spells if s["element_id"] not in have_spells]
         rows["player_clubs"] = upsert(connection, PlayerClub, spells, report.newest)
-        rows["player_fixture_stats"] = upsert(connection, PlayerFixtureStats, stats,
-                                              report.newest)
+        rows["player_fixture_stats"] = upsert(connection, PlayerFixtureStats, stats, report.newest)
     return report
 
 
@@ -275,8 +345,12 @@ def main(snapshot_id=None):
 def cli(argv=None):
     """`fpl-load`, or `python -m fpl.db.load`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--snapshot", default=None, metavar="SNAPSHOT_ID",
-                    help="the snapshot to load (default: LATEST)")
+    ap.add_argument(
+        "--snapshot",
+        default=None,
+        metavar="SNAPSHOT_ID",
+        help="the snapshot to load (default: LATEST)",
+    )
     args = ap.parse_args(argv)
     require_project_root()
     return main(args.snapshot)

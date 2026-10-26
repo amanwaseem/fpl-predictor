@@ -40,8 +40,12 @@ async def http_caching(request: Request, call_next):
     # Advice is from a manager's live squad, which changes with every transfer
     # they make: not for a browser or CDN to keep.
     live = request.url.path.startswith(LIVE_PREFIXES)
-    if request.method != "GET" or response.status_code != 200 \
-            or not request.url.path.startswith("/v1/") or live:
+    if (
+        request.method != "GET"
+        or response.status_code != 200
+        or not request.url.path.startswith("/v1/")
+        or live
+    ):
         if request.url.path in ("/healthz", "/readyz") or live:
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -60,10 +64,12 @@ async def http_caching(request: Request, call_next):
 
 def openapi_with_problems(app):
     """The generated OpenAPI, with every error response as application/problem+json."""
+
     def build():
         if app.openapi_schema is None:
-            schema = get_openapi(title=app.title, version=app.version,
-                                 description=app.description, routes=app.routes)
+            schema = get_openapi(
+                title=app.title, version=app.version, description=app.description, routes=app.routes
+            )
             for path in schema["paths"].values():
                 for operation in path.values():
                     for status, response in operation.get("responses", {}).items():
@@ -72,6 +78,7 @@ def openapi_with_problems(app):
                             content[problems.MEDIA_TYPE] = content.pop("application/json")
             app.openapi_schema = schema
         return app.openapi_schema
+
     return build
 
 
@@ -89,8 +96,8 @@ def create_app(engine=None):
         title="fpl-predictor",
         version=API_VERSION,
         description="Committed FPL predictions, their scores, and the data behind them, "
-                    "and a squad optimiser over them. The log is read-only. Errors are "
-                    "RFC 9457 problem details.",
+        "and a squad optimiser over them. The log is read-only. Errors are "
+        "RFC 9457 problem details.",
         lifespan=lifespan,
         redoc_url=None,
     )

@@ -27,17 +27,26 @@ def setUpModule():
 
 
 class OptimiseCase(APICase):
-
     def setUp(self):
         super().setUp()
         (self.tmp / "predictions").mkdir()
         shutil.copy(ENTRY, self.tmp / "predictions" / ENTRY.name)
         with self.engine.begin() as c:
             c.execute(insert(Season).values(season=SEASON))
-            c.execute(insert(Gameweek), [
-                {"season": SEASON, "gameweek": gw, "finished": gw < 8, "data_checked": gw < 8,
-                 "deadline_utc": datetime(2026, 8, 14, 17, 30, tzinfo=UTC)
-                 + timedelta(weeks=gw - 1)} for gw in range(1, 9)])
+            c.execute(
+                insert(Gameweek),
+                [
+                    {
+                        "season": SEASON,
+                        "gameweek": gw,
+                        "finished": gw < 8,
+                        "data_checked": gw < 8,
+                        "deadline_utc": datetime(2026, 8, 14, 17, 30, tzinfo=UTC)
+                        + timedelta(weeks=gw - 1),
+                    }
+                    for gw in range(1, 9)
+                ],
+            )
         project(self.engine, read_log())
         self.rows, _ = read_entry(ENTRY)
         self.best = optimise.best_squad(self.rows)
@@ -53,12 +62,13 @@ class OptimiseCase(APICase):
         return response.json()
 
     def owned(self, ids=None):
-        return [{"player_id": i, "selling_price": self.by_id[i]["price"]}
-                for i in (ids or self.squad_ids)]
+        return [
+            {"player_id": i, "selling_price": self.by_id[i]["price"]}
+            for i in (ids or self.squad_ids)
+        ]
 
 
 class TestOptimise(OptimiseCase):
-
     def test_with_no_squad_it_is_the_best_squad_from_scratch(self):
         body = self.post({})
         self.assertEqual((body["gameweek"], body["model_version"]), (8, "baseline-v1"))
@@ -72,14 +82,20 @@ class TestOptimise(OptimiseCase):
         self.assertEqual(body["plan"]["xi_gain"], 0)
 
     def test_a_weak_player_is_transferred_out(self):
-        weakest_mid = min((r for r in self.rows if r["position"] == "MID"
-                           and r["player_id"] not in self.squad_ids
-                           and r["team"] not in {self.by_id[i]["team"] for i in self.squad_ids}),
-                          key=lambda r: (r["predicted_points"], r["price"]))
-        best_mid = max((p for p in self.best.xi if p.position == "MID"),
-                       key=lambda p: p.predicted_points)
-        ids = [weakest_mid["player_id"] if i == best_mid.player_id else i
-               for i in self.squad_ids]
+        weakest_mid = min(
+            (
+                r
+                for r in self.rows
+                if r["position"] == "MID"
+                and r["player_id"] not in self.squad_ids
+                and r["team"] not in {self.by_id[i]["team"] for i in self.squad_ids}
+            ),
+            key=lambda r: (r["predicted_points"], r["price"]),
+        )
+        best_mid = max(
+            (p for p in self.best.xi if p.position == "MID"), key=lambda p: p.predicted_points
+        )
+        ids = [weakest_mid["player_id"] if i == best_mid.player_id else i for i in self.squad_ids]
         body = self.post({"squad": self.owned(ids), "bank": 5.0, "free_transfers": 1})
         outs = [t["out"]["player_id"] for t in body["plan"]["transfers"]]
         self.assertIn(weakest_mid["player_id"], outs)
@@ -105,9 +121,13 @@ class TestOptimise(OptimiseCase):
         self.post({"model": "nope-v1"}, 404)
 
     def test_a_squad_that_cannot_be_planned_from_is_422_naming_why(self):
-        ids = self.squad_ids[:14] + [next(r["player_id"] for r in self.rows
-                                          if r["position"] == "GKP"
-                                          and r["player_id"] not in self.squad_ids)]
+        ids = self.squad_ids[:14] + [
+            next(
+                r["player_id"]
+                for r in self.rows
+                if r["position"] == "GKP" and r["player_id"] not in self.squad_ids
+            )
+        ]
         body = self.post({"squad": self.owned(ids)}, 422)
         self.assertIn("GKP in the squad", body["detail"])
 
@@ -126,14 +146,16 @@ class TestOptimise(OptimiseCase):
         self.assertEqual(response.headers["retry-after"], "60")
 
     def test_a_solver_failure_is_503_not_the_requests_fault(self):
-        with mock.patch.object(optimise, "best_squad",
-                               side_effect=optimise.SolverFailure("Interrupted")):
+        with mock.patch.object(
+            optimise, "best_squad", side_effect=optimise.SolverFailure("Interrupted")
+        ):
             response = self.client.post("/v1/optimise", json={})
         self.assertEqual(response.status_code, 503)
 
     def test_a_cache_that_cannot_be_written_does_not_fail_the_request(self):
         """The projection may replace the entry mid-solve, during a deploy."""
         from sqlalchemy.exc import IntegrityError
+
         failing = mock.Mock(side_effect=IntegrityError("insert", {}, Exception("fk")))
         with mock.patch.object(self.engine, "begin", failing):
             body = self.post({})
@@ -149,16 +171,20 @@ class TestOptimise(OptimiseCase):
 
 
 class TestAdvice(OptimiseCase):
-
     def setUp(self):
         super().setUp()
         picks = [{"element": i} for i in self.squad_ids]
         self.upstream = {
             "entry/42/": {"started_event": 1, "current_event": 7},
-            "entry/42/event/7/picks/": {"active_chip": None, "picks": picks,
-                                        "entry_history": {"bank": 15}},
-            "entry/42/history/": {"current": [{"event": gw, "event_transfers": 0}
-                                              for gw in range(1, 8)], "chips": []},
+            "entry/42/event/7/picks/": {
+                "active_chip": None,
+                "picks": picks,
+                "entry_history": {"bank": 15},
+            },
+            "entry/42/history/": {
+                "current": [{"event": gw, "event_transfers": 0} for gw in range(1, 8)],
+                "chips": [],
+            },
             "entry/42/transfers/": [],
         }
         patch = mock.patch.object(upstream.requests, "get", side_effect=self.fake_get)
@@ -176,16 +202,28 @@ class TestAdvice(OptimiseCase):
 
     def test_a_team_id_gets_advice_on_its_squad(self):
         body = self.get("/v1/entries/42/advice")
-        self.assertEqual((body["fpl_team_id"], body["gameweek"], body["picks_gameweek"]),
-                         (42, 8, 7))
+        self.assertEqual(
+            (body["fpl_team_id"], body["gameweek"], body["picks_gameweek"]), (42, 8, 7)
+        )
         self.assertEqual(body["plan"]["bank"], 1.5)
         # Unused every week since GW1, so banked to the most FPL allows.
         self.assertEqual(body["plan"]["free_transfers"], optimise.MAX_FREE_TRANSFERS)
-        self.assertEqual(optimise.violations(optimise.Squad(**{
-            **body["squad"],
-            **{k: [optimise.Pick(**p) for p in body["squad"][k]] for k in ("xi", "bench")},
-            "captain": optimise.Pick(**body["squad"]["captain"]),
-            "vice_captain": optimise.Pick(**body["squad"]["vice_captain"])})), [])
+        self.assertEqual(
+            optimise.violations(
+                optimise.Squad(
+                    **{
+                        **body["squad"],
+                        **{
+                            k: [optimise.Pick(**p) for p in body["squad"][k]]
+                            for k in ("xi", "bench")
+                        },
+                        "captain": optimise.Pick(**body["squad"]["captain"]),
+                        "vice_captain": optimise.Pick(**body["squad"]["vice_captain"]),
+                    }
+                )
+            ),
+            [],
+        )
 
     def test_free_transfers_can_be_given(self):
         body = self.get("/v1/entries/42/advice", free_transfers=0)
@@ -221,9 +259,14 @@ class TestAdvice(OptimiseCase):
 
     def test_a_free_hit_squad_is_not_the_one_planned_from(self):
         self.upstream["entry/42/event/7/picks/"] = {
-            "active_chip": "freehit", "picks": [], "entry_history": {"bank": 0}}
+            "active_chip": "freehit",
+            "picks": [],
+            "entry_history": {"bank": 0},
+        }
         self.upstream["entry/42/event/6/picks/"] = {
-            "active_chip": None, "picks": [{"element": i} for i in self.squad_ids],
-            "entry_history": {"bank": 3}}
+            "active_chip": None,
+            "picks": [{"element": i} for i in self.squad_ids],
+            "entry_history": {"bank": 3},
+        }
         body = self.get("/v1/entries/42/advice")
         self.assertEqual((body["picks_gameweek"], body["plan"]["bank"]), (6, 0.3))

@@ -49,8 +49,9 @@ class FixtureRepo(unittest.TestCase):
         shutil.rmtree(self.repo, ignore_errors=True)
 
     def git(self, *args):
-        subprocess.run(["git", *args], cwd=self.repo, env=self.env, check=True,
-                       stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["git", *args], cwd=self.repo, env=self.env, check=True, stdout=subprocess.DEVNULL
+        )
 
     def write(self, relpath, text):
         path = self.repo / relpath
@@ -60,7 +61,10 @@ class FixtureRepo(unittest.TestCase):
     def check(self, ref="HEAD"):
         return subprocess.run(
             [sys.executable, str(TOOL), "--ref", ref],
-            cwd=self.repo, env=self.env, capture_output=True, text=True,
+            cwd=self.repo,
+            env=self.env,
+            capture_output=True,
+            text=True,
         )
 
 
@@ -71,8 +75,9 @@ class TestImmutabilityChecker(FixtureRepo):
         self.assertIn("unchanged", result.stdout)
 
     def test_modified_entry_fails_and_names_the_path(self):
-        self.write("predictions/gw04_baseline-v1.csv",
-                   "gameweek,player_id,predicted_points\n4,1,9.99\n")
+        self.write(
+            "predictions/gw04_baseline-v1.csv", "gameweek,player_id,predicted_points\n4,1,9.99\n"
+        )
         result = self.check()
         self.assertEqual(result.returncode, 1)
         self.assertIn("predictions/gw04_baseline-v1.csv", result.stderr)
@@ -119,17 +124,19 @@ class TestImmutabilityChecker(FixtureRepo):
     def test_reports_when_nothing_is_committed_yet(self):
         empty = Path(tempfile.mkdtemp())
         subprocess.run(["git", "init", "-q"], cwd=empty, env=self.env, check=True)
-        subprocess.run(["git", "config", "user.email", "t@e.com"], cwd=empty,
-                       env=self.env, check=True)
-        subprocess.run(["git", "config", "user.name", "T"], cwd=empty,
-                       env=self.env, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "t@e.com"], cwd=empty, env=self.env, check=True
+        )
+        subprocess.run(["git", "config", "user.name", "T"], cwd=empty, env=self.env, check=True)
         (empty / "README.md").write_text("x\n")
         subprocess.run(["git", "add", "-A"], cwd=empty, env=self.env, check=True)
-        subprocess.run(["git", "commit", "-qm", "init"], cwd=empty, env=self.env,
-                       check=True)
+        subprocess.run(["git", "commit", "-qm", "init"], cwd=empty, env=self.env, check=True)
         result = subprocess.run(
             [sys.executable, str(TOOL), "--ref", "HEAD"],
-            cwd=empty, env=self.env, capture_output=True, text=True,
+            cwd=empty,
+            env=self.env,
+            capture_output=True,
+            text=True,
         )
         shutil.rmtree(empty, ignore_errors=True)
         self.assertEqual(result.returncode, 0, result.stderr)

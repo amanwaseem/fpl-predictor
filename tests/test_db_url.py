@@ -48,20 +48,26 @@ CANNOT_CONNECT = {
     "a trailing newline": (f"{GOOD}\n", ["quotes or spaces around it"]),
     "whitespace in the host": (GOOD.replace("@", " @"), ["whitespace outside the query"]),
     "a port that is not a number": (
-        f"postgresql://{USER}:{PASSWORD}@{HOST}:port/{DATABASE}", ["port is not a number"]),
+        f"postgresql://{USER}:{PASSWORD}@{HOST}:port/{DATABASE}",
+        ["port is not a number"],
+    ),
     "a port out of range": (
-        f"postgresql://{USER}:{PASSWORD}@{HOST}:99999/{DATABASE}", ["between 1 and 65535"]),
-    "an unclosed IPv6 address": (
-        f"postgresql://{USER}:{PASSWORD}@[::1/{DATABASE}", ["IPv6"]),
+        f"postgresql://{USER}:{PASSWORD}@{HOST}:99999/{DATABASE}",
+        ["between 1 and 65535"],
+    ),
+    "an unclosed IPv6 address": (f"postgresql://{USER}:{PASSWORD}@[::1/{DATABASE}", ["IPv6"]),
     "one of several hosts with a bad port": (
         f"postgresql://{USER}:{PASSWORD}@{HOST}:5432,{HOST}:x/{DATABASE}",
-        ["port is not a number"]),
+        ["port is not a number"],
+    ),
 }
 
 # Fine for libpq, refused for the hosted database, where nothing fills them in.
 INCOMPLETE = {
-    "the deploy-day secret": (DEPLOY_DAY, ["no user", "being read as the host",
-                                           "no password", "names no database"]),
+    "the deploy-day secret": (
+        DEPLOY_DAY,
+        ["no user", "being read as the host", "no password", "names no database"],
+    ),
     "no user": (f"postgresql://:{PASSWORD}@{HOST}/{DATABASE}", ["no user"]),
     "no password": (f"postgresql://{USER}@{HOST}/{DATABASE}", ["no password"]),
     "no host": (f"postgresql://{USER}:{PASSWORD}@/{DATABASE}", ["no host"]),
@@ -70,7 +76,6 @@ INCOMPLETE = {
 
 
 class TestWhatCannotConnect(unittest.TestCase):
-
     def test_urls_libpq_connects_with_pass(self):
         for name, url in LIBPQ_ACCEPTS.items():
             with self.subTest(name):
@@ -89,7 +94,6 @@ class TestWhatCannotConnect(unittest.TestCase):
 
 
 class TestTheHostedDatabase(unittest.TestCase):
-
     def test_an_incomplete_url_passes_alone_but_not_for_hosting(self):
         for name, (url, phrases) in INCOMPLETE.items():
             with self.subTest(name):
@@ -124,29 +128,31 @@ class TestPooled(unittest.TestCase):
     def test_migrations_refuse_it_without_printing_it(self):
         self.assertTrue(pooled(self.POOLED_URL))
         self.assertFalse(pooled(GOOD))
-        with mock.patch.dict(os.environ, {"DATABASE_URL": self.POOLED_URL}), \
-                self.assertRaises(SystemExit) as raised:
+        with (
+            mock.patch.dict(os.environ, {"DATABASE_URL": self.POOLED_URL}),
+            self.assertRaises(SystemExit) as raised,
+        ):
             migrate.cli([])
         self.assertIn("-pooler", str(raised.exception))
         self.assertNotIn(PASSWORD, str(raised.exception))
 
 
 class TestTheDriverIsNamed(unittest.TestCase):
-
     def test_whatever_the_case_of_the_scheme(self):
         for url in ("postgresql://u:p@h/db", "POSTGRESQL://u:p@h/db", "Postgres://u:p@h/db"):
             with self.subTest(url=url):
                 self.assertEqual(normalise_url(url), "postgresql+psycopg://u:p@h/db")
 
     def test_a_named_driver_is_kept_lowercased(self):
-        self.assertEqual(normalise_url("PostgreSQL+Psycopg://u:p@h/db"),
-                         "postgresql+psycopg://u:p@h/db")
-        self.assertEqual(normalise_url("postgresql+asyncpg://u:p@h/db"),
-                         "postgresql+asyncpg://u:p@h/db")
+        self.assertEqual(
+            normalise_url("PostgreSQL+Psycopg://u:p@h/db"), "postgresql+psycopg://u:p@h/db"
+        )
+        self.assertEqual(
+            normalise_url("postgresql+asyncpg://u:p@h/db"), "postgresql+asyncpg://u:p@h/db"
+        )
 
 
 class TestNothingIsPrinted(unittest.TestCase):
-
     def assertNoSentinel(self, text):
         for sentinel in SENTINELS:
             self.assertNotIn(sentinel, text)
@@ -168,7 +174,6 @@ class TestNothingIsPrinted(unittest.TestCase):
 
 
 class TestOneCheckAndOneExit(unittest.TestCase):
-
     def test_the_library_raises_an_ordinary_error_that_tests_can_catch(self):
         """Not SystemExit, which unittest's setUpClass does not catch."""
         self.assertTrue(issubclass(DatabaseURLError, ValueError))
@@ -185,20 +190,28 @@ class TestOneCheckAndOneExit(unittest.TestCase):
     def test_every_database_command_exits_cleanly_on_a_bad_url(self):
         from fpl.api import serve
         from fpl.db import load, project, reconcile
-        commands = {"fpl-load": load.main, "fpl-project": project.main,
-                    "fpl-reconcile": reconcile.main, "fpl-migrate": migrate.main,
-                    "fpl-serve": lambda: serve.cli([])}
+
+        commands = {
+            "fpl-load": load.main,
+            "fpl-project": project.main,
+            "fpl-reconcile": reconcile.main,
+            "fpl-migrate": migrate.main,
+            "fpl-serve": lambda: serve.cli([]),
+        }
         for name, command in commands.items():
-            with self.subTest(command=name), \
-                    mock.patch.dict(os.environ, {"DATABASE_URL": f"npg_{PASSWORD}"}), \
-                    contextlib.redirect_stdout(io.StringIO()), \
-                    self.assertRaises(SystemExit) as raised:
+            with (
+                self.subTest(command=name),
+                mock.patch.dict(os.environ, {"DATABASE_URL": f"npg_{PASSWORD}"}),
+                contextlib.redirect_stdout(io.StringIO()),
+                self.assertRaises(SystemExit) as raised,
+            ):
                 command()
             self.assertIn("no scheme", str(raised.exception))
 
     def test_a_url_handed_to_make_engine_is_not_checked_again(self):
-        with mock.patch.object(session, "url_problems",
-                               side_effect=AssertionError("checked twice")):
+        with mock.patch.object(
+            session, "url_problems", side_effect=AssertionError("checked twice")
+        ):
             make_engine("postgresql://u:p@h/db").dispose()
 
 
@@ -212,8 +225,13 @@ class TestTheDeployCheck(unittest.TestCase):
         # -I ignores the environment and the script's directory; -S skips site,
         # so even this virtualenv's packages are out of reach, as on the
         # deploy runner, where nothing is installed.
-        return subprocess.run([sys.executable, "-I", "-S", *args], capture_output=True,
-                              text=True, env=environ, cwd="/")
+        return subprocess.run(
+            [sys.executable, "-I", "-S", *args],
+            capture_output=True,
+            text=True,
+            env=environ,
+            cwd="/",
+        )
 
     def check(self, url=None):
         return self.run_python(str(ROOT / "tools/check_database_url.py"), url=url)

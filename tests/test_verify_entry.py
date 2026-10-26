@@ -32,12 +32,14 @@ class VerifyCase(fixtures.TempCwd):
     def setUp(self):
         super().setUp()
         self.deadline = fixtures.future_deadline()
-        self.dir = self.league(SNAPSHOT_ID, target_gw=TARGET_GW,
-                               deadline=self.deadline)
+        self.dir = self.league(SNAPSHOT_ID, target_gw=TARGET_GW, deadline=self.deadline)
         self.bootstrap = json.loads((self.dir / "bootstrap.json").read_text())
         self.fixture_list = json.loads((self.dir / "fixtures.json").read_text())
         self.rows = fixtures.entry_rows(
-            self.bootstrap, self.fixture_list, TARGET_GW, self.deadline,
+            self.bootstrap,
+            self.fixture_list,
+            TARGET_GW,
+            self.deadline,
             snapshot_id=SNAPSHOT_ID,
         )
 
@@ -49,8 +51,7 @@ class VerifyCase(fixtures.TempCwd):
 
     def verify(self, rows=None, name=ENTRY_NAME):
         """Run the verifier over an entry, returning (exit code, output)."""
-        path = fixtures.write_csv(Path("predictions") / name,
-                                  self.rows if rows is None else rows)
+        path = fixtures.write_csv(Path("predictions") / name, self.rows if rows is None else rows)
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             code = verify_entry.main(path)
@@ -80,8 +81,15 @@ class TestCleanEntry(VerifyCase):
     def test_summary_reports_what_was_checked(self):
         """The PR body is the contemporaneous record, and this is its content."""
         output = self.assertAccepted()
-        for line in ("snapshot:", "target:", "deadline:", "generated:",
-                     "rows:", "blanking:", "doubles:"):
+        for line in (
+            "snapshot:",
+            "target:",
+            "deadline:",
+            "generated:",
+            "rows:",
+            "blanking:",
+            "doubles:",
+        ):
             self.assertIn(line, output)
 
 
@@ -120,25 +128,21 @@ class TestFixtureCounts(VerifyCase):
     def test_real_blank_the_entry_missed_refused(self):
         # Teams 1 and 2 are paired in the fixture list; dropping that fixture
         # makes both of them blank, while the entry still claims one fixture.
-        self.set_fixtures([f for f in self.fixture_list
-                           if 1 not in (f["team_h"], f["team_a"])])
+        self.set_fixtures([f for f in self.fixture_list if 1 not in (f["team_h"], f["team_a"])])
         self.assertRefused(because="(a blank)")
 
     def test_real_double_the_entry_missed_refused(self):
-        self.set_fixtures(self.fixture_list
-                          + [fixtures.fixture(TARGET_GW, 1, 3, fid=9001)])
+        self.set_fixtures(self.fixture_list + [fixtures.fixture(TARGET_GW, 1, 3, fid=9001)])
         self.assertRefused(because="(a double)")
 
     def test_fixtures_in_other_gameweeks_ignored(self):
         """A GW5 fixture must not count toward the GW4 comparison."""
-        self.set_fixtures(self.fixture_list
-                          + [fixtures.fixture(TARGET_GW + 1, 1, 3, fid=9002)])
+        self.set_fixtures(self.fixture_list + [fixtures.fixture(TARGET_GW + 1, 1, 3, fid=9002)])
         self.assertAccepted()
 
     def test_blanking_player_with_points_refused(self):
         """The count can be right and the prediction still ignore it."""
-        self.set_fixtures([f for f in self.fixture_list
-                           if 1 not in (f["team_h"], f["team_a"])])
+        self.set_fixtures([f for f in self.fixture_list if 1 not in (f["team_h"], f["team_a"])])
         rows = [dict(row) for row in self.rows]
         for row in rows:
             if row["team"] in ("T01", "T02"):
@@ -147,12 +151,13 @@ class TestFixtureCounts(VerifyCase):
         self.assertRefused(rows, because="carry a non-zero prediction")
 
     def test_blanking_team_zeroed_passes(self):
-        self.set_fixtures([f for f in self.fixture_list
-                           if 1 not in (f["team_h"], f["team_a"])])
+        self.set_fixtures([f for f in self.fixture_list if 1 not in (f["team_h"], f["team_a"])])
         rows = fixtures.entry_rows(
             self.bootstrap,
             json.loads((self.dir / "fixtures.json").read_text()),
-            TARGET_GW, self.deadline, snapshot_id=SNAPSHOT_ID,
+            TARGET_GW,
+            self.deadline,
+            snapshot_id=SNAPSHOT_ID,
         )
         self.assertAccepted(rows)
 
@@ -179,8 +184,9 @@ class TestAvailability(VerifyCase):
 
     def test_flagged_player_zeroed_passes(self):
         bootstrap = self.flag(1, "i")
-        rows = fixtures.entry_rows(bootstrap, self.fixture_list, TARGET_GW,
-                                   self.deadline, snapshot_id=SNAPSHOT_ID)
+        rows = fixtures.entry_rows(
+            bootstrap, self.fixture_list, TARGET_GW, self.deadline, snapshot_id=SNAPSHOT_ID
+        )
         self.assertAccepted(rows)
 
     def test_partial_chance_not_reduced_refused(self):
@@ -190,8 +196,9 @@ class TestAvailability(VerifyCase):
 
     def test_partial_chance_reduced_passes(self):
         bootstrap = self.flag(1, "d", chance=25)
-        rows = fixtures.entry_rows(bootstrap, self.fixture_list, TARGET_GW,
-                                   self.deadline, snapshot_id=SNAPSHOT_ID)
+        rows = fixtures.entry_rows(
+            bootstrap, self.fixture_list, TARGET_GW, self.deadline, snapshot_id=SNAPSHOT_ID
+        )
         self.assertAccepted(rows)
 
 
@@ -241,28 +248,31 @@ class TestAgreesWithSnapshot(VerifyCase):
         looked up by the name in the row rather than by the player's actual
         team in the snapshot.
         """
-        self.set_fixtures([f for f in self.fixture_list
-                           if 1 not in (f["team_h"], f["team_a"])])
+        self.set_fixtures([f for f in self.fixture_list if 1 not in (f["team_h"], f["team_a"])])
         rows = fixtures.entry_rows(
             self.bootstrap,
             json.loads((self.dir / "fixtures.json").read_text()),
-            TARGET_GW, self.deadline, snapshot_id=SNAPSHOT_ID,
+            TARGET_GW,
+            self.deadline,
+            snapshot_id=SNAPSHOT_ID,
         )
         smuggled = next(r for r in rows if r["team"] == "T01")
-        smuggled.update(team="T03", n_fixtures=1, predicted_points=6.0,
-                        expected_minutes=90.0, points_per_90=6.0)
+        smuggled.update(
+            team="T03", n_fixtures=1, predicted_points=6.0, expected_minutes=90.0, points_per_90=6.0
+        )
         rows.sort(key=lambda r: (-r["predicted_points"], r["player_id"]))
         output = self.assertRefused(rows, because="disagree with the snapshot on team")
         self.assertIn("n_fixtures is 1 in the entry", output)
 
     def test_blanking_player_with_minutes_but_no_points_refused(self):
         """expected_minutes is what a post-mortem reads to attribute a miss."""
-        self.set_fixtures([f for f in self.fixture_list
-                           if 1 not in (f["team_h"], f["team_a"])])
+        self.set_fixtures([f for f in self.fixture_list if 1 not in (f["team_h"], f["team_a"])])
         rows = fixtures.entry_rows(
             self.bootstrap,
             json.loads((self.dir / "fixtures.json").read_text()),
-            TARGET_GW, self.deadline, snapshot_id=SNAPSHOT_ID,
+            TARGET_GW,
+            self.deadline,
+            snapshot_id=SNAPSHOT_ID,
         )
         blanking = next(r for r in rows if r["team"] == "T01")
         blanking["expected_minutes"] = 90.0  # points stay 0.0
@@ -273,7 +283,11 @@ class TestCheckEntrySeam(VerifyCase):
     def test_no_rows_returns_faults_rather_than_raising(self):
         """check_entry contracts to return a list, including for no rows."""
         faults = verify_entry.check_entry(
-            [], self.bootstrap, self.fixture_list, TARGET_GW, "baseline-v1",
+            [],
+            self.bootstrap,
+            self.fixture_list,
+            TARGET_GW,
+            "baseline-v1",
             Path("predictions") / ENTRY_NAME,
         )
         self.assertEqual(faults, ["an entry must contain at least one row"])
@@ -303,13 +317,11 @@ class TestSnapshotIdIsUntrusted(VerifyCase):
 
 class TestProvenance(VerifyCase):
     def test_deadline_not_matching_bootstrap_refused(self):
-        rows = [dict(row, deadline_utc="2026-09-19T17:30:00Z")
-                for row in self.rows]
+        rows = [dict(row, deadline_utc="2026-09-19T17:30:00Z") for row in self.rows]
         self.assertRefused(rows, because="but the snapshot's GW4 deadline is")
 
     def test_generated_after_deadline_refused(self):
-        rows = [dict(row, generated_at_utc=fixtures.future_deadline(hours=25))
-                for row in self.rows]
+        rows = [dict(row, generated_at_utc=fixtures.future_deadline(hours=25)) for row in self.rows]
         self.assertRefused(rows, because="at or after the deadline")
 
     def test_generated_exactly_at_deadline_refused(self):
@@ -365,7 +377,7 @@ class TestSchema(VerifyCase):
         self.assertRefused(rows, because="cannot be negative")
 
     def test_float_in_an_int_column_refused(self):
-        """"1.0" in n_fixtures is a fault, not a value to coerce quietly."""
+        """ "1.0" in n_fixtures is a fault, not a value to coerce quietly."""
         rows = [dict(row) for row in self.rows]
         rows[0]["n_fixtures"] = "1.0"
         self.assertRefused(rows, because="not an int")
@@ -384,8 +396,7 @@ class TestSchema(VerifyCase):
 class TestFileShape(VerifyCase):
     def test_wrong_column_order_refused(self):
         shuffled = [fixtures.FIELDS[1], fixtures.FIELDS[0], *fixtures.FIELDS[2:]]
-        path = fixtures.write_csv(Path("predictions") / ENTRY_NAME, self.rows,
-                                  fieldnames=shuffled)
+        path = fixtures.write_csv(Path("predictions") / ENTRY_NAME, self.rows, fieldnames=shuffled)
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             code = verify_entry.main(path)

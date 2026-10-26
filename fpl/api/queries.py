@@ -47,55 +47,90 @@ def _logged(connection, season):
     """{gameweek: [model_version, ...]} for every committed entry this season."""
     logged = defaultdict(list)
     for gameweek, model in connection.execute(
-            select(PredictionEntry.gameweek, PredictionEntry.model_version)
-            .where(PredictionEntry.season == season)
-            .order_by(PredictionEntry.gameweek, PredictionEntry.model_version)):
+        select(PredictionEntry.gameweek, PredictionEntry.model_version)
+        .where(PredictionEntry.season == season)
+        .order_by(PredictionEntry.gameweek, PredictionEntry.model_version)
+    ):
         logged[gameweek].append(model)
     return logged
 
 
 def gameweeks(connection, season):
     logged = _logged(connection, season)
-    rows = connection.execute(select(Gameweek).where(Gameweek.season == season)
-                              .order_by(Gameweek.gameweek)).mappings()
+    rows = connection.execute(
+        select(Gameweek).where(Gameweek.season == season).order_by(Gameweek.gameweek)
+    ).mappings()
     return [dict(row) | {"models_logged": logged.get(row["gameweek"], [])} for row in rows]
 
 
 def gameweek(connection, season, number):
-    row = connection.execute(select(Gameweek).where(
-        Gameweek.season == season, Gameweek.gameweek == number)).mappings().first()
+    row = (
+        connection.execute(
+            select(Gameweek).where(Gameweek.season == season, Gameweek.gameweek == number)
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise not_found(f"No gameweek {number} in {season}.")
 
     home, away = aliased(Team), aliased(Team)
     fixtures = connection.execute(
-        select(Fixture.fixture_id, Fixture.kickoff_utc, home.short_name.label("home"),
-               away.short_name.label("away"), Fixture.team_h_score.label("home_score"),
-               Fixture.team_a_score.label("away_score"), Fixture.finished)
+        select(
+            Fixture.fixture_id,
+            Fixture.kickoff_utc,
+            home.short_name.label("home"),
+            away.short_name.label("away"),
+            Fixture.team_h_score.label("home_score"),
+            Fixture.team_a_score.label("away_score"),
+            Fixture.finished,
+        )
         .join(home, and_(home.season == Fixture.season, home.team_id == Fixture.team_h))
         .join(away, and_(away.season == Fixture.season, away.team_id == Fixture.team_a))
         .where(Fixture.season == season, Fixture.gameweek == number)
-        .order_by(Fixture.kickoff_utc, Fixture.fixture_id)).mappings()
+        .order_by(Fixture.kickoff_utc, Fixture.fixture_id)
+    ).mappings()
 
     entries = []
     for entry in connection.execute(
-            select(PredictionEntry, ScoreEntry.n, ScoreEntry.mae, ScoreEntry.rmse,
-                   ScoreEntry.bias, ScoreEntry.spearman)
-            .outerjoin(ScoreEntry, and_(
+        select(
+            PredictionEntry,
+            ScoreEntry.n,
+            ScoreEntry.mae,
+            ScoreEntry.rmse,
+            ScoreEntry.bias,
+            ScoreEntry.spearman,
+        )
+        .outerjoin(
+            ScoreEntry,
+            and_(
                 ScoreEntry.season == PredictionEntry.season,
                 ScoreEntry.gameweek == PredictionEntry.gameweek,
-                ScoreEntry.model_version == PredictionEntry.model_version))
-            .where(PredictionEntry.season == season, PredictionEntry.gameweek == number)
-            .order_by(PredictionEntry.model_version)).mappings():
-        score = ({k: entry[k] for k in ("n", "mae", "rmse", "bias", "spearman")}
-                 if entry["n"] is not None else None)
-        entries.append({k: entry[k] for k in ("model_version", "snapshot_id",
-                                              "generated_at_utc", "deadline_utc")}
-                       | {"score": score})
+                ScoreEntry.model_version == PredictionEntry.model_version,
+            ),
+        )
+        .where(PredictionEntry.season == season, PredictionEntry.gameweek == number)
+        .order_by(PredictionEntry.model_version)
+    ).mappings():
+        score = (
+            {k: entry[k] for k in ("n", "mae", "rmse", "bias", "spearman")}
+            if entry["n"] is not None
+            else None
+        )
+        entries.append(
+            {
+                k: entry[k]
+                for k in ("model_version", "snapshot_id", "generated_at_utc", "deadline_utc")
+            }
+            | {"score": score}
+        )
 
-    return dict(row) | {"season": season, "fixtures": [dict(f) for f in fixtures],
-                        "entries": entries,
-                        "models_logged": _logged(connection, season).get(number, [])}
+    return dict(row) | {
+        "season": season,
+        "fixtures": [dict(f) for f in fixtures],
+        "entries": entries,
+        "models_logged": _logged(connection, season).get(number, []),
+    }
 
 
 def encode_cursor(predicted_points, player_id):
@@ -114,30 +149,56 @@ def decode_cursor(cursor):
     return Decimal(points), int(player_id)
 
 
-def predictions(connection, season, number, model, *, position=None, team=None,
-                max_price=None, limit=50, after=None):
+def predictions(
+    connection,
+    season,
+    number,
+    model,
+    *,
+    position=None,
+    team=None,
+    max_price=None,
+    limit=50,
+    after=None,
+):
     """One entry's rows, in the log's order: predicted points down, then player id.
 
     Keyset pagination: `after` is the last row's (predicted_points, player_id),
     so a page is the same however many rows came before it.
     """
-    entry = connection.execute(select(PredictionEntry).where(
-        PredictionEntry.season == season, PredictionEntry.gameweek == number,
-        PredictionEntry.model_version == model)).mappings().first()
+    entry = (
+        connection.execute(
+            select(PredictionEntry).where(
+                PredictionEntry.season == season,
+                PredictionEntry.gameweek == number,
+                PredictionEntry.model_version == model,
+            )
+        )
+        .mappings()
+        .first()
+    )
     if entry is None:
         raise not_found(f"No {model} entry for gameweek {number} of {season}.")
 
     query = (
         select(Prediction, PlayerScore.actual_points, PlayerScore.actual_minutes)
-        .outerjoin(PlayerScore, and_(
-            PlayerScore.season == Prediction.season,
-            PlayerScore.gameweek == Prediction.gameweek,
-            PlayerScore.model_version == Prediction.model_version,
-            PlayerScore.player_id == Prediction.player_id))
-        .where(Prediction.season == season, Prediction.gameweek == number,
-               Prediction.model_version == model)
+        .outerjoin(
+            PlayerScore,
+            and_(
+                PlayerScore.season == Prediction.season,
+                PlayerScore.gameweek == Prediction.gameweek,
+                PlayerScore.model_version == Prediction.model_version,
+                PlayerScore.player_id == Prediction.player_id,
+            ),
+        )
+        .where(
+            Prediction.season == season,
+            Prediction.gameweek == number,
+            Prediction.model_version == model,
+        )
         .order_by(Prediction.predicted_points.desc(), Prediction.player_id)
-        .limit(limit + 1))
+        .limit(limit + 1)
+    )
     if position is not None:
         query = query.where(Prediction.position == position)
     if team is not None:
@@ -146,68 +207,117 @@ def predictions(connection, season, number, model, *, position=None, team=None,
         query = query.where(Prediction.price <= max_price)
     if after is not None:
         points, player_id = decode_cursor(after)
-        query = query.where(or_(
-            Prediction.predicted_points < points,
-            and_(Prediction.predicted_points == points, Prediction.player_id > player_id)))
+        query = query.where(
+            or_(
+                Prediction.predicted_points < points,
+                and_(Prediction.predicted_points == points, Prediction.player_id > player_id),
+            )
+        )
 
     rows = [dict(r) for r in connection.execute(query).mappings()]
     page, more = rows[:limit], len(rows) > limit
-    next_cursor = (encode_cursor(page[-1]["predicted_points"], page[-1]["player_id"])
-                   if more else None)
+    next_cursor = (
+        encode_cursor(page[-1]["predicted_points"], page[-1]["player_id"]) if more else None
+    )
     return dict(entry) | {"items": page, "next_cursor": next_cursor}
 
 
 def player(connection, season, player_id):
-    row = connection.execute(
-        select(SeasonPlayer.element_id.label("player_id"), SeasonPlayer.web_name,
-               SeasonPlayer.position, Player.first_name, Player.second_name)
-        .join(Player, Player.code == SeasonPlayer.player_code)
-        .where(SeasonPlayer.season == season, SeasonPlayer.element_id == player_id)
-    ).mappings().first()
+    row = (
+        connection.execute(
+            select(
+                SeasonPlayer.element_id.label("player_id"),
+                SeasonPlayer.web_name,
+                SeasonPlayer.position,
+                Player.first_name,
+                Player.second_name,
+            )
+            .join(Player, Player.code == SeasonPlayer.player_code)
+            .where(SeasonPlayer.season == season, SeasonPlayer.element_id == player_id)
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise not_found(f"No player {player_id} in {season}.")
 
     # An open-ended spell ('[6,)') is allowed by the schema: no last gameweek yet.
     clubs = [
-        {"team": team, "first_gameweek": gameweeks.lower,
-         "last_gameweek": None if gameweeks.upper is None else gameweeks.upper - 1}
+        {
+            "team": team,
+            "first_gameweek": gameweeks.lower,
+            "last_gameweek": None if gameweeks.upper is None else gameweeks.upper - 1,
+        }
         for team, gameweeks in connection.execute(
             select(Team.short_name, PlayerClub.gameweeks)
-            .join(Team, and_(Team.season == PlayerClub.season,
-                             Team.team_id == PlayerClub.team_id))
+            .join(Team, and_(Team.season == PlayerClub.season, Team.team_id == PlayerClub.team_id))
             .where(PlayerClub.season == season, PlayerClub.element_id == player_id)
-            .order_by(PlayerClub.gameweeks))]
+            .order_by(PlayerClub.gameweeks)
+        )
+    ]
 
     opponent = aliased(Team)
     history = connection.execute(
-        select(Fixture.gameweek, PlayerFixtureStats.fixture_id,
-               opponent.short_name.label("opponent"), PlayerFixtureStats.was_home,
-               PlayerFixtureStats.minutes, PlayerFixtureStats.total_points,
-               PlayerFixtureStats.goals_scored, PlayerFixtureStats.assists,
-               PlayerFixtureStats.clean_sheets, PlayerFixtureStats.bonus,
-               PlayerFixtureStats.expected_goals, PlayerFixtureStats.expected_assists)
-        .join(Fixture, and_(Fixture.season == PlayerFixtureStats.season,
-                            Fixture.fixture_id == PlayerFixtureStats.fixture_id))
-        .join(opponent, and_(opponent.season == PlayerFixtureStats.season,
-                             opponent.team_id == PlayerFixtureStats.opponent_team))
+        select(
+            Fixture.gameweek,
+            PlayerFixtureStats.fixture_id,
+            opponent.short_name.label("opponent"),
+            PlayerFixtureStats.was_home,
+            PlayerFixtureStats.minutes,
+            PlayerFixtureStats.total_points,
+            PlayerFixtureStats.goals_scored,
+            PlayerFixtureStats.assists,
+            PlayerFixtureStats.clean_sheets,
+            PlayerFixtureStats.bonus,
+            PlayerFixtureStats.expected_goals,
+            PlayerFixtureStats.expected_assists,
+        )
+        .join(
+            Fixture,
+            and_(
+                Fixture.season == PlayerFixtureStats.season,
+                Fixture.fixture_id == PlayerFixtureStats.fixture_id,
+            ),
+        )
+        .join(
+            opponent,
+            and_(
+                opponent.season == PlayerFixtureStats.season,
+                opponent.team_id == PlayerFixtureStats.opponent_team,
+            ),
+        )
         .where(PlayerFixtureStats.season == season, PlayerFixtureStats.element_id == player_id)
-        .order_by(Fixture.kickoff_utc, Fixture.fixture_id)).mappings()
+        .order_by(Fixture.kickoff_utc, Fixture.fixture_id)
+    ).mappings()
 
     predicted = connection.execute(
-        select(Prediction.gameweek, Prediction.model_version, Prediction.predicted_points,
-               Prediction.expected_minutes, PlayerScore.actual_points,
-               PlayerScore.actual_minutes)
-        .outerjoin(PlayerScore, and_(
-            PlayerScore.season == Prediction.season,
-            PlayerScore.gameweek == Prediction.gameweek,
-            PlayerScore.model_version == Prediction.model_version,
-            PlayerScore.player_id == Prediction.player_id))
+        select(
+            Prediction.gameweek,
+            Prediction.model_version,
+            Prediction.predicted_points,
+            Prediction.expected_minutes,
+            PlayerScore.actual_points,
+            PlayerScore.actual_minutes,
+        )
+        .outerjoin(
+            PlayerScore,
+            and_(
+                PlayerScore.season == Prediction.season,
+                PlayerScore.gameweek == Prediction.gameweek,
+                PlayerScore.model_version == Prediction.model_version,
+                PlayerScore.player_id == Prediction.player_id,
+            ),
+        )
         .where(Prediction.season == season, Prediction.player_id == player_id)
-        .order_by(Prediction.gameweek, Prediction.model_version)).mappings()
+        .order_by(Prediction.gameweek, Prediction.model_version)
+    ).mappings()
 
-    return dict(row) | {"season": season, "clubs": clubs,
-                        "history": [dict(h) for h in history],
-                        "predictions": [dict(p) for p in predicted]}
+    return dict(row) | {
+        "season": season,
+        "clubs": clubs,
+        "history": [dict(h) for h in history],
+        "predictions": [dict(p) for p in predicted],
+    }
 
 
 def models(connection, season):
@@ -218,39 +328,84 @@ def models(connection, season):
             logged[model].append(gameweek)
     scored = defaultdict(list)
     for gameweek, model in connection.execute(
-            select(ScoreEntry.gameweek, ScoreEntry.model_version)
-            .where(ScoreEntry.season == season).order_by(ScoreEntry.gameweek)):
+        select(ScoreEntry.gameweek, ScoreEntry.model_version)
+        .where(ScoreEntry.season == season)
+        .order_by(ScoreEntry.gameweek)
+    ):
         scored[model].append(gameweek)
-    settled = set(connection.scalars(select(Gameweek.gameweek).where(
-        Gameweek.season == season, Gameweek.finished, Gameweek.data_checked)))
+    settled = set(
+        connection.scalars(
+            select(Gameweek.gameweek).where(
+                Gameweek.season == season, Gameweek.finished, Gameweek.data_checked
+            )
+        )
+    )
 
-    return [{"model_version": model, "first_gameweek": gameweeks[0],
-             "gameweeks_logged": gameweeks, "gameweeks_scored": scored[model],
-             "gameweeks_missed": missed_gameweeks(gameweeks, settled)}
-            for model, gameweeks in sorted(logged.items())]
+    return [
+        {
+            "model_version": model,
+            "first_gameweek": gameweeks[0],
+            "gameweeks_logged": gameweeks,
+            "gameweeks_scored": scored[model],
+            "gameweeks_missed": missed_gameweeks(gameweeks, settled),
+        }
+        for model, gameweeks in sorted(logged.items())
+    ]
 
 
 def scorecard(connection, season):
     per_gameweek = defaultdict(list)
     for row in connection.execute(
-            select(ScoreEntry.model_version, ScoreEntry.gameweek, ScoreEntry.n, ScoreEntry.mae,
-                   ScoreEntry.rmse, ScoreEntry.bias, ScoreEntry.spearman)
-            .where(ScoreEntry.season == season).order_by(ScoreEntry.gameweek)).mappings():
+        select(
+            ScoreEntry.model_version,
+            ScoreEntry.gameweek,
+            ScoreEntry.n,
+            ScoreEntry.mae,
+            ScoreEntry.rmse,
+            ScoreEntry.bias,
+            ScoreEntry.spearman,
+        )
+        .where(ScoreEntry.season == season)
+        .order_by(ScoreEntry.gameweek)
+    ).mappings():
         per_gameweek[row["model_version"]].append(
-            {k: v for k, v in row.items() if k != "model_version"})
+            {k: v for k, v in row.items() if k != "model_version"}
+        )
 
     rows = defaultdict(lambda: defaultdict(list))
     for model, gameweek, predicted, actual, expected_minutes, actual_minutes in connection.execute(
-            select(PlayerScore.model_version, PlayerScore.gameweek, PlayerScore.predicted_points,
-                   PlayerScore.actual_points, PlayerScore.expected_minutes,
-                   PlayerScore.actual_minutes).where(PlayerScore.season == season)):
-        rows[model][gameweek].append({
-            "predicted_points": float(predicted), "actual_points": actual,
-            "expected_minutes": float(expected_minutes), "actual_minutes": actual_minutes})
+        select(
+            PlayerScore.model_version,
+            PlayerScore.gameweek,
+            PlayerScore.predicted_points,
+            PlayerScore.actual_points,
+            PlayerScore.expected_minutes,
+            PlayerScore.actual_minutes,
+        ).where(PlayerScore.season == season)
+    ):
+        rows[model][gameweek].append(
+            {
+                "predicted_points": float(predicted),
+                "actual_points": actual,
+                "expected_minutes": float(expected_minutes),
+                "actual_minutes": actual_minutes,
+            }
+        )
 
-    harness_versions = sorted(connection.scalars(
-        select(ScoreEntry.harness_version).where(ScoreEntry.season == season).distinct()))
-    return {"season": season, "harness_versions": harness_versions,
-            "models": [model | {"per_gameweek": per_gameweek[model["model_version"]],
-                                "pooled": pooled_block(list(rows[model["model_version"]].values()))}
-                       for model in models(connection, season)]}
+    harness_versions = sorted(
+        connection.scalars(
+            select(ScoreEntry.harness_version).where(ScoreEntry.season == season).distinct()
+        )
+    )
+    return {
+        "season": season,
+        "harness_versions": harness_versions,
+        "models": [
+            model
+            | {
+                "per_gameweek": per_gameweek[model["model_version"]],
+                "pooled": pooled_block(list(rows[model["model_version"]].values())),
+            }
+            for model in models(connection, season)
+        ],
+    }

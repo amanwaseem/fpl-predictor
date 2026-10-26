@@ -24,9 +24,21 @@ from pathlib import Path
 # inferred from the first row: the column set is part of the log contract, and
 # every gameweek has to stay comparable to the ones already committed.
 FIELDS = [
-    "gameweek", "player_id", "web_name", "team", "position", "price",
-    "predicted_points", "expected_minutes", "points_per_90", "n_fixtures",
-    "status", "model_version", "snapshot_id", "generated_at_utc", "deadline_utc",
+    "gameweek",
+    "player_id",
+    "web_name",
+    "team",
+    "position",
+    "price",
+    "predicted_points",
+    "expected_minutes",
+    "points_per_90",
+    "n_fixtures",
+    "status",
+    "model_version",
+    "snapshot_id",
+    "generated_at_utc",
+    "deadline_utc",
 ]
 
 # Stamped by write_entry from its own arguments rather than supplied by the
@@ -55,8 +67,13 @@ INTEGER = ["gameweek", "player_id", "n_fixtures"]
 # genuinely negative FPL score, and a model predicting one must be able to say
 # so rather than have the log silently refuse it.
 NUMERIC = [
-    "gameweek", "player_id", "price", "predicted_points",
-    "expected_minutes", "points_per_90", "n_fixtures",
+    "gameweek",
+    "player_id",
+    "price",
+    "predicted_points",
+    "expected_minutes",
+    "points_per_90",
+    "n_fixtures",
 ]
 NON_NEGATIVE = ["gameweek", "player_id", "price", "expected_minutes", "n_fixtures"]
 
@@ -134,9 +151,7 @@ def read_entry(path):
     rows, faults = [], []
     for index, values in enumerate(lines):
         if len(values) != len(FIELDS):
-            faults.append(
-                f"row {index}: has {len(values)} fields, expected {len(FIELDS)}"
-            )
+            faults.append(f"row {index}: has {len(values)} fields, expected {len(FIELDS)}")
             continue
         row = dict(zip(FIELDS, values, strict=True))
         parsed = True
@@ -170,8 +185,10 @@ def _number_fault(row, index, field):
     if field in NON_NEGATIVE and value < 0:
         return f"row {index}: {field} is {value}, which cannot be negative"
     if field in INTEGER and not isinstance(value, int):
-        return (f"row {index}: {field} is {value!r}, which SPEC section 5 types "
-                "as int — a float reaches the CSV as '1.0'")
+        return (
+            f"row {index}: {field} is {value!r}, which SPEC section 5 types "
+            "as int — a float reaches the CSV as '1.0'"
+        )
     return None
 
 
@@ -214,8 +231,7 @@ def validate_rows(rows, target_gw):
             )
         if row["status"] not in STATUSES:
             faults.append(
-                f"row {index}: status is {row['status']!r}, "
-                f"not one of {' '.join(sorted(STATUSES))}"
+                f"row {index}: status is {row['status']!r}, not one of {' '.join(sorted(STATUSES))}"
             )
         if row["position"] not in POSITIONS:
             faults.append(
@@ -246,8 +262,7 @@ def validate_rows(rows, target_gw):
     if well_formed:
         order = [(-row["predicted_points"], row["player_id"]) for row in rows]
         if order != sorted(order):
-            first = next(i for i in range(len(order) - 1)
-                         if order[i] > order[i + 1])
+            first = next(i for i in range(len(order) - 1) if order[i] > order[i + 1])
             faults.append(
                 f"rows {first} and {first + 1} are out of the contract sort "
                 "order (descending predicted_points, ties by ascending "
@@ -260,11 +275,9 @@ def validate_rows(rows, target_gw):
 
     if faults:
         shown = faults[:MAX_REPORTED]
-        more = (f"\n... and {len(faults) - MAX_REPORTED} more"
-                if len(faults) > MAX_REPORTED else "")
+        more = f"\n... and {len(faults) - MAX_REPORTED} more" if len(faults) > MAX_REPORTED else ""
         raise ValueError(
-            f"{len(faults)} schema violation(s) in this entry:\n  "
-            + "\n  ".join(shown) + more
+            f"{len(faults)} schema violation(s) in this entry:\n  " + "\n  ".join(shown) + more
         )
 
 
@@ -331,8 +344,7 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
     # backfilling a past gameweek into scratch/ is ordinary exploratory work.
     if now >= deadline_at:
         late = (
-            f"generated_at_utc {generated_at} is at or after the GW{target_gw} "
-            f"deadline {deadline}."
+            f"generated_at_utc {generated_at} is at or after the GW{target_gw} deadline {deadline}."
         )
         if _is_the_log(out_dir):
             raise SystemExit(
@@ -340,9 +352,11 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
                 "made after its deadline is indistinguishable from one made "
                 "knowing the result.\nNothing was written."
             )
-        print(f"WARNING: {late}\n"
-              f"         Fine for an exploratory run in {out_dir}, but this "
-              "could never go in predictions/.")
+        print(
+            f"WARNING: {late}\n"
+            f"         Fine for an exploratory run in {out_dir}, but this "
+            "could never go in predictions/."
+        )
 
     # Provenance is write_entry's to state, from its own arguments. A row that
     # arrives carrying it is either a model that misunderstands the contract or
@@ -363,8 +377,13 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
     # predictions to scratch/ and predictions/, say — does not find provenance
     # from the first write already sitting in them.
     stamped = [
-        dict(row, model_version=model_version, snapshot_id=snapshot_id,
-             generated_at_utc=generated_at, deadline_utc=deadline)
+        dict(
+            row,
+            model_version=model_version,
+            snapshot_id=snapshot_id,
+            generated_at_utc=generated_at,
+            deadline_utc=deadline,
+        )
         for row in rows
     ]
 

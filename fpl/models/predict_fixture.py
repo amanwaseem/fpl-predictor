@@ -78,12 +78,25 @@ MODEL_VERSION = "form-fixture-v1"
 DEFENSIVE_PRIOR_SCALE = 1.0
 
 
-def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
-                 strength="xg", last_season=True,
-                 player_prior_minutes=PLAYER_PRIOR_MINUTES,
-                 floor=None, xg_weight=None, prior_matches=None,
-                 goalkeeping=False, defensive=False,
-                 defensive_prior_scale=DEFENSIVE_PRIOR_SCALE, positional_prior=None):
+def predict_rows(
+    bootstrap,
+    fixtures,
+    histories,
+    pasts,
+    target_gw,
+    usable,
+    *,
+    strength="xg",
+    last_season=True,
+    player_prior_minutes=PLAYER_PRIOR_MINUTES,
+    floor=None,
+    xg_weight=None,
+    prior_matches=None,
+    goalkeeping=False,
+    defensive=False,
+    defensive_prior_scale=DEFENSIVE_PRIOR_SCALE,
+    positional_prior=None,
+):
     """Predictions for every player, as log rows without provenance.
 
     The whole model, separated from where its inputs come from, as in
@@ -126,12 +139,15 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
     league = positional_rates(bootstrap["elements"], positions, histories, target_gw, usable)
     if defensive:
         league_defensive = positional_defensive_rates(
-            bootstrap["elements"], positions, histories, target_gw, usable)
+            bootstrap["elements"], positions, histories, target_gw, usable
+        )
     if goalkeeping:
-        league_gk = positional_goalkeeping_rates(bootstrap["elements"], positions, histories,
-                                                 target_gw, usable)
-        league_saves = league_save_rate(bootstrap["elements"], positions, histories,
-                                        target_gw, usable)
+        league_gk = positional_goalkeeping_rates(
+            bootstrap["elements"], positions, histories, target_gw, usable
+        )
+        league_saves = league_save_rate(
+            bootstrap["elements"], positions, histories, target_gw, usable
+        )
 
     rows = []
     for player in bootstrap["elements"]:
@@ -153,46 +169,62 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
             # parts toward another would leave `rest` as whatever is left
             # over — negative, even — and the fixture would scale the wrong
             # thing.
-            parts = (player_prior_parts(pasts.get(pid, []), season, position, xg_weight, floor)
-                     if last_season else None)
+            parts = (
+                player_prior_parts(pasts.get(pid, []), season, position, xg_weight, floor)
+                if last_season
+                else None
+            )
             if parts is not None:
-                _, prior_minutes = prior(position, parts["total"],
-                                         season_minutes(history, target_gw, usable),
-                                         player_prior_minutes)
+                _, prior_minutes = prior(
+                    position,
+                    parts["total"],
+                    season_minutes(history, target_gw, usable),
+                    player_prior_minutes,
+                )
                 priors = (parts["total"], parts["attack"], parts["clean_sheet"])
             else:
                 prior_minutes = POSITION_PRIOR_MINUTES
-                priors = (POSITION_PRIOR_PP90.get(position, 3.5),
-                          *league.get(position, (0.0, 0.0)))
+                priors = (POSITION_PRIOR_PP90.get(position, 3.5), *league.get(position, (0.0, 0.0)))
                 if positional_prior is not None:
                     priors, prior_minutes = positional_prior(
-                        player, position, priors, prior_minutes,
-                        season_minutes(history, target_gw, usable))
+                        player,
+                        position,
+                        priors,
+                        prior_minutes,
+                        season_minutes(history, target_gw, usable),
+                    )
 
             minutes = sum(r["minutes"] for r in recent)
-            observed = (sum(r["points"] for r in recent),
-                        sum(attack_points(r, position) for r in window),
-                        sum(clean_sheet_points(r, position) for r in window))
+            observed = (
+                sum(r["points"] for r in recent),
+                sum(attack_points(r, position) for r in window),
+                sum(clean_sheet_points(r, position) for r in window),
+            )
             if goalkeeping or defensive:
                 # More parts out of the rest, each shrunk at the same weight
                 # toward the same prior's matching part, so they are counted
                 # once and still add up to the total.
                 if goalkeeping:
-                    priors += ((parts["conceded"], parts["saves"]) if parts is not None
-                               else league_gk.get(position, (0.0, 0.0)))
-                    observed += (sum(conceded_points(r, position) for r in window),
-                                 sum(save_points(r, position) for r in window))
+                    priors += (
+                        (parts["conceded"], parts["saves"])
+                        if parts is not None
+                        else league_gk.get(position, (0.0, 0.0))
+                    )
+                    observed += (
+                        sum(conceded_points(r, position) for r in window),
+                        sum(save_points(r, position) for r in window),
+                    )
                 if defensive:
                     # Last season's points are not in its row, only its count,
                     # so they are read off the count as this season's are.
                     if parts is not None:
                         prior_count = parts["defensive_count"]
-                        prior_defensive = (DEFENSIVE_CONTRIBUTION_POINTS
-                                           * chance_of_defensive_contribution(prior_count,
-                                                                              position))
+                        prior_defensive = (
+                            DEFENSIVE_CONTRIBUTION_POINTS
+                            * chance_of_defensive_contribution(prior_count, position)
+                        )
                     else:
-                        prior_count, prior_defensive = league_defensive.get(position,
-                                                                            (0.0, 0.0))
+                        prior_count, prior_defensive = league_defensive.get(position, (0.0, 0.0))
                     priors += (prior_defensive,)
                     observed += (sum(defensive_points(r, position) for r in window),)
                 pp90, split, rest_pp90 = split_parts(observed, minutes, priors, prior_minutes)
@@ -202,17 +234,23 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
                     # fixture below. The logged rate carries it as a full match.
                     count = shrunk_pp90(
                         sum(r.get("defensive_contribution") or 0 for r in window),
-                        minutes, prior_count, prior_minutes * defensive_prior_scale)
-                    pp90 += (DEFENSIVE_CONTRIBUTION_POINTS
-                             * chance_of_defensive_contribution(count, position) - split[-1])
-                    dc_per_fixture = defensive_contribution_points(count, position, window,
-                                                                   exp_min)
+                        minutes,
+                        prior_count,
+                        prior_minutes * defensive_prior_scale,
+                    )
+                    pp90 += (
+                        DEFENSIVE_CONTRIBUTION_POINTS
+                        * chance_of_defensive_contribution(count, position)
+                        - split[-1]
+                    )
+                    dc_per_fixture = defensive_contribution_points(count, position, window, exp_min)
             else:
                 # v1 as logged, through its own helper: split_parts would
                 # subtract the parts' sum, which is not bit-identical to
                 # subtracting them in turn, and v1 must not move.
                 pp90, attack_pp90, _, rest_pp90 = split_rates(
-                    observed, minutes, priors, prior_minutes)
+                    observed, minutes, priors, prior_minutes
+                )
             sixty = chance_of_sixty(window, player)
             usual = ratings.usual_goals(player["team"])
 
@@ -220,33 +258,43 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, *,
                 goals_for, goals_against = ratings.fixture_goals(fixture, player["team"])
                 scale = goals_for / usual if usual else 1.0
                 predicted += (rest_pp90 + attack_pp90 * scale) * exp_min / 90.0
-                predicted += (CLEAN_SHEET_POINTS.get(position, 0) * sixty
-                              * clean_sheet_probability(goals_against))
+                predicted += (
+                    CLEAN_SHEET_POINTS.get(position, 0)
+                    * sixty
+                    * clean_sheet_probability(goals_against)
+                )
                 if defensive:
                     predicted += dc_per_fixture
                 if goalkeeping:
                     # Conceded and saved while he is on the pitch: a keeper or
                     # defender plays 90 or nothing often enough for minutes/90
                     # to stand in for the chance he is there to concede them.
-                    predicted += exp_min / 90.0 * (
-                        CONCEDED_POINTS.get(position, 0)
-                        * poisson_floor_mean(goals_against, CONCEDED_PER_POINT)
-                        + SAVE_POINTS.get(position, 0)
-                        * poisson_floor_mean(league_saves * goals_against, SAVES_PER_POINT))
+                    predicted += (
+                        exp_min
+                        / 90.0
+                        * (
+                            CONCEDED_POINTS.get(position, 0)
+                            * poisson_floor_mean(goals_against, CONCEDED_PER_POINT)
+                            + SAVE_POINTS.get(position, 0)
+                            * poisson_floor_mean(league_saves * goals_against, SAVES_PER_POINT)
+                        )
+                    )
 
-        rows.append({
-            "gameweek": target_gw,
-            "player_id": pid,
-            "web_name": player["web_name"],
-            "team": teams.get(player["team"], "UNK"),
-            "position": position,
-            "price": player["now_cost"] / 10.0,
-            "predicted_points": round(predicted, 2),
-            "expected_minutes": round(exp_min, 1),
-            "points_per_90": round(pp90, 2),
-            "n_fixtures": n_fix,
-            "status": player.get("status", ""),
-        })
+        rows.append(
+            {
+                "gameweek": target_gw,
+                "player_id": pid,
+                "web_name": player["web_name"],
+                "team": teams.get(player["team"], "UNK"),
+                "position": position,
+                "price": player["now_cost"] / 10.0,
+                "predicted_points": round(predicted, 2),
+                "expected_minutes": round(exp_min, 1),
+                "points_per_90": round(pp90, 2),
+                "n_fixtures": n_fix,
+                "status": player.get("status", ""),
+            }
+        )
 
     # SPEC section 5: descending predicted_points, ties by ascending player_id.
     rows.sort(key=lambda r: (-r["predicted_points"], r["player_id"]))
@@ -265,8 +313,9 @@ def main(requested_gw, out_dir, snapshot_id=None):
 
     # As in baseline-v1: an element_type the snapshot does not name stops the
     # run rather than entering the log as UNK.
-    unknown = sorted({p["element_type"] for p in bootstrap["elements"]
-                      if p["element_type"] not in positions})
+    unknown = sorted(
+        {p["element_type"] for p in bootstrap["elements"] if p["element_type"] not in positions}
+    )
     if unknown:
         raise SystemExit(
             f"element_type(s) {unknown} appear on players but have no entry in "
@@ -287,8 +336,11 @@ def main(requested_gw, out_dir, snapshot_id=None):
     print(f"excluded: {exc_txt}" + ("  (results not final)" if excluded else ""))
 
     if not usable:
-        why = (f"data_checked is false for: {exc_txt}" if excluded
-               else "no earlier gameweeks exist in this snapshot")
+        why = (
+            f"data_checked is false for: {exc_txt}"
+            if excluded
+            else "no earlier gameweeks exist in this snapshot"
+        )
         raise SystemExit(
             f"\nNo usable history before GW{target_gw} — {why}.\n"
             "Refusing to predict from provisional data. Nothing was written.\n"
@@ -315,15 +367,19 @@ def main(requested_gw, out_dir, snapshot_id=None):
     # players the prior is actually applied to — a fixture this gameweek and
     # settled recent rounds — so a blank does not inflate it.
     season = previous_season(bootstrap["events"])
-    predicted = [p for p in bootstrap["elements"] if p["id"] in histories
-                 and counts.get(p["team"], 0)
-                 and recent_history(histories[p["id"]], target_gw, usable)]
+    predicted = [
+        p
+        for p in bootstrap["elements"]
+        if p["id"] in histories
+        and counts.get(p["team"], 0)
+        and recent_history(histories[p["id"]], target_gw, usable)
+    ]
     with_prior = sum(
-        1 for p in predicted
-        if player_prior_parts(pasts[p["id"]], season,
-                              positions.get(p["element_type"])) is not None)
-    print(f"prior:     {with_prior} from {season} / "
-          f"{len(predicted) - with_prior} positional")
+        1
+        for p in predicted
+        if player_prior_parts(pasts[p["id"]], season, positions.get(p["element_type"])) is not None
+    )
+    print(f"prior:     {with_prior} from {season} / {len(predicted) - with_prior} positional")
     matches = team_matches(fixtures, histories, target_gw, usable)
     print(f"ratings:   {len(matches)} club-matches from settled rounds")
 
@@ -334,8 +390,10 @@ def main(requested_gw, out_dir, snapshot_id=None):
     print(f"{'player':<18}{'team':<6}{'pos':<5}{'pred':>6}{'mins':>7}{'pp90':>7}")
     print("-" * 49)
     for r in rows[:20]:
-        print(f"{r['web_name'][:17]:<18}{r['team']:<6}{r['position']:<5}"
-              f"{r['predicted_points']:>6}{r['expected_minutes']:>7}{r['points_per_90']:>7}")
+        print(
+            f"{r['web_name'][:17]:<18}{r['team']:<6}{r['position']:<5}"
+            f"{r['predicted_points']:>6}{r['expected_minutes']:>7}{r['points_per_90']:>7}"
+        )
 
 
 def cli(argv=None):
@@ -347,11 +405,15 @@ def cli(argv=None):
         default="predictions",
         metavar="DIR",
         help="output directory (default: predictions/). Use a scratch directory "
-             "for exploratory runs — predictions/ is the append-only log.",
+        "for exploratory runs — predictions/ is the append-only log.",
     )
-    ap.add_argument("--snapshot", default=None, metavar="ID",
-                    help="snapshot id under data/raw/ (default: LATEST). Pass the same "
-                         "one to every model logged for a gameweek.")
+    ap.add_argument(
+        "--snapshot",
+        default=None,
+        metavar="ID",
+        help="snapshot id under data/raw/ (default: LATEST). Pass the same "
+        "one to every model logged for a gameweek.",
+    )
     args = ap.parse_args(argv)
     require_project_root()
     return main(args.gw, args.out, args.snapshot)

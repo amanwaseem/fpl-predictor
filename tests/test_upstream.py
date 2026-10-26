@@ -11,7 +11,6 @@ def history(*transfers):
 
 
 class TestFreeTransfers(unittest.TestCase):
-
     def test_one_after_the_first_gameweek(self):
         self.assertEqual(upstream.free_transfers(history(9), [], through=1), 1)
 
@@ -44,7 +43,6 @@ class TestFreeTransfers(unittest.TestCase):
 
 
 class TestSellingPrice(unittest.TestCase):
-
     def test_half_of_a_rise_rounded_down(self):
         self.assertEqual(upstream.selling_price(60, 63), 61)
         self.assertEqual(upstream.selling_price(60, 64), 62)
@@ -54,7 +52,6 @@ class TestSellingPrice(unittest.TestCase):
 
 
 class TestPurchasePrices(unittest.TestCase):
-
     def transfer(self, element, cost, event, time):
         return {"element_in": element, "element_in_cost": cost, "event": event, "time": time}
 

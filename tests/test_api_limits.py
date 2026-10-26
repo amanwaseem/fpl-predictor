@@ -17,7 +17,6 @@ class Clock:
 
 
 class TestParse(unittest.TestCase):
-
     def test_a_rate_is_requests_over_seconds(self):
         self.assertEqual(limits.parse("10/60"), (10, 60.0))
 
@@ -38,7 +37,6 @@ class TestParse(unittest.TestCase):
 
 
 class TestSlidingWindow(unittest.TestCase):
-
     def setUp(self):
         self.clock = Clock()
         self.window = limits.SlidingWindow((2, 60), clock=self.clock)
@@ -85,14 +83,14 @@ class TestSlidingWindow(unittest.TestCase):
 
 
 class TestClient(unittest.TestCase):
-
     def request(self, header=None):
         headers = {"fly-client-ip": header} if header else {}
         return SimpleNamespace(headers=headers, client=SimpleNamespace(host="10.0.0.1"))
 
     def test_on_fly_the_client_is_flys_header(self):
-        self.assertEqual(limits.client_of(self.request("203.0.113.9"), {"FPL_HOSTED": "1"}),
-                         "203.0.113.9")
+        self.assertEqual(
+            limits.client_of(self.request("203.0.113.9"), {"FPL_HOSTED": "1"}), "203.0.113.9"
+        )
 
     def test_elsewhere_the_header_is_not_trusted(self):
         self.assertEqual(limits.client_of(self.request("203.0.113.9"), {}), "10.0.0.1")

@@ -27,8 +27,12 @@ def is_legal(xi):
     by_pos = Counter(p["position"] for p in xi)
     by_club = Counter(p["team"] for p in xi)
     shape = (by_pos["DEF"], by_pos["MID"], by_pos["FWD"])
-    return (len(xi) == 11 and by_pos["GKP"] == 1 and shape in FORMATIONS
-            and max(by_club.values()) <= MAX_PER_CLUB)
+    return (
+        len(xi) == 11
+        and by_pos["GKP"] == 1
+        and shape in FORMATIONS
+        and max(by_club.values()) <= MAX_PER_CLUB
+    )
 
 
 def brute_force(pool, value):
@@ -49,21 +53,41 @@ def roster(clubs=6, per_club=4, seed=0):
     for club in range(clubs):
         for slot in range(per_club):
             pid += 1
-            pool.append(player(pid, positions[(club + slot) % len(positions)],
-                               f"C{club}", rng.randint(-2, 15)))
+            pool.append(
+                player(
+                    pid, positions[(club + slot) % len(positions)], f"C{club}", rng.randint(-2, 15)
+                )
+            )
     return pool
 
 
 class TestExactness(unittest.TestCase):
-
     def test_matches_brute_force(self):
         """Random 16-player pools over 4 clubs: the cap binds in most of them."""
         rng = random.Random(42)
-        positions = ["GKP", "GKP", "DEF", "DEF", "DEF", "DEF", "DEF", "MID",
-                     "MID", "MID", "MID", "MID", "FWD", "FWD", "FWD", "FWD"]
+        positions = [
+            "GKP",
+            "GKP",
+            "DEF",
+            "DEF",
+            "DEF",
+            "DEF",
+            "DEF",
+            "MID",
+            "MID",
+            "MID",
+            "MID",
+            "MID",
+            "FWD",
+            "FWD",
+            "FWD",
+            "FWD",
+        ]
         for trial in range(10):
-            pool = [player(i, pos, f"C{rng.randrange(4)}", rng.randint(-1, 12))
-                    for i, pos in enumerate(positions)]
+            pool = [
+                player(i, pos, f"C{rng.randrange(4)}", rng.randint(-1, 12))
+                for i, pos in enumerate(positions)
+            ]
             expected = brute_force(pool, points)
             if expected is None:
                 with self.assertRaises(ValueError):
@@ -77,20 +101,27 @@ class TestExactness(unittest.TestCase):
         """Predictions carry two decimals; hundredths must not be rounded away."""
         # Sixteen players, as above: brute force over 24 is 2.5 million subsets.
         positions = ["GKP", "GKP"] + ["DEF"] * 5 + ["MID"] * 5 + ["FWD"] * 4
-        pool = [player(i, pos, f"C{i % 5}", 3 + (i % 7) / 100)
-                for i, pos in enumerate(positions)]
+        pool = [player(i, pos, f"C{i % 5}", 3 + (i % 7) / 100) for i, pos in enumerate(positions)]
         total, xi, _ = best_xi(pool, points)
         self.assertAlmostEqual(total, brute_force(pool, points))
 
 
 class TestFormations(unittest.TestCase):
-
     def test_every_legal_shape_is_reachable(self):
         """Eight formations — #3 said seven, but FPL allows 8. Each is reachable."""
-        self.assertEqual(sorted(FORMATIONS), [
-            (3, 4, 3), (3, 5, 2), (4, 3, 3), (4, 4, 2),
-            (4, 5, 1), (5, 2, 3), (5, 3, 2), (5, 4, 1),
-        ])
+        self.assertEqual(
+            sorted(FORMATIONS),
+            [
+                (3, 4, 3),
+                (3, 5, 2),
+                (4, 3, 3),
+                (4, 4, 2),
+                (4, 5, 1),
+                (5, 2, 3),
+                (5, 3, 2),
+                (5, 4, 1),
+            ],
+        )
         for defenders, midfielders, forwards in FORMATIONS:
             want = {"DEF": defenders, "MID": midfielders, "FWD": forwards}
             pool, pid = [], 0
@@ -107,7 +138,6 @@ class TestFormations(unittest.TestCase):
 
 
 class TestClubCap(unittest.TestCase):
-
     def test_cap_binds_and_costs_points(self):
         """Four of the top eleven share a club. The XI must drop one and score less."""
         pool = [player(1, "GKP", "A", 9)]
@@ -124,7 +154,6 @@ class TestClubCap(unittest.TestCase):
 
 
 class TestProperties(unittest.TestCase):
-
     def test_optimum_by_actual_bounds_captured(self):
         """No XI chosen on predictions can beat the XI chosen on actuals."""
         rng = random.Random(7)
@@ -144,13 +173,10 @@ class TestProperties(unittest.TestCase):
             p["points"] = 3
         _, first, _ = best_xi(pool, points)
         _, second, _ = best_xi(list(reversed(pool)), points)
-        self.assertEqual([p["player_id"] for p in first],
-                         [p["player_id"] for p in second])
-
+        self.assertEqual([p["player_id"] for p in first], [p["player_id"] for p in second])
 
 
 class TestRareCases(unittest.TestCase):
-
     def test_all_negative_pool(self):
         """A gameweek of red cards: the XI still exists and loses least."""
         positions = ["GKP", "GKP"] + ["DEF"] * 5 + ["MID"] * 5 + ["FWD"] * 4
@@ -193,7 +219,6 @@ class TestRareCases(unittest.TestCase):
 
 
 class TestRefusals(unittest.TestCase):
-
     def test_no_goalkeeper(self):
         pool = [p for p in roster(clubs=8, per_club=5) if p["position"] != "GKP"]
         with self.assertRaises(ValueError):

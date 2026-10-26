@@ -80,8 +80,9 @@ class _Flow:
                         continue
                     for e in self.adj[u]:
                         v = self.to[e]
-                        if self.cap[e] > 0 and (dist[v] is None
-                                                or dist[u] + self.cost[e] < dist[v]):
+                        if self.cap[e] > 0 and (
+                            dist[v] is None or dist[u] + self.cost[e] < dist[v]
+                        ):
                             dist[v] = dist[u] + self.cost[e]
                             via[v] = e
                             changed = True
@@ -152,8 +153,9 @@ def order_xi(players, value):
 
 def formation_of(players):
     """An XI's formation as its defenders, midfielders and forwards: "4-4-2"."""
-    return "-".join(str(sum(p["position"] == pos for p in players))
-                    for pos in ("DEF", "MID", "FWD"))
+    return "-".join(
+        str(sum(p["position"] == pos for p in players)) for pos in ("DEF", "MID", "FWD")
+    )
 
 
 def best_xi(players, value):

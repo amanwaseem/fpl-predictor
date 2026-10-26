@@ -31,7 +31,8 @@ DEFAULT_MODEL = BASELINE_MODEL
 def entry_for(connection, season, gameweek, model):
     """(gameweek, deadline_utc) of the entry asked for: the latest one when no gameweek is."""
     query = select(PredictionEntry.gameweek, PredictionEntry.deadline_utc).where(
-        PredictionEntry.season == season, PredictionEntry.model_version == model)
+        PredictionEntry.season == season, PredictionEntry.model_version == model
+    )
     if gameweek is None:
         row = connection.execute(query.order_by(PredictionEntry.gameweek.desc()).limit(1)).first()
         if row is None:
@@ -46,13 +47,24 @@ def entry_for(connection, season, gameweek, model):
 def predictions(connection, season, gameweek, model):
     """The entry's rows as fpl.optimise reads them: floats, as read_entry gives."""
     rows = connection.execute(
-        select(Prediction.player_id, Prediction.web_name, Prediction.team,
-               Prediction.position, Prediction.price, Prediction.predicted_points,
-               Prediction.status)
-        .where(Prediction.season == season, Prediction.gameweek == gameweek,
-               Prediction.model_version == model)).mappings()
-    return [dict(r) | {"price": float(r["price"]),
-                       "predicted_points": float(r["predicted_points"])} for r in rows]
+        select(
+            Prediction.player_id,
+            Prediction.web_name,
+            Prediction.team,
+            Prediction.position,
+            Prediction.price,
+            Prediction.predicted_points,
+            Prediction.status,
+        ).where(
+            Prediction.season == season,
+            Prediction.gameweek == gameweek,
+            Prediction.model_version == model,
+        )
+    ).mappings()
+    return [
+        dict(r) | {"price": float(r["price"]), "predicted_points": float(r["predicted_points"])}
+        for r in rows
+    ]
 
 
 def request_hash(**decided_by):
@@ -62,8 +74,9 @@ def request_hash(**decided_by):
 
 
 def cached(connection, key):
-    return connection.scalar(select(OptimiseResult.result)
-                             .where(OptimiseResult.request_hash == key))
+    return connection.scalar(
+        select(OptimiseResult.result).where(OptimiseResult.request_hash == key)
+    )
 
 
 def store(engine, key, season, gameweek, model, result):
@@ -71,15 +84,35 @@ def store(engine, key, season, gameweek, model, result):
     the projection may have replaced the entry mid-solve, during a deploy."""
     try:
         with engine.begin() as connection:
-            connection.execute(insert(OptimiseResult).values(
-                request_hash=key, season=season, gameweek=gameweek, model_version=model,
-                result=result).on_conflict_do_nothing())
+            connection.execute(
+                insert(OptimiseResult)
+                .values(
+                    request_hash=key,
+                    season=season,
+                    gameweek=gameweek,
+                    model_version=model,
+                    result=result,
+                )
+                .on_conflict_do_nothing()
+            )
     except IntegrityError:
         pass
 
 
-def solve(engine, season, gameweek, model, *, squad=None, bank=None, free_transfers=None,
-          budget=optimise.BUDGET, include_unavailable=False, entry=None, rows=None):
+def solve(
+    engine,
+    season,
+    gameweek,
+    model,
+    *,
+    squad=None,
+    bank=None,
+    free_transfers=None,
+    budget=optimise.BUDGET,
+    include_unavailable=False,
+    entry=None,
+    rows=None,
+):
     """A result dict shaped like fpl.api.schemas.OptimiseResult.
 
     With `squad` ({player_id: selling_price}), the best transfers from it;
@@ -89,9 +122,15 @@ def solve(engine, season, gameweek, model, *, squad=None, bank=None, free_transf
     with engine.connect() as connection:
         gameweek, deadline = entry or entry_for(connection, season, gameweek, model)
         key = request_hash(
-            season=season, gameweek=gameweek, model=model, budget=budget,
-            include_unavailable=include_unavailable, bank=bank, free_transfers=free_transfers,
-            squad=sorted(squad.items()) if squad is not None else None)
+            season=season,
+            gameweek=gameweek,
+            model=model,
+            budget=budget,
+            include_unavailable=include_unavailable,
+            bank=bank,
+            free_transfers=free_transfers,
+            squad=sorted(squad.items()) if squad is not None else None,
+        )
         result = cached(connection, key)
         if result is None and rows is None:
             rows = predictions(connection, season, gameweek, model)
@@ -100,28 +139,44 @@ def solve(engine, season, gameweek, model, *, squad=None, bank=None, free_transf
     if not hit:
         result = _solve(rows, squad, bank, free_transfers, budget, include_unavailable)
         store(engine, key, season, gameweek, model, result)
-    return {"season": season, "gameweek": gameweek, "model_version": model,
-            "deadline_utc": deadline, "deadline_passed": datetime.now(UTC) >= deadline,
-            "cached": hit} | result
+    return {
+        "season": season,
+        "gameweek": gameweek,
+        "model_version": model,
+        "deadline_utc": deadline,
+        "deadline_passed": datetime.now(UTC) >= deadline,
+        "cached": hit,
+    } | result
 
 
 def _solve(rows, squad, bank, free_transfers, budget, include_unavailable):
     try:
         if squad is None:
-            result = optimise.best_squad(rows, budget=budget,
-                                         include_unavailable=include_unavailable,
-                                         time_limit=TIME_LIMIT)
+            result = optimise.best_squad(
+                rows, budget=budget, include_unavailable=include_unavailable, time_limit=TIME_LIMIT
+            )
             return {"squad": asdict(result), "plan": None}
-        plan = asdict(optimise.best_transfers(rows, squad, bank, free_transfers,
-                                              include_unavailable=include_unavailable,
-                                              time_limit=TIME_LIMIT))
+        plan = asdict(
+            optimise.best_transfers(
+                rows,
+                squad,
+                bank,
+                free_transfers,
+                include_unavailable=include_unavailable,
+                time_limit=TIME_LIMIT,
+            )
+        )
         return {"squad": plan.pop("squad"), "plan": plan}
     except optimise.SolverTimeout:
-        raise HTTPException(503, f"The solver did not finish within {TIME_LIMIT:g} seconds.",
-                            headers={"Retry-After": "60"}) from None
+        raise HTTPException(
+            503,
+            f"The solver did not finish within {TIME_LIMIT:g} seconds.",
+            headers={"Retry-After": "60"},
+        ) from None
     except optimise.SolverFailure as e:
-        raise HTTPException(503, f"The solver failed: {e}.",
-                            headers={"Retry-After": "60"}) from None
+        raise HTTPException(
+            503, f"The solver failed: {e}.", headers={"Retry-After": "60"}
+        ) from None
     except ValueError as e:
         # The squad or the pool cannot be solved: the request's fault, said why.
         raise HTTPException(422, str(e)) from None

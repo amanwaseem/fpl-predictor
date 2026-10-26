@@ -44,9 +44,15 @@ ENTRY = sorted((ROOT / "predictions").glob("gw*_*.csv"))[-1]
 
 
 def player(pid, position, predicted, price=5.0, status="a", team=None):
-    return {"player_id": pid, "web_name": f"p{pid}", "team": team or f"C{pid}",
-            "position": position, "price": price, "predicted_points": predicted,
-            "status": status}
+    return {
+        "player_id": pid,
+        "web_name": f"p{pid}",
+        "team": team or f"C{pid}",
+        "position": position,
+        "price": price,
+        "predicted_points": predicted,
+        "status": status,
+    }
 
 
 def even_squad():
@@ -113,8 +119,10 @@ class TestTheDoneCriteria(unittest.TestCase):
     def test_a_tie_keeps_the_squad_even_against_a_lower_id(self):
         """Ties go to fewer transfers before lower ids. Here the candidates have
         the lower ids, so only that order keeps the squad."""
-        squad = [p | {"player_id": p["player_id"] + 100, "team": f"C{p['player_id'] + 100}"}
-                 for p in even_squad()]
+        squad = [
+            p | {"player_id": p["player_id"] + 100, "team": f"C{p['player_id'] + 100}"}
+            for p in even_squad()
+        ]
         level = squad + [player(1, "MID", 3.0)]
         self.assertEqual(plan_for(level, owned(squad), free=1).transfers, [])
         exactly_the_hit = squad + [player(1, "MID", 3.0 + HIT)]
@@ -129,7 +137,6 @@ class TestTheDoneCriteria(unittest.TestCase):
 
 
 class TestMoney(unittest.TestCase):
-
     def setUp(self):
         self.squad = even_squad()
         # Every player bought at 4.5 and now 5.0: each sells for 4.5, so an
@@ -151,7 +158,6 @@ class TestMoney(unittest.TestCase):
 
 
 class TestAvailability(unittest.TestCase):
-
     def test_an_owned_player_of_any_status_may_be_kept(self):
         squad = even_squad()
         squad[5]["status"] = "i"
@@ -166,20 +172,17 @@ class TestAvailability(unittest.TestCase):
         squad[8] |= {"status": "u", "predicted_points": 0.0}
         pool = squad + [player(100, "MID", 3.0)]
         plan = plan_for(pool, owned(squad), free=1, bench_weight=0.1)
-        self.assertEqual([(t.out.player_id, t.into.player_id) for t in plan.transfers],
-                         [(9, 100)])
+        self.assertEqual([(t.out.player_id, t.into.player_id) for t in plan.transfers], [(9, 100)])
         self.assertEqual(plan_for(pool, owned(squad), free=1, bench_weight=0.0).transfers, [])
 
     def test_an_unavailable_player_is_not_bought(self):
         squad = even_squad()
         pool = squad + [player(100, "MID", 9.0, status="i")]
         self.assertEqual(plan_for(pool, owned(squad), free=1).transfers, [])
-        self.assertEqual(ins(plan_for(pool, owned(squad), free=1, include_unavailable=True)),
-                         [100])
+        self.assertEqual(ins(plan_for(pool, owned(squad), free=1, include_unavailable=True)), [100])
 
 
 class TestRefusals(unittest.TestCase):
-
     def assertRefused(self, current, *words, bank=0.0, free=1):
         squad = even_squad()
         with self.assertRaises(ValueError) as raised:
@@ -202,8 +205,13 @@ class TestRefusals(unittest.TestCase):
 
 def objective(squad_players, bench_weight):
     """The best line-up of a fixed squad, in fpl.evaluation.xi's units: XI, captain, bench."""
-    ranked = {pos: sorted((points(p["predicted_points"]) for p in squad_players
-                           if p["position"] == pos), reverse=True) for pos in SQUAD}
+    ranked = {
+        pos: sorted(
+            (points(p["predicted_points"]) for p in squad_players if p["position"] == pos),
+            reverse=True,
+        )
+        for pos in SQUAD
+    }
     best = None
     for d, m, f in FORMATIONS:
         starting = {"GKP": 1, "DEF": d, "MID": m, "FWD": f}
@@ -223,21 +231,32 @@ class TestAgainstExhaustiveSearch(unittest.TestCase):
         while compared < 24:
             rng = random.Random(next(seeds))
             pool = []
-            for pid, pos in enumerate(["GKP"] * 3 + ["DEF"] * 6 + ["MID"] * 6 + ["FWD"] * 4,
-                                      start=1):
-                pool.append(player(pid, pos, rng.randrange(0, 900) / 100,
-                                   price=rng.randrange(40, 100) / 10,
-                                   team=f"C{rng.randrange(8)}"))
-            legal = [s for s in itertools.combinations(pool, 15)
-                     if all(sum(p["position"] == pos for p in s) == n
-                            for pos, n in SQUAD.items())
-                     and all([p["team"] for p in s].count(c) <= MAX_PER_CLUB
-                             for c in {p["team"] for p in s})]
+            for pid, pos in enumerate(
+                ["GKP"] * 3 + ["DEF"] * 6 + ["MID"] * 6 + ["FWD"] * 4, start=1
+            ):
+                pool.append(
+                    player(
+                        pid,
+                        pos,
+                        rng.randrange(0, 900) / 100,
+                        price=rng.randrange(40, 100) / 10,
+                        team=f"C{rng.randrange(8)}",
+                    )
+                )
+            legal = [
+                s
+                for s in itertools.combinations(pool, 15)
+                if all(sum(p["position"] == pos for p in s) == n for pos, n in SQUAD.items())
+                and all(
+                    [p["team"] for p in s].count(c) <= MAX_PER_CLUB for c in {p["team"] for p in s}
+                )
+            ]
             if not legal:
                 continue  # Random clubs left no legal squad; try the next seed.
             start = rng.choice(legal)
-            current = {p["player_id"]: max(0.1, p["price"] - rng.choice((0, 0.1, 0.2)))
-                       for p in start}
+            current = {
+                p["player_id"]: max(0.1, p["price"] - rng.choice((0, 0.1, 0.2))) for p in start
+            }
             bank = rng.randrange(0, 20) / 10
             money = tenths(bank) + sum(tenths(v) for v in current.values())
             for free, bench_weight in itertools.product((0, 1, 2), (0.0, 0.1)):
@@ -245,13 +264,11 @@ class TestAgainstExhaustiveSearch(unittest.TestCase):
                     keep = objective(start, bench_weight)
                     best = keep
                     for squad in legal:
-                        cost = sum(tenths(current.get(p["player_id"], p["price"]))
-                                   for p in squad)
+                        cost = sum(tenths(current.get(p["player_id"], p["price"])) for p in squad)
                         if cost > money:
                             continue
                         moved = sum(p["player_id"] not in current for p in squad)
-                        value = (objective(squad, bench_weight)
-                                 - HIT * SCALE * max(0, moved - free))
+                        value = objective(squad, bench_weight) - HIT * SCALE * max(0, moved - free)
                         best = max(best, value)
                     plan = best_transfers(pool, current, bank, free, bench_weight=bench_weight)
                     self.assertEqual(round(plan.gain * SCALE), best - keep)
@@ -300,7 +317,6 @@ class TestOverTheClubCap(unittest.TestCase):
 
 
 class TestWhatTheGainCounts(unittest.TestCase):
-
     def test_a_bench_only_upgrade_gains_nothing_in_the_xi(self):
         """A 0.00 bench player swapped for a 2.00 who still would not start."""
         squad = even_squad()
@@ -322,7 +338,6 @@ class TestWhatTheGainCounts(unittest.TestCase):
 
 
 class TestRollingFreeTransfers(unittest.TestCase):
-
     def message(self, free):
         squad = even_squad()
         return describe_plan(plan_for(squad, owned(squad), free=free))
@@ -339,7 +354,6 @@ class TestRollingFreeTransfers(unittest.TestCase):
 
 
 class TestPricesAddUp(unittest.TestCase):
-
     def test_owned_players_are_shown_at_their_selling_price(self):
         """A player risen from 7.5 to 8.0 sells for 7.7: shown and counted at 7.7."""
         squad = even_squad()
@@ -347,8 +361,9 @@ class TestPricesAddUp(unittest.TestCase):
         current = owned(squad, {squad[4]["player_id"]: 7.7})
         plan = plan_for(squad + [player(100, "MID", 4.0)], current, free=1, bank=1.0)
         everyone = plan.squad.xi + plan.squad.bench
-        shown = sum(tenths(p.selling_price if p.selling_price is not None else p.price)
-                    for p in everyone)
+        shown = sum(
+            tenths(p.selling_price if p.selling_price is not None else p.price) for p in everyone
+        )
         self.assertEqual(shown, tenths(plan.squad.cost))
         risen = next(p for p in everyone if p.player_id == squad[4]["player_id"])
         self.assertEqual((risen.price, risen.selling_price), (8.0, 7.7))
@@ -380,12 +395,12 @@ class CountingHighs(highspy.Highs):
 
 
 def solver_with(**kwargs):
-    return SimpleNamespace(Highs=lambda: CountingHighs(**kwargs),
-                           HighsModelStatus=highspy.HighsModelStatus)
+    return SimpleNamespace(
+        Highs=lambda: CountingHighs(**kwargs), HighsModelStatus=highspy.HighsModelStatus
+    )
 
 
 class TestSolves(unittest.TestCase):
-
     def test_keeping_the_squad_is_valued_without_a_tie_break_solve(self):
         squad = even_squad()
         CountingHighs.minimizes = 0
@@ -403,15 +418,13 @@ class TestSolves(unittest.TestCase):
 
 
 class TestSquadFiles(unittest.TestCase):
-
     def write(self, data):
         path = Path(tempfile.mkdtemp()) / "squad.json"
         path.write_text(json.dumps(data))
         return path
 
     def squad_file(self, **changes):
-        players = [{"player_id": p["player_id"], "selling_price": p["price"]}
-                   for p in even_squad()]
+        players = [{"player_id": p["player_id"], "selling_price": p["price"]} for p in even_squad()]
         return {"bank": 0.5, "free_transfers": 1, "players": players} | changes
 
     def test_a_well_formed_file_reads(self):
@@ -437,9 +450,9 @@ class TestSquadFiles(unittest.TestCase):
 
 
 class TestOnePositionCheck(unittest.TestCase):
-
     def test_every_selector_refuses_an_unknown_position_alike(self):
         from fpl.evaluation.xi import best_xi
+
         squad = even_squad()
         pool = squad + [player(100, "MGR", 0.0)]
         calls = {
@@ -454,7 +467,6 @@ class TestOnePositionCheck(unittest.TestCase):
 
 
 class TestCommand(unittest.TestCase):
-
     def setUp(self):
         self.previous = Path.cwd()
         os.chdir(ROOT)
@@ -463,10 +475,18 @@ class TestCommand(unittest.TestCase):
         self.file = Path(tempfile.mkdtemp()) / "squad.json"
         # What is left of the budget slice 1 spent, so the file describes exactly
         # the squad it chose. A larger bank could afford an upgrade it could not.
-        self.file.write_text(json.dumps({
-            "bank": round(squad.budget - squad.cost, 1), "free_transfers": 1,
-            "players": [{"player_id": p.player_id, "selling_price": p.price}
-                        for p in squad.xi + squad.bench]}))
+        self.file.write_text(
+            json.dumps(
+                {
+                    "bank": round(squad.budget - squad.cost, 1),
+                    "free_transfers": 1,
+                    "players": [
+                        {"player_id": p.player_id, "selling_price": p.price}
+                        for p in squad.xi + squad.bench
+                    ],
+                }
+            )
+        )
 
     def tearDown(self):
         os.chdir(self.previous)

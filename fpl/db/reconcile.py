@@ -49,9 +49,12 @@ def compare(table, in_git, in_database):
     for key in sorted(database.keys() - git.keys()):
         found.append(f"{table.name} {key}: in the database, not in git")
     for key in sorted(git.keys() & database.keys()):
-        changed = [f"{column} is {git[key][column]!r} in git, "
-                   f"{database[key].get(column)!r} in the database"
-                   for column in git[key] if git[key][column] != database[key].get(column)]
+        changed = [
+            f"{column} is {git[key][column]!r} in git, "
+            f"{database[key].get(column)!r} in the database"
+            for column in git[key]
+            if git[key][column] != database[key].get(column)
+        ]
         if changed:
             found.append(f"{table.name} {key}: " + "; ".join(changed))
     return found
@@ -64,13 +67,12 @@ def differences(engine, log):
         for row in player_scores:
             harness_error = float(row["predicted_points"]) - row["actual_points"]
             row["error"] = Decimal(repr(round(harness_error, 2)))
-        return (compare(PredictionEntry.__table__, log.entries,
-                        table_rows(connection, PredictionEntry))
-                + compare(Prediction.__table__, log.predictions,
-                          table_rows(connection, Prediction))
-                + compare(ScoreEntry.__table__, log.score_entries,
-                          table_rows(connection, ScoreEntry))
-                + compare(PlayerScore.__table__, log.player_scores, player_scores))
+        return (
+            compare(PredictionEntry.__table__, log.entries, table_rows(connection, PredictionEntry))
+            + compare(Prediction.__table__, log.predictions, table_rows(connection, Prediction))
+            + compare(ScoreEntry.__table__, log.score_entries, table_rows(connection, ScoreEntry))
+            + compare(PlayerScore.__table__, log.player_scores, player_scores)
+        )
 
 
 @exits_on_bad_url

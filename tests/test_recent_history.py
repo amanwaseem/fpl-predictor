@@ -141,4 +141,3 @@ class TestOrdering(unittest.TestCase):
         hist = [row(i) for i in range(1, 12)]
         out = recent_history(hist, target_gw=12, usable=set(range(1, 12)))
         self.assertEqual(len(out), 5, "LOOKBACK caps the window at 5 rounds")
-
