@@ -1,0 +1,37 @@
+{
+  "gbm-v1": {
+    "feature_version": "features-v1",
+    "git_sha": "ab3730551645627842c5cded5143c7fa10c3078d",
+    "held_out": {
+      "2023/24": {
+        "mae": 0.9596192675189085,
+        "mae_gain": 0.06547944408361384
+      },
+      "2024/25": {
+        "mae": 0.9955588979359689,
+        "mae_gain": 0.06451332608652227
+      },
+      "2025/26": {
+        "mae": 0.9640417207502391,
+        "mae_gain": 0.09639653925463965
+      }
+    },
+    "lightgbm": "4.7.0",
+    "release": "model-gbm-v1",
+    "sha256": "d528dfc8bb81e0247b457e26364a32a9152eca1a618a23aac85c64c0191200ce",
+    "trained_at_utc": "2026-10-26T03:01:39Z",
+    "trained_on": [
+      "2016/17",
+      "2017/18",
+      "2018/19",
+      "2019/20",
+      "2020/21",
+      "2021/22",
+      "2022/23",
+      "2023/24",
+      "2024/25",
+      "2025/26"
+    ],
+    "url": "https://github.com/amanwaseem/fpl-predictor/releases/download/model-gbm-v1/gbm-v1.json"
+  }
+}
