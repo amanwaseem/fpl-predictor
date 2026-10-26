@@ -173,6 +173,22 @@ class Scorecard(BaseModel):
     models: list[ScorecardModel]
 
 
+class Status(BaseModel):
+    """How fresh production's data is, for the uptime check and the dashboard (#86)."""
+
+    season: str
+    # The newest snapshot loaded (by the daily ingest, #93), and how old it is.
+    snapshot_id: str | None
+    snapshot_completed_utc: datetime | None
+    data_age_seconds: float | None
+    # The latest gameweek with final results, and the next deadline.
+    latest_settled_gameweek: int | None
+    next_gameweek: int | None
+    next_deadline_utc: datetime | None
+    # Committed entries for the next gameweek, so far.
+    next_gameweek_entries: list[str]
+
+
 class Health(BaseModel):
     status: str
 

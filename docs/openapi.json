@@ -1470,6 +1470,102 @@
         "title": "Squad",
         "type": "object"
       },
+      "Status": {
+        "description": "How fresh production's data is, for the uptime check and the dashboard (#86).",
+        "properties": {
+          "data_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Age Seconds"
+          },
+          "latest_settled_gameweek": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Settled Gameweek"
+          },
+          "next_deadline_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Deadline Utc"
+          },
+          "next_gameweek": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Gameweek"
+          },
+          "next_gameweek_entries": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Next Gameweek Entries",
+            "type": "array"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "snapshot_completed_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Completed Utc"
+          },
+          "snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Id"
+          }
+        },
+        "required": [
+          "season",
+          "snapshot_id",
+          "snapshot_completed_utc",
+          "data_age_seconds",
+          "latest_settled_gameweek",
+          "next_gameweek",
+          "next_deadline_utc",
+          "next_gameweek_entries"
+        ],
+        "title": "Status",
+        "type": "object"
+      },
       "Transfer": {
         "properties": {
           "into": {
@@ -2380,6 +2476,72 @@
         "summary": "Get Scorecard",
         "tags": [
           "models"
+        ]
+      }
+    },
+    "/v1/status": {
+      "get": {
+        "description": "How fresh the data is: the newest snapshot loaded, the latest settled\ngameweek, and the entries so far for the next deadline.",
+        "operationId": "get_status_v1_status_get",
+        "parameters": [
+          {
+            "description": "Defaults to the latest season.",
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}/\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to the latest season.",
+              "examples": [
+                "2026/27"
+              ],
+              "title": "Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "health"
         ]
       }
     }

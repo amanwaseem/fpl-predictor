@@ -23,6 +23,7 @@ from fpl.db.models import (
     ScoreEntry,
     Season,
     SeasonPlayer,
+    Snapshot,
     Team,
 )
 from fpl.evaluation.score import missed_gameweeks, pooled_block
@@ -54,6 +55,45 @@ def _logged(connection, season):
     ):
         logged[gameweek].append(model)
     return logged
+
+
+def status(connection, season, now):
+    snapshot = connection.execute(
+        select(Snapshot.snapshot_id, Snapshot.completed_at_utc)
+        .where(Snapshot.season == season)
+        .order_by(Snapshot.snapshot_id.desc())
+        .limit(1)
+    ).first()
+    settled = connection.scalar(
+        select(func.max(Gameweek.gameweek)).where(
+            Gameweek.season == season, Gameweek.finished, Gameweek.data_checked
+        )
+    )
+    upcoming = connection.execute(
+        select(Gameweek.gameweek, Gameweek.deadline_utc)
+        .where(Gameweek.season == season, Gameweek.deadline_utc > now)
+        .order_by(Gameweek.gameweek)
+        .limit(1)
+    ).first()
+    entries = []
+    if upcoming is not None:
+        entries = list(
+            connection.scalars(
+                select(PredictionEntry.model_version)
+                .where(PredictionEntry.season == season, PredictionEntry.gameweek == upcoming[0])
+                .order_by(PredictionEntry.model_version)
+            )
+        )
+    return {
+        "season": season,
+        "snapshot_id": snapshot[0] if snapshot else None,
+        "snapshot_completed_utc": snapshot[1] if snapshot else None,
+        "data_age_seconds": (now - snapshot[1]).total_seconds() if snapshot else None,
+        "latest_settled_gameweek": settled,
+        "next_gameweek": upcoming[0] if upcoming else None,
+        "next_deadline_utc": upcoming[1] if upcoming else None,
+        "next_gameweek_entries": entries,
+    }
 
 
 def gameweeks(connection, season):

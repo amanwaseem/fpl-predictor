@@ -9,6 +9,7 @@ of everything that decides them (fpl.db.models.OptimiseResult).
 import hashlib
 import json
 import os
+import time
 from dataclasses import asdict
 from datetime import UTC, datetime
 
@@ -18,6 +19,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
 from fpl import optimise
+from fpl.api import observability
 from fpl.db.models import OptimiseResult, Prediction, PredictionEntry
 from fpl.evaluation.score import BASELINE_MODEL
 
@@ -137,7 +139,9 @@ def solve(
 
     hit = result is not None
     if not hit:
+        start = time.perf_counter()
         result = _solve(rows, squad, bank, free_transfers, budget, include_unavailable)
+        observability.record_solver_time(time.perf_counter() - start)
         store(engine, key, season, gameweek, model, result)
     return {
         "season": season,

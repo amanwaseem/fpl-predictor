@@ -12,6 +12,7 @@ import sys
 
 import uvicorn
 
+from fpl.api import observability
 from fpl.db.session import database_url
 from fpl.db.url import DatabaseURLError
 
@@ -29,8 +30,17 @@ def cli(argv=None):
         database_url()
     except DatabaseURLError as e:
         raise SystemExit(str(e)) from None
+    observability.configure_logging()
+    if observability.configure_sentry():
+        observability.log.info("errors are reported to Sentry")
     uvicorn.run(
-        "fpl.api.app:app", host=args.host, port=args.port, reload=args.reload, proxy_headers=True
+        "fpl.api.app:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+        proxy_headers=True,
+        # Logging is configured above; uvicorn's own config would replace it.
+        log_config=None,
     )
     return 0
 
