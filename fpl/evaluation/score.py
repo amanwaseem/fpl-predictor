@@ -49,6 +49,8 @@ from fpl.evaluation.xi import best_xi
 from fpl.ingest.snapshot import SNAPSHOT_ID, load_live, load_snapshot
 from fpl.log import roles
 from fpl.log.contract import LOG_DIR_NAME, parse_entry_filename, read_entry
+from fpl.models.feature_table import season_after
+from fpl.models.features import previous_season
 from fpl.paths import require_project_root
 
 # Bumped whenever a metric's definition changes, so that rewritten score files
@@ -390,6 +392,10 @@ def cumulative(scored, events, entries):
     visible instead of letting the record read as unbroken.
     """
     settled = settled_gameweeks(events)
+    season = season_after(previous_season(events))
+    contradicted = roles.entries_after_retirement(entries, season)
+    if contradicted:
+        raise SystemExit("The log contradicts fpl.log.roles: " + "; ".join(contradicted))
     out = {"harness_version": HARNESS_VERSION, "models": {}}
     models = sorted({model for _, model in entries})
     for model in models:
@@ -400,9 +406,9 @@ def cumulative(scored, events, entries):
         with_xi = [res["xi"] for _, _, res in mine if res["xi"]["available"]]
         captured = sum(xi["captured"]["actual"] for xi in with_xi)
         optimum = sum(xi["optimum"]["actual"] for xi in with_xi)
-        last = roles.last_gameweek(model)
+        last = roles.last_gameweek(model, season)
         out["models"][model] = {
-            "role": "retired" if last is not None else roles.ROLES.get(model),
+            "role": roles.role(model, season),
             "retired_after": last,
             "gameweeks_scored": [gw for gw, _, _ in mine],
             "gameweeks_pending": [gw for gw in logged if gw not in settled],

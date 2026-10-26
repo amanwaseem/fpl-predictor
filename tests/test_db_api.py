@@ -380,6 +380,8 @@ class TestTheCommittedScorecard(APICase):
             with self.subTest(model=model):
                 got = served[model]
                 self.assertEqual(got["gameweeks_missed"], expected["gameweeks_missed"])
+                self.assertEqual(got["role"], expected["role"])
+                self.assertEqual(got["retired_after"], expected["retired_after"])
                 self.assertEqual(got["gameweeks_scored"], expected["gameweeks_scored"])
                 for block in ("all", "predicted_to_play"):
                     for metric, value in expected["pooled"][block].items():
