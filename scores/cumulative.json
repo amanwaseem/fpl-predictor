@@ -6,7 +6,9 @@
         5,
         7
       ],
-      "gameweeks_pending": [],
+      "gameweeks_pending": [
+        8
+      ],
       "gameweeks_scored": [
         4,
         6
@@ -46,6 +48,8 @@
           "spearman": 0.5092
         }
       },
+      "retired_after": null,
+      "role": "baseline",
       "xi": {
         "captured": 105,
         "captured_share": 0.3777,
@@ -57,7 +61,9 @@
       "gameweeks_missed": [
         7
       ],
-      "gameweeks_pending": [],
+      "gameweeks_pending": [
+        8
+      ],
       "gameweeks_scored": [
         6
       ],
@@ -88,6 +94,8 @@
           "spearman": 0.5063
         }
       },
+      "retired_after": null,
+      "role": "main",
       "xi": {
         "captured": 30,
         "captured_share": 0.2273,

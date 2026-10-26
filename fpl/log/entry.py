@@ -41,7 +41,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fpl.ingest.snapshot import load_snapshot, resolve_target_gw
-from fpl.log import summarise, verify_entry
+from fpl.log import roles, summarise, verify_entry
 from fpl.log.contract import TIMESTAMP
 from fpl.models import gbm, predict_baseline, predict_fixture
 from fpl.paths import require_project_root
@@ -151,6 +151,15 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
     if digest_out is not None and not Path(digest_out).parent.is_dir():
         raise SystemExit(
             f"--digest {digest_out}: {Path(digest_out).parent} does not exist. Nothing was run."
+        )
+
+    # A retired model's record has ended (fpl.log.roles); an entry for it
+    # would start a second one under the same name.
+    retired = [m for m, _ in models if roles.last_gameweek(m) is not None]
+    if retired:
+        raise SystemExit(
+            f"Retired, and not logged any more: {', '.join(retired)}. "
+            "Take it out of LOGGED_MODELS. Nothing was run."
         )
 
     # Resolved once here, then passed to every model by id: each reads exactly

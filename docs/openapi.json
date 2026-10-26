@@ -469,6 +469,34 @@
           "model_version": {
             "title": "Model Version",
             "type": "string"
+          },
+          "retired_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired After"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "baseline",
+                  "main",
+                  "challenger",
+                  "retired"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
           }
         },
         "required": [
@@ -476,7 +504,9 @@
           "first_gameweek",
           "gameweeks_logged",
           "gameweeks_scored",
-          "gameweeks_missed"
+          "gameweeks_missed",
+          "role",
+          "retired_after"
         ],
         "title": "Model",
         "type": "object"
@@ -1339,6 +1369,34 @@
           },
           "pooled": {
             "$ref": "#/components/schemas/Pooled"
+          },
+          "retired_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired After"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "baseline",
+                  "main",
+                  "challenger",
+                  "retired"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
           }
         },
         "required": [
@@ -1347,6 +1405,8 @@
           "gameweeks_logged",
           "gameweeks_scored",
           "gameweeks_missed",
+          "role",
+          "retired_after",
           "per_gameweek",
           "pooled"
         ],

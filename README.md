@@ -72,7 +72,9 @@ Logging predictions for the 2026/27 season. Entries are on `main` for GW4, GW6 a
 GW6 are scored, and GW8 is scored once it settles. GW5 and GW7 were missed and stay missed,
 recorded as missed in `scores/`.
 
-**Logged models**
+**Logged models**, each with a role (ADR 0020): `baseline-v1` the fixed yardstick, the main model,
+and at most one challenger. A challenger that beats the main model replaces it, and the beaten
+one retires: no longer logged, its record kept.
 
 | Model | Logged from | What it does |
 |---|---|---|
