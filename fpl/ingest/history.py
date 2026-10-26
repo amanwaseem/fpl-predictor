@@ -20,7 +20,8 @@ one, under its own season, with three differences forced by the archive:
 - **Deadlines are reconstructed**: 90 minutes before the gameweek's first
   kick-off, FPL's rule for most of these seasons and the earlier of the two it
   has used. Earlier is the safe side for a feature that must only use what
-  was known at the deadline.
+  was known at the deadline. A gameweek with no fixtures still gets a row,
+  as the live loader's do, its deadline between its neighbours'.
 - **2019/20's restart is renumbered.** FPL numbered the gameweeks after the
   2020 suspension 39 to 47, leaving 30 to 38 empty. They are stored as 30 to
   38: the order is the same, and a gameweek is between 1 and 38 everywhere.
@@ -32,13 +33,19 @@ import io
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from decimal import Decimal
 from pathlib import Path
 
 import requests
-from sqlalchemy import Boolean, Integer, Numeric, SmallInteger
+from sqlalchemy import Boolean, Integer, SmallInteger
 
-from fpl.db.load import LAST_GAMEWEEK, POSITIONS, club_spells
+from fpl.db.load import (
+    LAST_GAMEWEEK,
+    POSITIONS,
+    club_spells,
+    season_player_rows,
+    stats_row,
+    team_rows,
+)
 from fpl.db.models import PlayerFixtureStats
 
 SOURCE = "vaastav/Fantasy-Premier-League"
@@ -192,16 +199,21 @@ def gameweek_of(season, round_):
 
 
 def parse_season(season, raw=RAW, names=None):
-    """A Season from the archive's files for `season`."""
+    """A Season from the archive's files for `season`.
+
+    Teams, season players and stats rows are built by fpl.db.load's own
+    builders, from the archive's values typed as the API would send them, so
+    a past season is shaped exactly as the live one is.
+    """
     names = short_names(raw) if names is None else names
     base = raw / folder(season)
-    elements = read_csv(base / "players_raw.csv")
-    players = {int(e["id"]): e for e in elements if int(e["element_type"]) in POSITIONS}
+    elements = [_typed_element(e) for e in read_csv(base / "players_raw.csv")]
+    players = {e["id"]: e for e in elements if e["element_type"] in POSITIONS}
     result = Season(season)
 
     # Teams: ids and codes from the players' file, names from teams.csv where
     # the season has one and the master list where it does not.
-    codes = {int(e["team"]): int(e["team_code"]) for e in elements}
+    codes = {e["team"]: e["team_code"] for e in elements}
     if (base / "teams.csv").exists():
         full = {int(t["id"]): t["name"] for t in read_csv(base / "teams.csv")}
     else:
@@ -210,149 +222,166 @@ def parse_season(season, raw=RAW, names=None):
             for t in read_csv(raw / "master_team_list.csv")
             if t["season"] == folder(season)
         }
-    result.teams = [
-        {
-            "season": season,
-            "team_id": tid,
-            "code": code,
-            "name": full[tid],
-            "short_name": names[code],
-        }
-        for tid, code in sorted(codes.items())
-    ]
-
+    bootstrap = {
+        "teams": [
+            {"id": tid, "code": code, "name": full[tid], "short_name": names[code]}
+            for tid, code in sorted(codes.items())
+        ]
+    }
+    result.teams = team_rows(season, bootstrap)
     result.players = [
-        {"code": int(e["code"]), "first_name": e["first_name"], "second_name": e["second_name"]}
+        {"code": e["code"], "first_name": e["first_name"], "second_name": e["second_name"]}
         for e in players.values()
     ]
-    result.season_players = [
-        {
-            "season": season,
-            "element_id": pid,
-            "player_code": int(e["code"]),
-            "web_name": e["web_name"],
-            "position": POSITIONS[int(e["element_type"])],
-        }
-        for pid, e in sorted(players.items())
-    ]
+    result.season_players = season_player_rows(season, [players[p] for p in sorted(players)])
 
-    rows = _deduplicated(read_csv(base / "gws" / "merged_gw.csv"), result)
-    kept = []
-    for row in rows:
+    rows = []
+    for row in read_csv(base / "gws" / "merged_gw.csv"):
         if int(row["element"]) not in players:
             result.not_players += 1
             continue
-        kept.append(row | {"round": gameweek_of(season, int(row["round"]))})
+        rows.append(row | {"round": gameweek_of(season, int(row["round"]))})
+    kept = _deduplicated(season, rows, result)
 
     result.fixtures = _fixtures(season, kept)
-    first_kickoff = defaultdict(list)
-    for f in result.fixtures:
-        first_kickoff[f["gameweek"]].append(f["kickoff_utc"])
-    result.gameweeks = [
+    result.gameweeks = _gameweeks(season, result.fixtures)
+
+    fixtures_by_id = {
+        f["fixture_id"]: {"team_h": f["team_h"], "team_a": f["team_a"]} for f in result.fixtures
+    }
+    typed = [_typed_row(row) for row in kept]
+    history = defaultdict(list)
+    for row in typed:
+        history[row["element"]].append(row)
+    for pid, e in sorted(players.items()):
+        for team, gameweeks in club_spells(history[pid], fixtures_by_id, e["team"], None):
+            result.player_clubs.append(
+                {"season": season, "element_id": pid, "team_id": team, "gameweeks": gameweeks}
+            )
+    result.player_fixture_stats = [stats_row(season, None, row) for row in typed]
+    return result
+
+
+def _gameweeks(season, fixtures):
+    """Every gameweek, 1 to 38. A deadline is 90 minutes before the first kick-off;
+    a gameweek with no fixtures (2022/23's GW7, postponed whole) has none to go by,
+    so it is put midway between its neighbours'."""
+    kickoffs = defaultdict(list)
+    for f in fixtures:
+        kickoffs[f["gameweek"]].append(f["kickoff_utc"])
+    deadlines = {gw: min(k) - DEADLINE_BEFORE_KICKOFF for gw, k in kickoffs.items()}
+    if not deadlines:
+        return []
+    for gw in range(1, LAST_GAMEWEEK + 1):
+        if gw in deadlines:
+            continue
+        before = max((g for g in deadlines if g < gw), default=None)
+        after = min((g for g in deadlines if g > gw), default=None)
+        if before is not None and after is not None:
+            share = (gw - before) / (after - before)
+            deadlines[gw] = deadlines[before] + (deadlines[after] - deadlines[before]) * share
+        elif before is not None:
+            deadlines[gw] = deadlines[before] + timedelta(weeks=gw - before)
+        else:
+            deadlines[gw] = deadlines[after] - timedelta(weeks=after - gw)
+    return [
         {
             "season": season,
             "gameweek": gw,
             "finished": True,
             "data_checked": True,
-            "deadline_utc": min(first_kickoff[gw]) - DEADLINE_BEFORE_KICKOFF,
+            "deadline_utc": deadlines[gw],
         }
         for gw in range(1, LAST_GAMEWEEK + 1)
-        if first_kickoff.get(gw)
     ]
 
-    fixtures_by_id = {
-        f["fixture_id"]: {"team_h": f["team_h"], "team_a": f["team_a"]} for f in result.fixtures
-    }
-    history = defaultdict(list)
-    for row in kept:
-        history[int(row["element"])].append(
-            {
-                "round": row["round"],
-                "kickoff_time": row["kickoff_time"],
-                "fixture": int(row["fixture"]),
-                "was_home": row["was_home"] == "True",
-            }
-        )
-    for pid, e in sorted(players.items()):
-        for team, gameweeks in club_spells(history[pid], fixtures_by_id, int(e["team"]), None):
-            result.player_clubs.append(
-                {"season": season, "element_id": pid, "team_id": team, "gameweeks": gameweeks}
-            )
-    result.player_fixture_stats = [_stats(season, row) for row in kept]
-    return result
 
-
-def _deduplicated(rows, result):
-    """One row per (element, fixture). Where the archive has two, it is either the
-    same row twice or, in 2019/20, a fixture postponed in March and played in June:
-    the stale row has no score, so the row with the result is kept."""
+def _deduplicated(season, rows, result):
+    """One row per (element, fixture). Where the archive has two, they must be the
+    same row twice, or, in 2019/20, a fixture postponed in March and played in
+    June, whose stale row has no score: the row with the result is kept. Any
+    other pair is refused, rather than one of them kept by file order."""
     best = {}
     for row in rows:
         key = (row["element"], row["fixture"])
-        if key in best:
-            result.duplicates += 1
-            if best[key]["team_h_score"] != "" and row["team_h_score"] == "":
-                continue
-        best[key] = row
+        if key not in best:
+            best[key] = row
+            continue
+        result.duplicates += 1
+        kept, scored = best[key], row["team_h_score"] != ""
+        if row == kept or not scored:
+            continue
+        if kept["team_h_score"] == "":
+            best[key] = row
+            continue
+        raise SystemExit(
+            f"{season}: two different rows for element {key[0]} in fixture "
+            f"{key[1]}, both with a result. Not choosing between them."
+        )
     return list(best.values())
 
 
 def _fixtures(season, rows):
+    """Fixtures from the player rows, every row of a fixture agreeing about it."""
     sides = defaultdict(dict)
+    facts = {}
     for row in rows:
-        fixture = sides[int(row["fixture"])]
+        fid = int(row["fixture"])
+        fixture = sides[fid]
         # A home player's opponent is the away side, and the other way round.
         fixture["team_a" if row["was_home"] == "True" else "team_h"] = int(row["opponent_team"])
-        fixture.update(
-            kickoff=row["kickoff_time"],
-            gameweek=row["round"],
-            home_score=row["team_h_score"],
-            away_score=row["team_a_score"],
-        )
+        fact = (row["kickoff_time"], row["round"], row["team_h_score"], row["team_a_score"])
+        if facts.setdefault(fid, fact) != fact:
+            raise SystemExit(
+                f"{season} fixture {fid}: player rows disagree about its kick-off, "
+                f"gameweek or score ({facts[fid]} against {fact})."
+            )
     fixtures = []
     for fid, f in sorted(sides.items()):
         if "team_h" not in f or "team_a" not in f:
             raise SystemExit(f"{season} fixture {fid} has players on one side only.")
+        kickoff, gameweek, home, away = facts[fid]
+        if home == "" or away == "":
+            raise SystemExit(f"{season} fixture {fid} has no result.")
         fixtures.append(
             {
                 "season": season,
                 "fixture_id": fid,
-                "gameweek": f["gameweek"],
-                "kickoff_utc": timestamp(f["kickoff"]),
+                "gameweek": gameweek,
+                "kickoff_utc": timestamp(kickoff),
                 "team_h": f["team_h"],
                 "team_a": f["team_a"],
-                "team_h_score": int(f["home_score"]),
-                "team_a_score": int(f["away_score"]),
+                "team_h_score": int(home),
+                "team_a_score": int(away),
                 "finished": True,
             }
         )
     return fixtures
 
 
-STAT_COLUMNS = [
-    c
-    for c in PlayerFixtureStats.__table__.columns
-    if c.name not in ("season", "element_id", "fixture_id", "snapshot_id")
-]
+def _typed_element(e):
+    """A players_raw row with the bootstrap's types."""
+    return e | {key: int(e[key]) for key in ("id", "code", "element_type", "team", "team_code")}
 
 
-def _stats(season, row):
-    stats = {
-        "season": season,
-        "element_id": int(row["element"]),
-        "fixture_id": int(row["fixture"]),
-        "snapshot_id": None,
-    }
-    for column in STAT_COLUMNS:
-        value = row.get(column.name, "")
-        if value in ("", None):
-            stats[column.name] = None
-        elif isinstance(column.type, Boolean):
-            stats[column.name] = value == "True"
-        elif isinstance(column.type, Integer | SmallInteger):
-            stats[column.name] = int(float(value))
-        elif isinstance(column.type, Numeric):
-            stats[column.name] = Decimal(value)
+def _typed_row(row):
+    """A merged_gw row as an element-summary history row: the API's types, with
+    numbers it sends as strings (expected goals, ICT) left as strings for
+    stats_row, and an empty cell as no value."""
+    typed = {}
+    for key, value in row.items():
+        column = STAT_COLUMNS.get(key)
+        if value == "":
+            typed[key] = None
+        elif column is not None and isinstance(column.type, Boolean):
+            typed[key] = value == "True"
+        elif column is not None and isinstance(column.type, Integer | SmallInteger):
+            typed[key] = int(float(value))
         else:
-            stats[column.name] = value
-    return stats
+            typed[key] = value
+    typed["element"], typed["fixture"] = int(row["element"]), int(row["fixture"])
+    typed["was_home"] = row["was_home"] == "True"
+    return typed
+
+
+STAT_COLUMNS = {c.name: c for c in PlayerFixtureStats.__table__.columns}

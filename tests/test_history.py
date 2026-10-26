@@ -3,7 +3,7 @@
 import hashlib
 import tempfile
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
@@ -38,7 +38,16 @@ class TestParseSeason(ArchiveCase):
     def test_a_deadline_is_ninety_minutes_before_the_first_kickoff(self):
         gameweeks = {g["gameweek"]: g for g in self.parse().gameweeks}
         self.assertEqual(gameweeks[1]["deadline_utc"], datetime(2016, 8, 13, 12, 30, tzinfo=UTC))
-        self.assertEqual(sorted(gameweeks), [1, 2])
+        self.assertEqual(sorted(gameweeks), list(range(1, 39)))
+
+    def test_a_gameweek_without_fixtures_has_a_deadline_between_its_neighbours(self):
+        """2022/23's GW7 was postponed whole; the live loader would still have its row."""
+        players, gws = season_rows()
+        for row in gws[4:]:
+            row["round"] = row["GW"] = 3
+        gameweeks = {g["gameweek"]: g["deadline_utc"] for g in self.parse(gws=gws).gameweeks}
+        self.assertEqual(gameweeks[2], gameweeks[1] + (gameweeks[3] - gameweeks[1]) / 2)
+        self.assertEqual(gameweeks[4] - gameweeks[3], timedelta(weeks=1))
 
     def test_managers_are_not_players(self):
         parsed = self.parse()
@@ -91,8 +100,25 @@ class TestParseSeason(ArchiveCase):
         for row in gws[4:]:
             row["round"] = row["GW"] = 39
         parsed = self.parse("2019/20", gws=gws, teams_csv=True)
-        self.assertEqual(sorted(g["gameweek"] for g in parsed.gameweeks), [1, 30])
+        self.assertEqual({f["gameweek"] for f in parsed.fixtures}, {1, 30})
         self.assertEqual(history.gameweek_of("2018/19", 39), 39)
+
+    def test_two_different_rows_with_results_are_refused(self):
+        players, gws = season_rows()
+        other = dict(gws[0], total_points=9)
+        with self.assertRaises(SystemExit):
+            self.parse(gws=gws + [other])
+
+    def test_an_identical_row_twice_is_dropped(self):
+        players, gws = season_rows()
+        parsed = self.parse(gws=gws + [dict(gws[0])])
+        self.assertEqual((parsed.duplicates, len(parsed.player_fixture_stats)), (1, 6))
+
+    def test_player_rows_that_disagree_about_a_fixture_are_refused(self):
+        players, gws = season_rows()
+        gws[1]["kickoff_time"] = "2016-08-14T14:00:00Z"
+        with self.assertRaises(SystemExit):
+            self.parse(gws=gws)
 
     def test_one_sided_fixture_is_refused(self):
         players, gws = season_rows()

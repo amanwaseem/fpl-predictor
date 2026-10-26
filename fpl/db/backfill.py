@@ -19,9 +19,10 @@ Run from the repository root, with DATABASE_URL set.
 import argparse
 import sys
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.dialects.postgresql import insert
 
+from fpl.db.load import LOAD_LOCK
 from fpl.db.models import (
     Fixture,
     Gameweek,
@@ -37,27 +38,97 @@ from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.ingest import history
 from fpl.paths import require_project_root
 
-# Rows per season once loaded: (season_players, fixtures, player_fixture_stats),
-# counted from the pinned files when they were first loaded.
-EXPECTED: dict[str, tuple[int, int, int]] = {
-    "2016/17": (683, 380, 23679),
-    "2017/18": (647, 380, 22467),
-    "2018/19": (624, 380, 21790),
-    "2019/20": (666, 380, 22501),
-    "2020/21": (713, 380, 24365),
-    "2021/22": (737, 380, 25447),
-    "2022/23": (778, 380, 26505),
-    "2023/24": (865, 380, 29725),
-    "2024/25": (784, 380, 27283),
-    "2025/26": (841, 380, 29747),
+# Rows per season once loaded, table by table (COUNTED), counted from the
+# pinned files when they were first loaded. Every table the backfill writes is
+# counted, so a change to any of its parsing, or to the builders it shares with
+# the snapshot loader, shows up here.
+EXPECTED: dict[str, dict[str, int]] = {
+    "2016/17": {
+        "teams": 20,
+        "season_players": 683,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 718,
+        "player_fixture_stats": 23679,
+    },
+    "2017/18": {
+        "teams": 20,
+        "season_players": 647,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 674,
+        "player_fixture_stats": 22467,
+    },
+    "2018/19": {
+        "teams": 20,
+        "season_players": 624,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 628,
+        "player_fixture_stats": 21790,
+    },
+    "2019/20": {
+        "teams": 20,
+        "season_players": 666,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 674,
+        "player_fixture_stats": 22501,
+    },
+    "2020/21": {
+        "teams": 20,
+        "season_players": 713,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 726,
+        "player_fixture_stats": 24365,
+    },
+    "2021/22": {
+        "teams": 20,
+        "season_players": 737,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 751,
+        "player_fixture_stats": 25447,
+    },
+    "2022/23": {
+        "teams": 20,
+        "season_players": 778,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 807,
+        "player_fixture_stats": 26505,
+    },
+    "2023/24": {
+        "teams": 20,
+        "season_players": 865,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 890,
+        "player_fixture_stats": 29725,
+    },
+    "2024/25": {
+        "teams": 20,
+        "season_players": 784,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 815,
+        "player_fixture_stats": 27283,
+    },
+    "2025/26": {
+        "teams": 20,
+        "season_players": 841,
+        "gameweeks": 38,
+        "fixtures": 380,
+        "player_clubs": 870,
+        "player_fixture_stats": 29747,
+    },
 }
 
 # Children before parents, so a season can be deleted in this order.
 TABLES = [PlayerFixtureStats, PlayerClub, Fixture, Gameweek, SeasonPlayer, Team]
+COUNTED = {model.__tablename__: model for model in reversed(TABLES)}
 LOCK = 79
-# Rows per INSERT: psycopg sends each as one statement of parameters, and a
-# season's 30,000 stats rows at once is more than it needs to be.
-BATCH = 5000
 
 
 def load_season(connection, parsed):
@@ -71,9 +142,24 @@ def load_season(connection, parsed):
     connection.execute(insert(Season).values(season=season).on_conflict_do_nothing())
     for model in TABLES:
         connection.execute(delete(model).where(model.season == season))
-    # People are not per season; a name already known, from a later season or
-    # the live one, is kept.
-    connection.execute(insert(Player).on_conflict_do_nothing(), parsed.players)
+    # People are not per season. A name is taken from this season unless a
+    # later one, past or live, already has the person: the newest name wins,
+    # whatever order the seasons are loaded in.
+    statement = insert(Player)
+    later = exists().where(
+        SeasonPlayer.player_code == statement.excluded.code, SeasonPlayer.season > season
+    )
+    connection.execute(
+        statement.on_conflict_do_update(
+            index_elements=["code"],
+            set_={
+                "first_name": statement.excluded.first_name,
+                "second_name": statement.excluded.second_name,
+            },
+            where=~later,
+        ),
+        parsed.players,
+    )
     for model, rows in (
         (Team, parsed.teams),
         (SeasonPlayer, parsed.season_players),
@@ -82,39 +168,50 @@ def load_season(connection, parsed):
         (PlayerClub, parsed.player_clubs),
         (PlayerFixtureStats, parsed.player_fixture_stats),
     ):
-        for start in range(0, len(rows), BATCH):
-            connection.execute(insert(model), rows[start : start + BATCH])
+        # SQLAlchemy pages a many-row INSERT itself (insertmanyvalues).
+        if rows:
+            connection.execute(insert(model), rows)
 
 
 def counts(connection, season):
-    return tuple(
-        connection.scalar(select(func.count()).select_from(model).where(model.season == season))
-        for model in (SeasonPlayer, Fixture, PlayerFixtureStats)
-    )
+    return {
+        name: connection.scalar(
+            select(func.count()).select_from(model).where(model.season == season)
+        )
+        for name, model in COUNTED.items()
+    }
 
 
-def backfill(engine, seasons, raw=history.RAW, expected=None):
-    """Load `seasons` from `raw`. Returns {season: counts}."""
+def backfill(engine, seasons, raw=history.RAW, expected=None, verified=False):
+    """Load `seasons` from `raw`, checking its files' hashes first unless `verified`.
+    Returns {season: counts}."""
     expected = EXPECTED if expected is None else expected
+    if not verified:
+        history.verify(raw)
     names = history.short_names(raw)
     loaded = {}
     for season in seasons:
         parsed = history.parse_season(season, raw, names)
         with engine.begin() as connection:
+            # The snapshot loader's lock too: the check that a season has no
+            # snapshots, then its delete, must not interleave with an fpl-load.
+            connection.execute(select(func.pg_advisory_xact_lock(LOAD_LOCK)))
             connection.execute(select(func.pg_advisory_xact_lock(LOCK)))
             load_season(connection, parsed)
             found = counts(connection, season)
             want = expected.get(season)
             if want is not None and found != want:
+                differ = {k: (found[k], want.get(k)) for k in found if found[k] != want.get(k)}
                 raise SystemExit(
-                    f"{season}: loaded {found} (players, fixtures, stats), "
-                    f"expected {want}. Nothing for it was kept."
+                    f"{season}: loaded rows differ from the pinned counts, as (loaded, "
+                    f"pinned): {differ}. Nothing for it was kept."
                 )
         loaded[season] = found
         print(
-            f"{season}: {found[0]} players, {found[1]} fixtures, {found[2]} player-fixture "
-            f"rows ({parsed.duplicates} duplicate rows dropped, {parsed.not_players} "
-            "rows for managers, who are not players)"
+            f"{season}: {found['season_players']} players, {found['fixtures']} fixtures, "
+            f"{found['player_fixture_stats']} player-fixture rows ({parsed.duplicates} "
+            f"duplicate rows dropped, {parsed.not_players} rows for managers, who are not "
+            "players)"
         )
     return loaded
 
@@ -128,10 +225,10 @@ def main(seasons, download_only=False):
     )
     if download_only:
         return 0
-    history.verify()
     engine = make_engine()
     try:
-        backfill(engine, seasons)
+        # download() has just checked every file's hash.
+        backfill(engine, seasons, verified=True)
     finally:
         engine.dispose()
     return 0
