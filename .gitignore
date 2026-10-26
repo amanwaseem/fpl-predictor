@@ -25,6 +25,10 @@ htmlcov/
 # Raw API snapshots — large, regenerable via fpl/ingest/fetch.py (hard rule 3)
 data/raw/
 
+# Trained models fetched from their release, by SHA-256 (#85); the registry is
+# committed, the artifacts are not
+data/models/
+
 # Exploratory runs — throwaway, never a real prediction
 scratch/
 

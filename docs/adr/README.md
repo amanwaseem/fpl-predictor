@@ -25,3 +25,4 @@ answer.
 | [0016](0016-optimise-my-team-caches-beside-the-projection.md) | Optimise my team: caches beside the projection, estimates said aloud | Accepted |
 | [0017](0017-uv-lock-replaces-hand-pinned-requirements.md) | A uv lockfile replaces the hand-pinned requirements files | Accepted |
 | [0018](0018-past-seasons-are-training-data.md) | Past seasons are training data, from a pinned archive | Accepted |
+| [0019](0019-a-learned-model-evaluated-without-its-library.md) | A learned model, trained with LightGBM and evaluated without it | Accepted |

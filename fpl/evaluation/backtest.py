@@ -63,6 +63,7 @@ being predicted at zero.
 """
 
 import argparse
+import functools
 import itertools
 import json
 import math
@@ -71,7 +72,7 @@ from pathlib import Path
 
 from fpl.evaluation import metrics, score
 from fpl.ingest.snapshot import load_live, load_snapshot, usable_rounds
-from fpl.models import predict_fixture
+from fpl.models import gbm, predict_fixture
 from fpl.models.candidates import (
     baseline_fixture_rows,
     baseline_prior_rows,
@@ -213,6 +214,19 @@ def _form_fixture(bootstrap, fixtures, histories, target_gw, pasts=None, **setti
     )
 
 
+def _gbm(bootstrap, fixtures, histories, target_gw, pasts=None):
+    usable, _ = usable_rounds(bootstrap["events"], target_gw)
+    return gbm.predict_rows(
+        bootstrap, fixtures, histories, pasts or {}, target_gw, usable, _gbm_bundle()
+    )
+
+
+@functools.cache
+def _gbm_bundle():
+    """gbm-v1's registered artifact, read once a run."""
+    return gbm.load()
+
+
 # Every model the backtest can replay: name -> f(bootstrap, fixtures,
 # histories, target_gw, pasts) returning log-shaped rows. A logged model added
 # here must be the same function its log entries come from; a candidate from
@@ -224,6 +238,9 @@ MODELS = {
     "baseline-fdr": lambda *view, **kw: baseline_fixture_rows(*view, strength="fdr", **kw),
     # The logged model (#32): the same function its entries come from.
     "form-fixture-v1": _form_fixture,
+    # The learned model (#85), trained on 2016/17-2025/26 only, so every
+    # gameweek of this season is held out from it already.
+    "gbm-v1": _gbm,
     # The candidate for form-fixture-v2 (#48): v1 with goals conceded and
     # saves priced from the fixture. Not logged until it passes its gates.
     "form-fixture-v2": lambda *view, **kw: _form_fixture(*view, goalkeeping=True, **kw),
