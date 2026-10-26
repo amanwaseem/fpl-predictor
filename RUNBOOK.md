@@ -46,7 +46,7 @@ Work out three things and write them down:
 |---|---|
 | **N** | the gameweek to predict |
 | **Deadline** | GW N's `deadline_time`, UTC — see below |
-| **Model version** | `baseline-v1` and, from GW6, `form-fixture-v1` — one entry each |
+| **Model version** | `baseline-v1`; from GW6, `form-fixture-v1`; from GW9, `gbm-v1` — one entry each |
 
 The entry will be written to `predictions/gwNN_<model-version>.csv`.
 
@@ -56,8 +56,9 @@ Each model has its own command, and every step below runs once per model:
 |---|---|
 | `baseline-v1` | `fpl-predict-baseline` |
 | `form-fixture-v1` | `fpl-predict-fixture` |
+| `gbm-v1` | `fpl-predict-gbm` (fetches its trained model once, by SHA-256, from the `model-gbm-v1` release) |
 
-Run both from **the same snapshot**. Head-to-head scoring compares them
+Run them all from **the same snapshot**. Head-to-head scoring compares them
 player by player, and two snapshots would make that a comparison of snapshots.
 By hand, pass `--snapshot <id>` to each command so that a fetch in between
 cannot move `LATEST` under the second one.

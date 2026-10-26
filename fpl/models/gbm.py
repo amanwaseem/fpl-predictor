@@ -102,6 +102,8 @@ class Bundle:
         if artifact["features"] != FEATURES:
             raise ValueError("the artifact was trained on different inputs than this code builds")
         self.meta = {k: v for k, v in artifact.items() if k != "models"}
+        # Set by load(), from the registry: the artifact's identity.
+        self.sha256 = None
         self.models = {part: Model(artifact["models"][part]) for part in PARTS}
 
     def predict(self, row):
@@ -138,7 +140,9 @@ def load(version=MODEL_VERSION, registry=REGISTRY, cache=CACHE):
             f"{path} has SHA-256 {found}, not the registered {entry['sha256']}. "
             "Delete it and run again; nothing was predicted."
         )
-    return Bundle(json.loads(path.read_text()))
+    bundle = Bundle(json.loads(path.read_text()))
+    bundle.sha256 = found
+    return bundle
 
 
 def season_of(events):
@@ -225,7 +229,7 @@ def main(requested_gw, out_dir, snapshot_id=None):
     print(f"snapshot:  {snap.name}")
     print(f"target:    GW{target_gw}")
     print(f"deadline:  {deadline}")
-    print(f"model:     {MODEL_VERSION}, artifact {registered()['sha256'][:12]}")
+    print(f"model:     {MODEL_VERSION}, artifact {(bundle.sha256 or 'unregistered')[:12]}")
     print(f"included: {', '.join(str(r) for r in sorted(usable)) or 'none'}")
     print(f"excluded: {', '.join(str(r) for r in excluded) or 'none'}")
     if not usable:

@@ -43,7 +43,7 @@ from pathlib import Path
 from fpl.ingest.snapshot import load_snapshot, resolve_target_gw
 from fpl.log import summarise, verify_entry
 from fpl.log.contract import TIMESTAMP
-from fpl.models import predict_baseline, predict_fixture
+from fpl.models import gbm, predict_baseline, predict_fixture
 from fpl.paths import require_project_root
 
 # The models logged each gameweek, declared here and nowhere else. Adding a
@@ -51,6 +51,8 @@ from fpl.paths import require_project_root
 LOGGED_MODELS = (
     (predict_baseline.MODEL_VERSION, predict_baseline.main),
     (predict_fixture.MODEL_VERSION, predict_fixture.main),
+    # From GW9 (#85): its artifact is fetched by hash from its release.
+    (gbm.MODEL_VERSION, gbm.main),
 )
 
 
