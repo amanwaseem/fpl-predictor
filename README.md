@@ -78,6 +78,7 @@ recorded as missed in `scores/`.
 |---|---|---|
 | `baseline-v1` | GW4 | Rolling form: recent minutes and scoring rate, adjusted for availability and fixture count. No training |
 | `form-fixture-v1` | GW6 | The baseline plus last-season priors and opponent-aware team strength |
+| `gbm-v1` | GW9 | LightGBM on ten past seasons: minutes in two stages, points by a Tweedie model; held-out report in `reports/gbm-v1.md` (ADR 0019) |
 
 The rolling-form baseline exists so that the pipeline, optimiser and frontend can be built and
 validated end to end without waiting on model accuracy. Any model that beats the baseline
@@ -133,7 +134,6 @@ two models apart; the cumulative record is `scores/cumulative.json`.
 
 - Automated entries: a scheduled workflow that makes each entry and opens its PR before the
   deadline (#68)
-- A learned model on past seasons, gbm-v1 (#85)
 
 **Planned** (tracked in #75)
 

@@ -13,8 +13,9 @@ from pathlib import Path
 from unittest import mock
 
 from fpl.log import entry
-from fpl.models import predict_baseline, predict_fixture
+from fpl.models import gbm, predict_baseline, predict_fixture
 from tests import fixtures
+from tests.gbm_fixture import tiny_bundle
 from tests.test_predict_fixture import played, row
 
 SNAPSHOT_ID = "20260910T000000Z"
@@ -45,6 +46,10 @@ def flaky(gw, out_dir, snapshot_id):
 class TestEntry(fixtures.TempCwd):
     def setUp(self):
         super().setUp()
+        # gbm-v1 with a tiny model of its own, rather than the released one.
+        patch = mock.patch.object(gbm, "load", tiny_bundle)
+        patch.start()
+        self.addCleanup(patch.stop)
         self.league_with_results(SNAPSHOT_ID)
 
     def league_with_results(self, name, deadline=None):
@@ -232,7 +237,7 @@ class TestEntry(fixtures.TempCwd):
     def test_each_predictor_can_be_pointed_at_one_snapshot_by_hand(self):
         """The manual fallback can pin a snapshot as fpl-entry does."""
         self.league_with_results("20260911T000000Z")
-        for cli in (predict_baseline.cli, predict_fixture.cli):
+        for cli in (predict_baseline.cli, predict_fixture.cli, gbm.cli):
             with contextlib.redirect_stdout(io.StringIO()):
                 cli(["--out", "scratch/manual", "--snapshot", SNAPSHOT_ID])
         for model in MODELS:
