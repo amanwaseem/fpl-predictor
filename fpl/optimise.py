@@ -143,7 +143,7 @@ class SolverFailure(Exception):
     """The solver stopped for a reason that is not the request's: not infeasible, not time."""
 
 
-def _deadline(time_limit):
+def deadline_in(time_limit):
     """A monotonic deadline `time_limit` seconds away, or None for no limit."""
     return None if time_limit is None else time.monotonic() + time_limit
 
@@ -158,7 +158,7 @@ def points(value):
     return round(value * SCALE)
 
 
-def _solver():
+def solver():
     """highspy, imported only when a squad is solved, so --help works without it."""
     try:
         import highspy
@@ -225,9 +225,71 @@ def best_squad(
         raise ValueError("no legal squad: " + "; ".join(reasons))
     cost = {p["player_id"]: tenths(p["price"]) for p in pool}
     squad, starters, captain, _ = _solve(
-        pool, cost, tenths(budget), bench_weight, deadline=_deadline(time_limit)
+        pool, cost, tenths(budget), bench_weight, deadline=deadline_in(time_limit)
     )
-    return _squad(squad, starters, captain, cost, budget)
+    return build_squad(squad, starters, captain, cost, budget)
+
+
+def new_model():
+    """(highspy, an empty model) set for exact integer optima: a zero relative
+    gap, and an absolute one below one unit, since every objective is integral."""
+    highspy = solver()
+    model = highspy.Highs()
+    model.silent()
+    model.setOptionValue("mip_rel_gap", 0.0)
+    model.setOptionValue("mip_abs_gap", 0.5)
+    return highspy, model
+
+
+def solve_lexicographic(highspy, model, value, tiebreak, read, deadline, infeasible):
+    """Maximise `value`, then with it held minimise `tiebreak`: (optimum, read()).
+
+    The first solve's answer is read before the second, and stands if the
+    second does not finish optimal: just as good in points, only not
+    tie-broken. `tiebreak` None skips the second solve. `deadline` is a
+    time.monotonic() value both solves must finish by; a first solve that
+    reaches it raises SolverTimeout, as an answer not proved optimal is not
+    given. An infeasible model raises ValueError(`infeasible`), with the
+    solver's status. Shared with fpl.plan, so the two solve alike.
+    """
+
+    def limit_time():
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SolverTimeout("the solver's time limit was reached")
+            model.setOptionValue("time_limit", remaining)
+
+    limit_time()
+    model.maximize(value)
+    status = model.getModelStatus()
+    if status == highspy.HighsModelStatus.kTimeLimit:
+        raise SolverTimeout("the solver's time limit was reached before it proved an optimum")
+    # Every variable is bounded, so "unbounded or infeasible" can only be infeasible.
+    if status not in (
+        highspy.HighsModelStatus.kOptimal,
+        highspy.HighsModelStatus.kInfeasible,
+        highspy.HighsModelStatus.kUnboundedOrInfeasible,
+    ):
+        raise SolverFailure(
+            f"the solver stopped without an answer: {model.modelStatusToString(status)}"
+        )
+    if status != highspy.HighsModelStatus.kOptimal:
+        raise ValueError(f"{infeasible} (solver: {model.modelStatusToString(status)}).")
+    best = round(model.getObjectiveValue())
+    solution = read()
+    if tiebreak is not None:
+        # Half a unit below the optimum, so the solver's tolerances cannot
+        # exclude the optimum itself, and still above every worse answer.
+        model.addConstr(value >= best - 0.5)
+        try:
+            limit_time()
+            model.minimize(tiebreak)
+            if model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
+                solution = read()
+        except SolverTimeout:
+            pass
+    return best, solution
 
 
 def add_squad(model, pool, worth, bench_weight, club_cap=True):
@@ -298,20 +360,8 @@ def _solve(
     solve that reaches it raises SolverTimeout: an answer not proved optimal is
     not given.
     """
-    highspy = _solver()
+    highspy, model = new_model()
     n = len(pool)
-    model = highspy.Highs()
-    model.silent()
-    # The objectives are integral, so a gap below one unit is optimality.
-    model.setOptionValue("mip_rel_gap", 0.0)
-    model.setOptionValue("mip_abs_gap", 0.5)
-
-    def limit_time():
-        if deadline is not None:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise SolverTimeout("the solver's time limit was reached")
-            model.setOptionValue("time_limit", remaining)
 
     squad, start, captain, value = add_squad(
         model, pool, [points(p["predicted_points"]) for p in pool], bench_weight, club_cap=not keep
@@ -330,44 +380,22 @@ def _solve(
         model.addConstr(hits >= transfers - free_transfers)
         value = value - HIT * SCALE * hits
 
-    limit_time()
-    model.maximize(value)
-    status = model.getModelStatus()
-    if status == highspy.HighsModelStatus.kTimeLimit:
-        raise SolverTimeout("the solver's time limit was reached before it proved an optimum")
-    # Every variable is bounded, so "unbounded or infeasible" can only be infeasible.
-    if status not in (
-        highspy.HighsModelStatus.kOptimal,
-        highspy.HighsModelStatus.kInfeasible,
-        highspy.HighsModelStatus.kUnboundedOrInfeasible,
-    ):
-        raise SolverFailure(
-            f"the solver stopped without an answer: {model.modelStatusToString(status)}"
-        )
-    if status != highspy.HighsModelStatus.kOptimal:
-        raise ValueError(
-            f"no legal squad within £{budget / 10:.1f}m: each rule can be met alone, but not "
-            "together; the budget and the three-per-club cap leave no squad (solver: "
-            f"{model.modelStatusToString(model.getModelStatus())})."
-        )
-    best = round(model.getObjectiveValue())
-    solution = [model.vals(variables) for variables in (squad, start, captain)]
-
+    tiebreak = None
     if not keep:
-        # Half a unit below the optimum, so the solver's tolerances cannot
-        # exclude the optimum itself, and still above every worse squad.
-        model.addConstr(value >= best - 0.5)
-        rank = model.qsum(i * (squad[i] + start[i] + captain[i]) for i in range(n))
         # Fewer transfers first: one transfer outweighs any difference in
         # rank, which is at most 27 chosen variables each ranked below n.
-        try:
-            limit_time()
-            model.minimize(rank if transfers is None else (27 * n + 1) * transfers + rank)
-            tie_broken = model.getModelStatus() == highspy.HighsModelStatus.kOptimal
-        except SolverTimeout:
-            tie_broken = False
-        if tie_broken:
-            solution = [model.vals(variables) for variables in (squad, start, captain)]
+        rank = model.qsum(i * (squad[i] + start[i] + captain[i]) for i in range(n))
+        tiebreak = rank if transfers is None else (27 * n + 1) * transfers + rank
+    best, solution = solve_lexicographic(
+        highspy,
+        model,
+        value,
+        tiebreak,
+        lambda: [model.vals(variables) for variables in (squad, start, captain)],
+        deadline,
+        f"no legal squad within £{budget / 10:.1f}m: each rule can be met alone, but not "
+        "together; the budget and the three-per-club cap leave no squad",
+    )
 
     chosen_squad, starters, captains = (
         [pool[i] for i, v in enumerate(values) if v > 0.5] for values in solution
@@ -375,7 +403,7 @@ def _solve(
     return chosen_squad, starters, captains[0], best
 
 
-def _pick(player, selling=None):
+def pick(player, selling=None):
     return Pick(
         player_id=player["player_id"],
         web_name=player["web_name"],
@@ -387,7 +415,7 @@ def _pick(player, selling=None):
     )
 
 
-def _squad(squad, starters, captain, cost, budget, selling=None, verify=True):
+def build_squad(squad, starters, captain, cost, budget, selling=None, verify=True):
     """A Squad from the chosen players, checked against the rules unless `verify`
     is off (for a squad kept as it is, which may be over the club cap)."""
     xi = order_xi(starters, lambda p: p["predicted_points"])
@@ -403,10 +431,10 @@ def _squad(squad, starters, captain, cost, budget, selling=None, verify=True):
         key=lambda p: (p["predicted_points"], -p["player_id"]),
     )
     result = Squad(
-        xi=[_pick(p, selling) for p in xi],
-        bench=[_pick(p, selling) for p in bench],
-        captain=_pick(captain, selling),
-        vice_captain=_pick(vice, selling),
+        xi=[pick(p, selling) for p in xi],
+        bench=[pick(p, selling) for p in bench],
+        captain=pick(captain, selling),
+        vice_captain=pick(vice, selling),
         formation=formation_of(xi),
         cost=sum(cost[p["player_id"]] for p in squad) / 10,
         budget=budget,
@@ -528,11 +556,11 @@ def best_transfers(
         club: clubs.count(club) for club in sorted(set(clubs)) if clubs.count(club) > MAX_PER_CLUB
     }
 
-    deadline = _deadline(time_limit)
+    deadline = deadline_in(time_limit)
     kept_squad, kept_starters, kept_captain, kept = _solve(
         pool, cost, budget, bench_weight, owned, free_transfers, keep=True, deadline=deadline
     )
-    kept_result = _squad(
+    kept_result = build_squad(
         kept_squad, kept_starters, kept_captain, cost, budget / 10, current, verify=False
     )
     try:
@@ -548,7 +576,7 @@ def best_transfers(
             "kept as it is, but any transfer must bring it within the cap, and no "
             "affordable set of transfers does. Keep the squad this week."
         ) from None
-    result = _squad(squad, starters, captain, cost, budget / 10, current)
+    result = build_squad(squad, starters, captain, cost, budget / 10, current)
 
     by_id = {p["player_id"]: p for p in pool}
     new = {p["player_id"] for p in squad}
@@ -565,7 +593,7 @@ def best_transfers(
             key=lambda p: (-p["predicted_points"], p["player_id"]),
         )
         transfers += [
-            Transfer(out=_pick(o, current), selling_price=current[o["player_id"]], into=_pick(b))
+            Transfer(out=pick(o, current), selling_price=current[o["player_id"]], into=pick(b))
             for o, b in zip(sold, bought, strict=True)
         ]
     hits = max(0, len(transfers) - free_transfers)

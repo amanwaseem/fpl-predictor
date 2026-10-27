@@ -404,14 +404,14 @@ class TestSolves(unittest.TestCase):
     def test_keeping_the_squad_is_valued_without_a_tie_break_solve(self):
         squad = even_squad()
         CountingHighs.minimizes = 0
-        with mock.patch.object(optimise, "_solver", lambda: solver_with()):
+        with mock.patch.object(optimise, "solver", lambda: solver_with()):
             plan_for(squad + [player(100, "MID", 4.0)], owned(squad), free=1)
         self.assertEqual(CountingHighs.minimizes, 1)
 
     def test_a_tie_break_that_does_not_finish_leaves_the_first_answer(self):
         rows, _ = read_entry(ENTRY)
         expected = best_squad(rows).expected_points
-        with mock.patch.object(optimise, "_solver", lambda: solver_with(stall=True)):
+        with mock.patch.object(optimise, "solver", lambda: solver_with(stall=True)):
             squad = best_squad(rows)
         self.assertEqual(violations(squad), [])
         self.assertEqual(squad.expected_points, expected)
