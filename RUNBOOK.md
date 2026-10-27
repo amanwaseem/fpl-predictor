@@ -552,7 +552,9 @@ fpl-score
 The harness rescores every entry in `predictions/` against that snapshot and
 rewrites `scores/` in full. That is safe: `scores/` is derived output, and a
 rerun on the same inputs produces byte-identical files. Commit the changes to
-`scores/` on a branch like any other.
+`scores/` on a branch like any other, with the README's two results tables
+brought up to date in the same commit: `tests/test_readme.py` fails until
+every number in them matches `scores/`.
 
 Read the last lines of its output. `pending:` means a gameweek has not settled
 yet; `missed:` means a settled gameweek has no entry and never will.

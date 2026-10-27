@@ -1,12 +1,45 @@
 # fpl-predictor
 
-Gameweek-level points prediction and squad optimisation for Fantasy Premier League, with a public
-prediction log that cannot be edited after the fact.
+Points predictions for every Fantasy Premier League player, committed to this repository before
+each gameweek's deadline, scored against what actually happened once the gameweek settles, and
+never rewritten. CI refuses any change to an entry already in the log, so the track record,
+the bad weeks and the missed ones included, is the one the git history shows. Beside the log
+sit a squad optimiser and a live API over all of it.
 
-Every prediction is written to an append-only log **before** the gameweek deadline, then scored
-against the actual result once the gameweek completes. The log is committed to this repository
-and never rewritten, so the model's track record, including the weeks it gets things wrong, is
-public and verifiable.
+### The record so far
+
+2026/27, pooled over every player in every scored gameweek, from
+[`scores/cumulative.json`](scores/cumulative.json) and the per-gameweek files beside it
+(actuals from snapshot `20261027T032902Z`, after GW8 settled). Lower MAE is better; `form` is
+FPL's own form figure, the naive prediction a model has to beat.
+
+| Model | Role | Scored | Missed | MAE | `form` MAE | XI points | `form` XI points |
+|---|---|---|---|---|---|---|---|
+| `baseline-v1` | baseline | GW4, GW6, GW8 | GW5, GW7 | 1.099 | 1.294 | 155 | 100 |
+| `form-fixture-v1` | main | GW6, GW8 | GW7 | 1.065 | 1.303 | 79 | 68 |
+| `gbm-v1` | challenger | from GW9 | | | | | |
+
+"XI points" is what each model's best predicted starting eleven actually scored, summed over
+its gameweeks. A missed gameweek had no entry before the deadline, and stays missed. Per
+gameweek figures are under [Current status](#current-status).
+
+### The API
+
+Live at [fpl-predictor-aman.fly.dev](https://fpl-predictor-aman.fly.dev/docs), read-only over
+the log, with interactive docs at `/docs`:
+
+| Endpoint | What it holds |
+|---|---|
+| `GET /v1/gameweeks`, `/v1/gameweeks/{gw}` | The season's gameweeks; one gameweek's fixtures and each model's entry, with its score once settled |
+| `GET /v1/gameweeks/{gw}/predictions?model=` | One entry's predictions, highest first, with actual points once scored |
+| `GET /v1/scorecard`, `/v1/models` | Each model's metrics per gameweek and pooled, and its logged, scored and missed gameweeks |
+| `GET /v1/players/{id}` | A player's clubs, matches and every prediction made for them |
+| `POST /v1/optimise`, `GET /v1/entries/{fpl_team_id}/advice` | The best squad or transfers for the latest entry's predictions |
+| `GET /v1/status` | How fresh the data is |
+
+```bash
+curl -s https://fpl-predictor-aman.fly.dev/v1/scorecard
+```
 
 **Contents:** [Why](#why) · [How it works](#how-it-works) · [Approach](#approach) ·
 [Current status](#current-status) · [Usage](#usage) · [Repository layout](#repository-layout) ·
@@ -81,9 +114,9 @@ one retires: no longer logged, its record kept.
 | `form-fixture-v1` | GW6 | The baseline plus last-season priors and opponent-aware team strength |
 | `gbm-v1` | GW9 | LightGBM on ten past seasons: minutes in two stages, points by a Tweedie model; held-out report in `reports/gbm-v1.md` (ADR 0019) |
 
-The rolling-form baseline exists so that the pipeline, optimiser and frontend can be built and
-validated end to end without waiting on model accuracy. Any model that beats the baseline
-replaces it; any model that doesn't, doesn't ship.
+The rolling-form baseline exists so that the pipeline, optimiser and frontend could be built
+and validated end to end without waiting on model accuracy, and it stays as the yardstick. A
+model that cannot beat it held out is not logged at all (ADR 0007).
 
 **Results so far**
 
@@ -134,9 +167,6 @@ few to tell the two models apart; the cumulative record is `scores/cumulative.js
   freshness check, and SLOs with an incident runbook ([`docs/operations.md`](docs/operations.md))
 - "Optimise my team" on the API: `POST /v1/optimise` for a squad sent in, and
   `GET /v1/entries/{id}/advice`, which reads an FPL team's squad from the FPL API first
-
-**In progress**
-
 - Automated entries: a scheduled workflow that makes each entry and opens its PR before the
   deadline (#68)
 
