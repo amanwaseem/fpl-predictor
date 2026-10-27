@@ -16,11 +16,20 @@ own logs, with no third-party monitoring service to sign up for or keep.
 | The data is fresh | `/v1/status`'s `checked_age_seconds`, since the ingest last compared FPL with the database, under 30 hours | Failed-workflow email |
 | A load the ingest needed went through | The Ingest workflow fails its own run | Failed-workflow email |
 | An entry is in before the deadline | The deadline watchdog (`deadline.yml`, `tools/check_deadline.py`), hourly | Failed-workflow email |
-| Requests and errors | One JSON line per request, and the traceback of any error, with its request id: `fly logs --app fpl-predictor-aman` | — |
+| Requests and errors | One JSON line per request, and the traceback of any error, with its request id: `fly logs --app fpl-predictor-aman` | None |
 
 Every response carries `X-Request-ID`, a 500 included. A user who reports a
 problem can quote it, and `fly logs | grep <id>` finds the request and, for an
 error, its traceback.
+
+Two things this setup does not do, on purpose ([ADR 0021](adr/0021-observability-with-what-the-project-already-has.md)):
+
+- **A 500 sends no alert.** The guard against them is before a deploy: CI's
+  fuzz test sends every route inputs it was not written for and fails on any
+  500. After a deploy that changes the API, read `fly logs` for a minute.
+- **Logs are not kept.** `fly logs` shows Fly's recent buffer, not a history,
+  so a request id is findable for a while after the request, not days later.
+  Ask whoever reports a problem for the id straight away.
 
 Checks are hourly rather than every minute on purpose: the Fly machine stops
 when idle and Neon suspends an idle database, and a check that kept them awake
@@ -34,9 +43,9 @@ reason to look, not a page at 3am.
 | | Objective | Measured by |
 |---|---|---|
 | **Availability** | 99% of hourly `/healthz` checks answer 200 within 60 s, a cold start included | Uptime workflow history |
-| **Data freshness** | The ingest checks FPL at least daily, so a settled gameweek's results reach production within 24 hours of FPL settling it | Uptime workflow history |
+| **Data freshness** | The ingest checks FPL within every 30 hours (it is scheduled daily, with room for one late run), so a settled gameweek's results reach production the day FPL settles them | Uptime workflow history: a run fails when the last check is over 30 hours old |
 | **Entries** | Every logged model's entry merged at least 2 hours before each deadline | The deadline watchdog |
-| **Latency** | Reads well under a second on a warm machine, and the optimiser within its 10-second limit | `duration_ms` in the logs; the load test in the README |
+| **Latency** | Reads under a second on a warm machine; the optimiser stops at its 10-second limit by construction | Spot checks, not a monthly figure: `duration_ms` in the logs, and the load test in the README |
 
 ## Incidents
 
@@ -79,19 +88,33 @@ bug: no input may cause one, which CI's fuzz checks.
 
 ## Backups, and rebuilding instead
 
-The production database holds nothing that exists only there. Everything in
-it can be rebuilt from scratch into an empty database, in this order:
+Nothing that matters exists only in the production database. The log is in
+git, past seasons are in a pinned archive, and the live season is in FPL's
+API. A rebuild loses only bookkeeping that refills itself: the caches
+(optimiser results and FPL API responses), the record of which snapshots were
+loaded, and the ingest's check history.
 
-```bash
-fpl-migrate                     # the schema
-fpl-project                     # the log, from predictions/ and scores/ in git
-fpl-backfill                    # 2016/17-2025/26, from the pinned archive
-# then Actions → Ingest → Run workflow, with force: the live season
-fpl-features                    # the feature table, from all of the above
-```
+So no backup is kept or tested beyond what Neon does on its own (a short
+history of every change, from which its console can make a point-in-time
+branch). To rebuild:
 
-The only things a rebuild loses are the caches (optimiser results and FPL API
-responses), which refill themselves. So no backup is kept or tested beyond
-what Neon does on its own: it keeps a short history of every change, and a
-point-in-time branch can be made from its console if a rebuild would ever be
-too slow.
+1. In Neon, make a new empty database, or a branch, and copy its direct
+   connection string (pooling off).
+2. From the repository root, without the string appearing on screen:
+
+   ```bash
+   export DATABASE_URL="$(pbpaste)"
+   python3 tools/check_database_url.py
+   fpl-migrate                   # the schema
+   fpl-project                   # the log, from predictions/ and scores/ in git
+   fpl-backfill                  # 2016/17-2025/26, from the pinned archive
+   unset DATABASE_URL
+   ```
+
+3. Point the service at it, again from the clipboard: on Fly,
+   `fly secrets set DATABASE_URL="$(pbpaste)" --app fpl-predictor-aman`, and in
+   the repository, **Settings → Environments → production → DATABASE_URL**.
+4. Actions → Ingest → Run workflow, with **force**: it loads the live season
+   and builds the feature table. Until it has run, `/v1/status` has no check
+   to report, and the uptime check says STALE.
+5. Actions → Deploy → Run workflow, then `curl .../readyz`.
