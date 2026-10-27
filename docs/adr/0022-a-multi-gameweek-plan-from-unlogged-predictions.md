@@ -32,12 +32,15 @@ between weeks.
   function of the opponent and so prices any later fixture directly. gbm-v1's
   inputs are built per gameweek from settled rounds, and would need a
   separate feature build for weeks that have not been reached.
-- **Free transfers roll over**, one a week, banked up to five, and each
-  transfer beyond them costs four points in the week it is made.
-- **Later weeks count less**: week k at 0.9^k of the first, hits included.
-- **Not modelled:** chips, price changes (each player's price and selling
-  price are as at the snapshot), and availability changing (a player injured
-  now is injured for the whole plan).
+- **Free transfers roll over**, one a week, banked up to five. They are used
+  before any hit, and each transfer beyond them costs four points in the week
+  it is made.
+- **Later weeks count less**: week k at 0.9^k of the first, hits included,
+  with the discount kept from 0.5 to 1 so the last week still counts.
+- **Money:** an owned player costs his selling price while he is kept; sold
+  and bought back, he costs his price like anyone else.
+- **Not modelled:** chips, price changes (prices are as at the snapshot), and
+  availability changing (a player injured now is injured for the whole plan).
 
 Only the first week's transfers are a decision. The rest are the plan as it
 stands, and the next snapshot revisits them.
@@ -46,9 +49,9 @@ stands, and the next snapshot revisits them.
 
 - One-week plans agree with fpl-optimise, which the tests check, so the two
   cannot drift.
-- A plan solves in a few seconds for three to six weeks on a real pool. It is
-  a command, not an API route; the API's routes stay within their ten-second
-  limit.
+- A plan solves in five to ten seconds for three to six weeks on a real pool.
+  That is too slow to sit beside the API's routes and their ten-second limit,
+  so it is a command, not a route.
 - Because availability is held fixed, the plan never banks on a return from
   injury. It can be slow to buy back a player who returns; the next week's
   snapshot corrects that.

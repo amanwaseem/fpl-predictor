@@ -29,10 +29,15 @@ Run from the repository root.
 """
 
 import argparse
-import json
 import sys
 
-from fpl.ingest.snapshot import fixture_counts, load_snapshot, resolve_target_gw, usable_rounds
+from fpl.ingest.snapshot import (
+    fixture_counts,
+    load_snapshot,
+    player_summaries,
+    resolve_target_gw,
+    usable_rounds,
+)
 from fpl.log.contract import write_entry
 from fpl.models.features import (
     CLEAN_SHEET_POINTS,
@@ -354,13 +359,7 @@ def main(requested_gw, out_dir, snapshot_id=None):
     if doubles:
         print(f"doubles:   {', '.join(sorted(doubles))}")
 
-    histories, pasts = {}, {}
-    for p in bootstrap["elements"]:
-        path = players_dir / f"{p['id']}.json"
-        if path.exists():
-            summary = json.loads(path.read_text())
-            histories[p["id"]] = summary.get("history", [])
-            pasts[p["id"]] = summary.get("history_past", [])
+    histories, pasts = player_summaries(bootstrap, players_dir)
 
     # Always reported, like included/excluded: how much of the entry rests on
     # last season rather than on a positional guess (#30). Counted over the

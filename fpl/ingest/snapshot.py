@@ -121,6 +121,22 @@ def load_snapshot(snapshot_id=None):
     return snap, bootstrap, fixtures, players_dir
 
 
+def player_summaries(bootstrap, players_dir):
+    """({player_id: history rows}, {player_id: history_past rows}) from a snapshot.
+
+    A player with no element-summary file is left out of both, as a model
+    leaves out a player it has no history for.
+    """
+    histories, pasts = {}, {}
+    for p in bootstrap["elements"]:
+        path = players_dir / f"{p['id']}.json"
+        if path.exists():
+            summary = json.loads(path.read_text())
+            histories[p["id"]] = summary.get("history", [])
+            pasts[p["id"]] = summary.get("history_past", [])
+    return histories, pasts
+
+
 def load_live(snap, gw):
     """Actual per-player points for a completed gameweek.
 
