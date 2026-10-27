@@ -39,11 +39,7 @@ db = ["sqlalchemy>=2.0,<2.1", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
 optimise = ["highspy>=1.15,<2"]
 # The API (#81), with the solver /v1/optimise runs (#83).
 api = [{include-group = "db"}, {include-group = "optimise"},
-       "fastapi>=0.159,<1", "uvicorn>=0.54,<1",
-       # Errors and traces (#86); both off unless their settings are present.
-       "sentry-sdk==2.72.0",
-       "opentelemetry-sdk==1.45.1", "opentelemetry-exporter-otlp-proto-http==1.45.1",
-       "opentelemetry-instrumentation-fastapi==0.66b1"]
+       "fastapi>=0.159,<1", "uvicorn>=0.54,<1"]
 # Training the learned model (#85). Not needed to predict with it: a trained
 # model is evaluated by fpl.models.trees, in plain Python.
 ml = ["lightgbm>=4.7,<5", "numpy>=2.5,<3"]
@@ -91,7 +87,6 @@ fpl-optimise = "fpl.optimise:cli"
 fpl-project = "fpl.db.project:cli"
 fpl-reconcile = "fpl.db.reconcile:cli"
 fpl-serve = "fpl.api.serve:cli"
-fpl-check-sentry = "fpl.api.observability:cli"
 
 [tool.setuptools]
 # Stated rather than discovered, so tests/, tools/, data/ and scratch/ can

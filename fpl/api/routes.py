@@ -8,7 +8,7 @@ from fastapi import Path as PathParam
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from fpl.api import observability, queries, schemas, solver, upstream
+from fpl.api import queries, schemas, solver, upstream
 from fpl.api.limits import solver_rate
 from fpl.api.problems import responses
 from fpl.db import migrate
@@ -128,14 +128,9 @@ def list_models(db: Database, season: SeasonParam = None):
 def get_status(db: Database, season: SeasonParam = None):
     """How fresh the data is: the newest snapshot loaded, the latest settled
     gameweek, and the entries so far for the next deadline."""
-    current = season is None
     with db.connect() as conn:
         season = queries.resolve_season(conn, season)
-        body = queries.status(conn, season, datetime.now(UTC))
-    # The gauge is production's freshness: the current season's only.
-    if current:
-        observability.record_freshness(body["last_checked_utc"])
-    return body
+        return queries.status(conn, season, datetime.now(UTC))
 
 
 @v1.get("/scorecard", response_model=schemas.Scorecard, tags=["models"])

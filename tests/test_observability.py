@@ -1,31 +1,17 @@
-"""Logs, request ids and error reporting, fpl.api.observability (#86).
+"""Logs and request ids, fpl.api.observability (#86).
 
-No database: /healthz and a route that raises are all these need. The Sentry
-test sends the induced error through Sentry's own SDK to a transport that
-keeps it, so it runs offline.
+No database: /healthz and a route that raises are all these need.
 """
 
 import io
 import json
 import logging
 import unittest
-from contextlib import redirect_stdout
 
-import sentry_sdk
 from fastapi.testclient import TestClient
-from sentry_sdk.transport import Transport
 
 from fpl.api import observability
 from fpl.api.app import create_app
-
-
-class Kept(Transport):
-    def __init__(self, options=None):
-        super().__init__(options)
-        self.envelopes = []
-
-    def capture_envelope(self, envelope):
-        self.envelopes.append(envelope)
 
 
 def app_with_a_failing_route():
@@ -97,45 +83,6 @@ class TestRouteTemplate(unittest.TestCase):
         )
         self.assertEqual(observability.route_template("/healthz", "/healthz"), "/healthz")
         self.assertIsNone(observability.route_template("/nowhere", None))
-
-
-class TestSentry(unittest.TestCase):
-    def tearDown(self):
-        sentry_sdk.init()  # off again: no DSN
-
-    def test_off_without_a_dsn(self):
-        self.assertFalse(observability.configure_sentry({}))
-
-    def test_an_induced_error_reaches_sentry(self):
-        transport = Kept()
-        sentry_sdk.init(
-            dsn="https://key@example.invalid/1",
-            transport=transport,
-            data_collection={"user_info": False, "http_bodies": []},
-        )
-        with (
-            TestClient(app_with_a_failing_route(), raise_server_exceptions=False) as client,
-            redirect_stdout(io.StringIO()),
-        ):
-            response = client.get("/v1/broken", headers={"X-Request-ID": "boom-1"})
-            self.assertEqual(response.status_code, 500)
-        sentry_sdk.flush()
-        events = [
-            item.payload.json
-            for env in transport.envelopes
-            for item in env.items
-            if item.headers.get("type") == "event"
-        ]
-        self.assertTrue(events, "no event reached the transport")
-        self.assertEqual(len(events), 1, "reported once, not twice")
-        values = events[0]["exception"]["values"]
-        self.assertEqual(values[-1]["type"], "RuntimeError")
-        self.assertEqual(events[0]["tags"]["request_id"], "boom-1")
-
-
-class TestTelemetry(unittest.TestCase):
-    def test_off_without_an_endpoint(self):
-        self.assertFalse(observability.configure_telemetry(create_app(engine=object()), environ={}))
 
 
 if __name__ == "__main__":
