@@ -27,16 +27,18 @@ fpl-optimise's model once per week, with the weeks joined:
   budget), with a legal XI and a captain;
 - a player in a week's squad but not the week before's is a transfer;
 - a week has the free transfers left from the week before, plus one, banked
-  up to MAX_FREE_TRANSFERS; each transfer beyond them costs HIT points;
+  up to MAX_FREE_TRANSFERS; they are used before any hit, and each transfer
+  beyond them costs HIT points;
 - week k's points count at DISCOUNT**k of the first week's, hits included, as
   later predictions are less sure.
 
 From scratch, the first week's squad is chosen freely, as at the start of a
 season or on a wildcard, and every later week has one free transfer more.
 
-A player owned costs his selling price in every week, a player bought his
-price. Chips are not played. Every week's squad is checked against the rules
-by fpl.optimise.violations before it is returned.
+A player owned costs his selling price for as long as he is kept; once sold,
+buying him back costs his price, as for anyone else. Chips are not played.
+Every week's squad is checked against the rules by fpl.optimise.violations
+before it is returned.
 
 Writes nothing. Needs the HiGHS solver, in the optimise group.
 """
@@ -47,8 +49,8 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 
-from fpl.evaluation.xi import MAX_PER_CLUB, POSITIONS, SCALE, XI_SIZE, check_positions
-from fpl.ingest.snapshot import load_snapshot, resolve_target_gw, usable_rounds
+from fpl.evaluation.xi import MAX_PER_CLUB, POSITIONS, SCALE, best_xi, check_positions
+from fpl.ingest.snapshot import load_snapshot, player_summaries, resolve_target_gw, usable_rounds
 from fpl.models import predict_fixture
 from fpl.optimise import (
     BENCH_WEIGHT,
@@ -56,7 +58,6 @@ from fpl.optimise import (
     HIT,
     MAX_FREE_TRANSFERS,
     SQUAD,
-    XI_BOUNDS,
     SolverFailure,
     SolverTimeout,
     Squad,
@@ -65,6 +66,7 @@ from fpl.optimise import (
     _pick,
     _solver,
     _squad,
+    add_squad,
     check_current,
     describe,
     eligible,
@@ -78,8 +80,13 @@ from fpl.paths import require_project_root
 WEEKS = 3
 MAX_WEEKS = 6
 # A later week's points against the first's: predictions further out rest on
-# the same form with more time for it to change.
+# the same form with more time for it to change. At least MIN_DISCOUNT, so
+# the last of MAX_WEEKS still counts for something.
 DISCOUNT = 0.9
+MIN_DISCOUNT = 0.5
+# Week weights in ten-thousandths, so every coefficient is an integer and the
+# optimum exact, as in fpl.optimise; 0.5**5 is still 312 of them.
+WEIGHT_SCALE = 10_000
 
 
 @dataclass
@@ -90,47 +97,52 @@ class Week:
     free_transfers: int | None
     hits: int
     hit_points: int
+    bank_after: float
     squad: Squad
 
 
 @dataclass
 class HorizonPlan:
     weeks: list[Week]
+    # Fewer than asked for when the season ends first.
+    weeks_requested: int
     discount: float
     bench_weight: float
-    bank: float
-    # Over the weeks, net of hits, undiscounted: the XI's expected points
-    # captain included, for this plan and for keeping the squad as it is.
+    # What there is to spend: the bank and the squad's selling prices, or the
+    # budget for a squad from scratch.
+    money: float
+    # The XI's expected points, captain included, net of hits, summed over
+    # the weeks: for this plan, and for keeping the squad as it is.
     expected_points: float
     kept_points: float | None
+    # The same as the plan weighs them, which is what it maximised: later
+    # weeks discounted and the bench at bench_weight. The plan's is never
+    # below keeping's.
+    value: float
+    kept_value: float | None
 
 
 def horizon_predictions(snapshot_id=None, weeks=WEEKS):
-    """(snapshot id, {gameweek: rows}) for the next `weeks` gameweeks.
+    """(snapshot id, rounds left out, {gameweek: rows}) for the next `weeks` gameweeks.
 
     Every week is predicted from the rounds settled before the first, so no
-    week knows more than its first deadline did.
+    week knows more than its first deadline did. Rounds before it that have
+    not settled are left out, and returned so the caller can say so.
     """
     snap, bootstrap, fixtures, players_dir = load_snapshot(snapshot_id)
     first, _ = resolve_target_gw(bootstrap["events"], None)
-    usable, _ = usable_rounds(bootstrap["events"], first)
+    usable, excluded = usable_rounds(bootstrap["events"], first)
     if not usable:
         raise SystemExit(
             f"No settled rounds before GW{first} in {snap.name}: nothing to plan from."
         )
     last = max(e["id"] for e in bootstrap["events"])
-    histories, pasts = {}, {}
-    for p in bootstrap["elements"]:
-        path = players_dir / f"{p['id']}.json"
-        if path.exists():
-            summary = json.loads(path.read_text())
-            histories[p["id"]] = summary.get("history", [])
-            pasts[p["id"]] = summary.get("history_past", [])
+    histories, pasts = player_summaries(bootstrap, players_dir)
     by_week = {
         gw: predict_fixture.predict_rows(bootstrap, fixtures, histories, pasts, gw, usable)
         for gw in range(first, min(first + weeks, last + 1))
     }
-    return snap.name, by_week
+    return snap.name, excluded, by_week
 
 
 def best_plan(
@@ -143,6 +155,7 @@ def best_plan(
     bench_weight=BENCH_WEIGHT,
     include_unavailable=False,
     time_limit=None,
+    weeks_requested=None,
 ):
     """The plan over `by_week` ({gameweek: rows}) maximising discounted points net of hits.
 
@@ -154,6 +167,8 @@ def best_plan(
     gameweeks = sorted(by_week)
     if not gameweeks:
         raise ValueError("no gameweeks to plan")
+    if not MIN_DISCOUNT <= discount <= 1:
+        raise ValueError(f"the discount must be from {MIN_DISCOUNT} to 1, not {discount}")
     first = by_week[gameweeks[0]]
     for rows in by_week.values():
         check_positions(rows)
@@ -180,90 +195,66 @@ def best_plan(
         if reasons:
             raise ValueError("no legal squad: " + "; ".join(reasons))
         money = tenths(budget)
-        cost = {p["player_id"]: tenths(p["price"]) for p in pool}
     else:
         money = tenths(bank) + sum(tenths(price) for price in current.values())
-        cost = {
-            p["player_id"]: tenths(current[p["player_id"]])
-            if p["player_id"] in owned
-            else tenths(p["price"])
-            for p in pool
-        }
+    price = {p["player_id"]: tenths(p["price"]) for p in pool}
+    selling = {pid: tenths(value) for pid, value in (current or {}).items()}
     predicted = {
         gw: {r["player_id"]: r["predicted_points"] for r in rows} for gw, rows in by_week.items()
     }
-    # Week k's weight in hundredths, so every coefficient is an integer and
-    # the optimum exact, as in fpl.optimise.
-    weights = [round(100 * discount**k) for k in range(len(gameweeks))]
+    weights = [round(WEIGHT_SCALE * discount**k) for k in range(len(gameweeks))]
 
-    deadline = _deadline(time_limit)
     solved = _solve(
         pool,
-        cost,
+        price,
+        selling,
         money,
-        predicted,
-        gameweeks,
+        [predicted[gw] for gw in gameweeks],
         weights,
         bench_weight,
-        owned,
-        current is not None,
-        free_transfers,
-        deadline=deadline,
+        free_transfers if current is not None else None,
+        deadline=_deadline(time_limit),
     )
-    kept = None
-    if current is not None:
-        kept_solution = _solve(
-            pool,
-            cost,
-            money,
-            predicted,
-            gameweeks,
-            weights,
-            bench_weight,
-            owned,
-            True,
-            free_transfers,
-            keep=True,
-            deadline=deadline,
-        )
-        kept = sum(
-            _xi_points(week, predicted[gw])
-            for gw, week in zip(gameweeks, kept_solution, strict=True)
-        )
 
-    # Free transfers and hits as FPL counts them, from the transfers made: the
-    # model only bounds the free transfers, so its own count can read low in a
-    # week that does not need them.
-    weeks, before = [], owned
+    # Free transfers and hits as FPL counts them, from the transfers made.
+    weeks, before, held = [], owned, owned
     free = free_transfers if current is not None else None
-    for gw, (squad, starters, captain) in zip(gameweeks, solved, strict=True):
-        rows = [dict(p, predicted_points=predicted[gw][p["player_id"]]) for p in squad]
-        xi = [dict(p, predicted_points=predicted[gw][p["player_id"]]) for p in starters]
-        cap = dict(captain, predicted_points=predicted[gw][captain["player_id"]])
-        result = _squad(rows, xi, cap, cost, money / 10, current)
+    previous_cost, previous_sells_for = dict(selling), current
+    value = 0.0
+    for k, (gw, (squad, starters, captain)) in enumerate(zip(gameweeks, solved, strict=True)):
+        worth = predicted[gw]
         new = {p["player_id"] for p in squad}
-        by_id = {
-            p["player_id"]: dict(p, predicted_points=predicted[gw][p["player_id"]]) for p in pool
-        }
+        held = held & new
+        cost = {pid: selling[pid] if pid in held else price[pid] for pid in price}
+        sells_for = {pid: current[pid] for pid in held} if current else None
+        result = _squad(
+            [dict(p, predicted_points=worth[p["player_id"]]) for p in squad],
+            [dict(p, predicted_points=worth[p["player_id"]]) for p in starters],
+            dict(captain, predicted_points=worth[captain["player_id"]]),
+            cost,
+            money / 10,
+            sells_for,
+        )
+        by_id = {p["player_id"]: dict(p, predicted_points=worth[p["player_id"]]) for p in pool}
         transfers = []
-        if before or current is not None:
-            for position in POSITIONS:
-                sold = sorted(
-                    (by_id[i] for i in before - new if by_id[i]["position"] == position),
-                    key=lambda p: (p["predicted_points"], p["player_id"]),
+        # A first squad chosen from scratch is not transfers.
+        for position in POSITIONS if free is not None else ():
+            sold = sorted(
+                (by_id[i] for i in before - new if by_id[i]["position"] == position),
+                key=lambda p: (p["predicted_points"], p["player_id"]),
+            )
+            bought = sorted(
+                (by_id[i] for i in new - before if by_id[i]["position"] == position),
+                key=lambda p: (-p["predicted_points"], p["player_id"]),
+            )
+            transfers += [
+                Transfer(
+                    out=_pick(o, previous_sells_for),
+                    selling_price=previous_cost[o["player_id"]] / 10,
+                    into=_pick(b),
                 )
-                bought = sorted(
-                    (by_id[i] for i in new - before if by_id[i]["position"] == position),
-                    key=lambda p: (-p["predicted_points"], p["player_id"]),
-                )
-                transfers += [
-                    Transfer(
-                        out=_pick(o, current),
-                        selling_price=cost[o["player_id"]] / 10,
-                        into=_pick(b, current),
-                    )
-                    for o, b in zip(sold, bought, strict=True)
-                ]
+                for o, b in zip(sold, bought, strict=True)
+            ]
         hits = 0 if free is None else max(0, len(transfers) - free)
         weeks.append(
             Week(
@@ -272,55 +263,72 @@ def best_plan(
                 free_transfers=free,
                 hits=hits,
                 hit_points=HIT * hits,
+                bank_after=round((money - sum(cost[pid] for pid in new)) / 10, 1),
                 squad=result,
             )
         )
+        value += (
+            weights[k]
+            / WEIGHT_SCALE
+            * (result.expected_points + bench_weight * result.bench_points - HIT * hits)
+        )
         free = 1 if free is None else min(MAX_FREE_TRANSFERS, max(0, free - len(transfers)) + 1)
-        before = new
+        before, previous_cost, previous_sells_for = new, cost, sells_for
+
+    kept_points = kept_value = None
+    if current is not None:
+        kept_points = kept_value = 0.0
+        for k, gw in enumerate(gameweeks):
+            xi, bench_points = _kept_week(first, current, predicted[gw])
+            kept_points += xi
+            kept_value += weights[k] / WEIGHT_SCALE * (xi + bench_weight * bench_points)
 
     return HorizonPlan(
         weeks=weeks,
+        weeks_requested=weeks_requested or len(gameweeks),
         discount=discount,
         bench_weight=bench_weight,
-        bank=bank if current is not None else budget,
+        money=money / 10,
         expected_points=round(sum(w.squad.expected_points - w.hit_points for w in weeks), 2),
-        kept_points=None if kept is None else round(kept, 2),
+        kept_points=None if kept_points is None else round(kept_points, 2),
+        value=round(value, 2),
+        kept_value=None if kept_value is None else round(kept_value, 2),
     )
 
 
-def _xi_points(week, predicted):
-    """A week's XI points, captain included, from a _solve week."""
-    _, starters, captain = week
-    return (
-        sum(points(predicted[p["player_id"]]) for p in starters)
-        + points(predicted[captain["player_id"]])
-    ) / SCALE
+def _kept_week(first, current, worth):
+    """(XI points with the captain's twice, bench points) for the owned squad in one week.
+
+    The best XI of a fixed squad holds its best player, so he is the captain,
+    and the rest is the bench: no solver needed.
+    """
+    squad = [
+        dict(p, predicted_points=worth[p["player_id"]]) for p in first if p["player_id"] in current
+    ]
+    total, xi, _ = best_xi(squad, lambda p: p["predicted_points"])
+    captain = max(points(p["predicted_points"]) for p in xi)
+    everyone = sum(points(p["predicted_points"]) for p in squad)
+    starting = sum(points(p["predicted_points"]) for p in xi)
+    return (starting + captain) / SCALE, (everyone - starting) / SCALE
 
 
 def _solve(
-    pool,
-    cost,
-    money,
-    predicted,
-    gameweeks,
-    weights,
-    bench_weight,
-    owned,
-    from_squad,
-    free_transfers,
-    keep=False,
-    deadline=None,
+    pool, price, selling, money, worth_by_week, weights, bench_weight, free_transfers, deadline=None
 ):
     """One model over every week: [(squad, starters, captain)], one a week.
 
-    `from_squad` False makes the first week's squad free to choose, with one
-    free transfer the week after. `keep` forbids transfers, for the value of
-    keeping the squad. Solved as fpl.optimise._solve is: points first with a
-    zero gap, then ties broken toward fewer transfers and lower player ids
-    with the points held, the first answer standing if that runs out of time.
+    `price` and `selling` map player ids to tenths of a million; `selling`
+    holds the owned squad's selling prices, and `free_transfers` is None for
+    a first squad chosen from scratch. Each week is fpl.optimise.add_squad;
+    the weeks are joined by what each costs, the transfers between them and
+    the free transfers carried. Solved as fpl.optimise._solve is: points
+    first with a zero gap, then ties broken toward fewer transfers and lower
+    player ids with the points held, the first answer standing if that runs
+    out of time.
     """
     highspy = _solver()
     n = len(pool)
+    owned = [i for i in range(n) if pool[i]["player_id"] in selling]
     model = highspy.Highs()
     model.silent()
     model.setOptionValue("mip_rel_gap", 0.0)
@@ -333,45 +341,39 @@ def _solve(
                 raise SolverTimeout("the solver's time limit was reached")
             model.setOptionValue("time_limit", remaining)
 
-    # Per week: the squad, XI and captain variables, and the free transfers
-    # (an int when fixed, else a variable) and hits (None when unlimited).
     weeks = []
     value = 0
     transfer_count = 0
-    for k, gw in enumerate(gameweeks):
-        squad = model.addBinaries(n)
-        start = model.addBinaries(n)
-        captain = model.addBinaries(n)
-        for i in range(n):
-            model.addConstr(start[i] <= squad[i])
-            model.addConstr(captain[i] <= start[i])
-        model.addConstr(model.qsum(captain[i] for i in range(n)) == 1)
-        model.addConstr(model.qsum(start[i] for i in range(n)) == XI_SIZE)
-        for position in POSITIONS:
-            members = [i for i in range(n) if pool[i]["position"] == position]
-            model.addConstr(model.qsum(squad[i] for i in members) == SQUAD[position])
-            low, high = XI_BOUNDS[position]
-            model.addConstr(model.qsum(start[i] for i in members) >= low)
-            model.addConstr(model.qsum(start[i] for i in members) <= high)
-        for club in sorted({p["team"] for p in pool}):
-            model.addConstr(
-                model.qsum(squad[i] for i in range(n) if pool[i]["team"] == club) <= MAX_PER_CLUB
-            )
-        model.addConstr(
-            model.qsum(cost[pool[i]["player_id"]] * squad[i] for i in range(n)) <= money
+    for k, worth in enumerate(worth_by_week):
+        squad, start, captain, week_value = add_squad(
+            model, pool, [points(worth[p["player_id"]]) for p in pool], bench_weight
         )
-
-        worth = [points(predicted[gw][p["player_id"]]) for p in pool]
-        bench = [round(w * bench_weight) for w in worth]
-        week_value = model.qsum(
-            worth[i] * start[i] + worth[i] * captain[i] + bench[i] * (squad[i] - start[i])
-            for i in range(n)
-        )
-
-        free = hit = None
-        if k > 0 or from_squad:
+        # An owned player is held while he has been in every squad so far,
+        # and costs his selling price only while held: held = held last week
+        # and in this squad.
+        held = {}
+        for i in owned:
+            held[i] = model.addBinary()
+            model.addConstr(held[i] <= squad[i])
             if k == 0:
-                bought = model.qsum(squad[i] for i in range(n) if pool[i]["player_id"] not in owned)
+                model.addConstr(held[i] >= squad[i])
+            else:
+                last = weeks[-1]["held"][i]
+                model.addConstr(held[i] <= last)
+                model.addConstr(held[i] >= last + squad[i] - 1)
+        spend = model.qsum(
+            price[pool[i]["player_id"]] * squad[i] for i in range(n) if i not in held
+        ) + model.qsum(
+            selling[pool[i]["player_id"]] * held[i]
+            + price[pool[i]["player_id"]] * (squad[i] - held[i])
+            for i in owned
+        )
+        model.addConstr(spend <= money)
+
+        free = used = None
+        if k > 0 or free_transfers is not None:
+            if k == 0:
+                bought = model.qsum(squad[i] for i in range(n) if i not in held)
                 free = free_transfers
             else:
                 # In this week's squad and not last week's. Continuous is
@@ -388,24 +390,25 @@ def _solve(
                     # What was left last week, plus one, banked up to the most.
                     free = model.addIntegral(lb=1, ub=MAX_FREE_TRANSFERS)
                     model.addConstr(free <= last["free"] - last["used"] + 1)
-            if keep:
-                model.addConstr(bought == 0)
             used = model.addIntegral(lb=0, ub=MAX_FREE_TRANSFERS)
             hit = model.addIntegral(lb=0, ub=sum(SQUAD.values()))
+            # Free transfers are used before any hit is taken: a hit means
+            # every free transfer this week was used.
+            any_hit = model.addBinary()
             model.addConstr(used <= free)
+            model.addConstr(hit <= sum(SQUAD.values()) * any_hit)
+            model.addConstr(used >= free - MAX_FREE_TRANSFERS * (1 - any_hit))
             model.addConstr(bought == used + hit)
             week_value = week_value - HIT * SCALE * hit
             transfer_count = transfer_count + bought
-        else:
-            used = None
         weeks.append(
             {
                 "squad": squad,
                 "start": start,
                 "captain": captain,
+                "held": held,
                 "free": free,
                 "used": used,
-                "hit": hit,
             }
         )
         value = value + weights[k] * week_value
@@ -442,29 +445,34 @@ def _solve(
         return out
 
     solution = read()
-    if not keep:
-        # As fpl.optimise: hold the points, then fewer transfers outweigh any
-        # difference in rank, which is at most 27 chosen variables a week each
-        # ranked below n.
-        model.addConstr(value >= best - 0.5)
-        rank = model.qsum(
-            i * (week["squad"][i] + week["start"][i] + week["captain"][i])
-            for week in weeks
-            for i in range(n)
-        )
-        try:
-            limit_time()
-            model.minimize((27 * n * len(weeks) + 1) * transfer_count + rank)
-            if model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-                solution = read()
-        except SolverTimeout:
-            pass
+    # As fpl.optimise: hold the points, then fewer transfers outweigh any
+    # difference in rank, which is at most 27 chosen variables a week each
+    # ranked below n.
+    model.addConstr(value >= best - 0.5)
+    rank = model.qsum(
+        i * (week["squad"][i] + week["start"][i] + week["captain"][i])
+        for week in weeks
+        for i in range(n)
+    )
+    try:
+        limit_time()
+        model.minimize((27 * n * len(weeks) + 1) * transfer_count + rank)
+        if model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
+            solution = read()
+    except SolverTimeout:
+        pass
     return solution
 
 
 def describe_plan(plan):
     """The plan as readable text: each week's transfers, then the first week's squad."""
     lines = []
+    if len(plan.weeks) < plan.weeks_requested:
+        lines += [
+            f"The season ends first: {len(plan.weeks)} of the {plan.weeks_requested} "
+            "gameweeks asked for are left.",
+            "",
+        ]
     for week in plan.weeks:
         head = f"GW{week.gameweek}"
         if week.free_transfers is None:
@@ -478,29 +486,38 @@ def describe_plan(plan):
             )
             for t in week.transfers:
                 lines.append(
-                    f"  OUT {t.out.web_name} ({t.out.team} {t.out.position}, £"
+                    f"  OUT {t.out.web_name} ({t.out.team} {t.out.position}, sells £"
                     f"{t.selling_price:.1f}m)  ->  IN {t.into.web_name} ({t.into.team}, £"
                     f"{t.into.price:.1f}m)"
                 )
         lines.append(
             f"  XI {week.squad.expected_points:.2f} expected, captain "
-            f"{week.squad.captain.web_name}."
+            f"{week.squad.captain.web_name}; £{week.bank_after:.1f}m in the bank."
         )
     lines.append("")
-    lines.append(
+    total = (
         f"Over {len(plan.weeks)} gameweeks: {plan.expected_points:.2f} expected in the XI, "
-        "captain included, net of hits."
-        + (f" Keeping the squad: {plan.kept_points:.2f}." if plan.kept_points is not None else "")
+        "captain included, net of hits"
     )
+    if plan.kept_points is not None:
+        total += f", against {plan.kept_points:.2f} keeping the squad"
+    lines.append(total + ".")
+    weighed = (
+        f"As the plan weighs them, each week at {plan.discount:g} of the one before and the "
+        f"bench at {plan.bench_weight:g}: {plan.value:.2f}"
+    )
+    if plan.kept_value is not None:
+        weighed += f", against {plan.kept_value:.2f}"
+    lines.append(weighed + ".")
     lines.append(
-        f"Later weeks count at {plan.discount:g} a week less; only the first week's "
-        "transfers are a decision now, the rest a plan the next snapshot revisits."
+        "Only the first week's transfers are a decision now; the rest are the plan as it "
+        "stands, for the next snapshot to revisit."
     )
     return "\n".join(lines) + "\n\n" + describe(plan.weeks[0].squad)
 
 
 def main(weeks, squad_file, budget, discount, bench_weight, as_json, include_unavailable):
-    snapshot, by_week = horizon_predictions(weeks=weeks)
+    snapshot, excluded, by_week = horizon_predictions(weeks=weeks)
     try:
         if squad_file is None:
             plan = best_plan(
@@ -509,6 +526,7 @@ def main(weeks, squad_file, budget, discount, bench_weight, as_json, include_una
                 discount=discount,
                 bench_weight=bench_weight,
                 include_unavailable=include_unavailable,
+                weeks_requested=weeks,
             )
         else:
             current, bank, free_transfers = read_squad(squad_file)
@@ -520,13 +538,18 @@ def main(weeks, squad_file, budget, discount, bench_weight, as_json, include_una
                 discount=discount,
                 bench_weight=bench_weight,
                 include_unavailable=include_unavailable,
+                weeks_requested=weeks,
             )
     except (ValueError, ImportError, SolverFailure) as e:
         raise SystemExit(str(e)) from None
     if as_json:
-        print(json.dumps({"snapshot_id": snapshot} | asdict(plan), indent=2))
+        print(json.dumps({"snapshot_id": snapshot, "excluded": excluded} | asdict(plan), indent=2))
     else:
-        print(f"snapshot:  {snapshot} (form-fixture-v1, not logged)\n")
+        print(f"snapshot:  {snapshot} (form-fixture-v1, not logged)")
+        if excluded:
+            rounds = ", ".join(f"GW{gw}" for gw in excluded)
+            print(f"excluded:  {rounds}  (results not final; take a snapshot once they settle)")
+        print()
         print(describe_plan(plan))
     return 0
 
@@ -573,8 +596,8 @@ def cli(argv=None):
     args = ap.parse_args(argv)
     if not 1 <= args.weeks <= MAX_WEEKS:
         ap.error(f"--weeks must be from 1 to {MAX_WEEKS}")
-    if not 0 < args.discount <= 1:
-        ap.error("--discount must be above 0 and at most 1")
+    if not MIN_DISCOUNT <= args.discount <= 1:
+        ap.error(f"--discount must be from {MIN_DISCOUNT} to 1")
     if not 0 <= args.bench_weight <= 1:
         ap.error("--bench-weight must be between 0 and 1")
     if args.squad and args.budget is not None:

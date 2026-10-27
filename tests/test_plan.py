@@ -102,13 +102,14 @@ class TestAcrossWeeks(unittest.TestCase):
         self.assertEqual(once.weeks[0].hits, 0)
 
     def test_the_discount_decides_between_now_and_later(self):
-        # A small gain now (102, +1) or rolling the transfer for two bigger
-        # gains next week (100 and 101, +3 each). Undiscounted, rolling wins
-        # (6 against 5); with later weeks at a fifth, the gain now does.
-        self.pool.append(player(102, "FWD", 4.0))
+        # A small gain now (102, +1.2 a week) or rolling the transfer for two
+        # bigger gains next week (100 and 101, +3 each). Undiscounted, rolling
+        # wins (6 against 5.4); with next week at half, the gain now does
+        # (3.3 against 3).
+        self.pool.append(player(102, "FWD", 4.2))
         worth = {1: {}, 2: {100: 6.0, 101: 6.0}}
         self.assertEqual(self.plan(worth).weeks[0].transfers, [])
-        self.assertEqual(bought(self.plan(worth, discount=0.2).weeks[0]), [102])
+        self.assertEqual(bought(self.plan(worth, discount=0.5).weeks[0]), [102])
 
     def test_free_transfers_bank_up_to_the_most_fpl_allows(self):
         result = self.plan({1: {}, 2: {}, 3: {}}, free=MAX_FREE_TRANSFERS - 1)
@@ -122,12 +123,59 @@ class TestAcrossWeeks(unittest.TestCase):
         result = best_plan(weeks_of(pool, {1: {}, 2: {}, 3: {}}), budget=tight_budget(pool))
         self.assertEqual([w.free_transfers for w in result.weeks], [None, 1, 2])
 
-    def test_it_never_does_worse_than_keeping_the_squad(self):
-        result = self.plan({1: {100: 6.0}, 2: {101: 9.0}, 3: {}})
-        self.assertGreaterEqual(result.expected_points, result.kept_points)
+    def test_it_never_does_worse_than_keeping_the_squad_as_it_weighs_them(self):
+        for discount, bench_weight in ((1.0, 0.0), (0.9, 0.1), (0.5, 1.0)):
+            with self.subTest(discount=discount, bench_weight=bench_weight):
+                result = best_plan(
+                    weeks_of(self.pool, {1: {100: 6.0}, 2: {101: 9.0}, 3: {}}),
+                    owned(self.squad),
+                    10.0,
+                    1,
+                    discount=discount,
+                    bench_weight=bench_weight,
+                )
+                self.assertGreaterEqual(result.value, result.kept_value)
+
+    def test_a_player_sold_and_bought_back_costs_his_price(self):
+        # Player 8, a MID, sells for 3.0 but costs 9.0 to buy: worth nothing
+        # this week and 10 next. A stand-in (200) is worth 10 this week only.
+        # Selling 8 for the stand-in and buying him back next week would be
+        # the best plan at his selling price (84 MID points against 77), but
+        # buying him back costs 9.0 and the bank has 3.0, so it is not made.
+        squad = even_squad()
+        squad[7]["price"] = 9.0
+        for p in squad[8:12]:
+            p["predicted_points"] = 8.0
+        current = owned(squad) | {8: 3.0}
+        pool = squad + [player(200, "MID", 0.0, price=3.0)]
+        result = best_plan(
+            weeks_of(pool, {1: {8: 0.0, 200: 10.0}, 2: {8: 10.0, 200: 0.0}}),
+            current,
+            0.0,
+            2,
+            discount=1.0,
+            bench_weight=0.0,
+        )
+        self.assertEqual(bought(result.weeks[0]), [200])
+        self.assertNotIn(8, bought(result.weeks[1]))
+        for week in result.weeks:
+            self.assertGreaterEqual(week.bank_after, 0.0)
+
+    def test_the_bank_after_each_week_adds_up(self):
+        self.pool[-2]["price"], self.pool[-1]["price"] = 6.0, 7.0
+        result = self.plan({1: {100: 6.0}, 2: {101: 6.0}})
+        first, second = result.weeks
+        # Each sale returns 5.0; 100 costs 6.0 and 101 7.0.
+        self.assertEqual((bought(first), first.bank_after), ([100], 9.0))
+        self.assertEqual((bought(second), second.bank_after), ([101], 7.0))
 
 
 class TestRefusals(unittest.TestCase):
+    def test_a_discount_below_the_least_is_refused(self):
+        squad = even_squad()
+        with self.assertRaisesRegex(ValueError, "discount"):
+            best_plan({1: squad, 2: squad}, owned(squad), 0.0, 1, discount=0.1)
+
     def test_a_squad_over_the_club_cap_is_sent_to_the_one_week_optimiser(self):
         squad = even_squad()
         for p in squad[:4]:
@@ -147,11 +195,14 @@ class TestHorizonPredictions(fixtures.TempCwd):
         self.snap = rated_league(self, fixtures.future_deadline(), later=(5, 6))
 
     def test_the_weeks_run_from_the_next_and_stop_at_the_season_end(self):
-        _, by_week = horizon_predictions(weeks=5)
+        _, excluded, by_week = horizon_predictions(weeks=5)
         self.assertEqual(sorted(by_week), [4, 5, 6])
+        self.assertEqual(excluded, [])
+        result = best_plan(by_week, budget=100.0, weeks_requested=5)
+        self.assertIn("3 of the 5 gameweeks", plan.describe_plan(result))
 
     def test_the_first_week_is_form_fixture_v1s_entry(self):
-        _, by_week = horizon_predictions(weeks=2)
+        _, _, by_week = horizon_predictions(weeks=2)
         stream = io.StringIO()
         with contextlib.redirect_stdout(stream):
             predict_fixture.main(4, "scratch")
@@ -163,7 +214,7 @@ class TestHorizonPredictions(fixtures.TempCwd):
             )
 
     def test_later_weeks_know_only_what_the_first_deadline_did(self):
-        _, by_week = horizon_predictions(weeks=3)
+        _, _, by_week = horizon_predictions(weeks=3)
         self.assertTrue(all(r["gameweek"] == 5 for r in by_week[5]))
         # A later round settling in the snapshot would not change these: the
         # rounds used are those settled before the first week.

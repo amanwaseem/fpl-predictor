@@ -230,6 +230,45 @@ def best_squad(
     return _squad(squad, starters, captain, cost, budget)
 
 
+def add_squad(model, pool, worth, bench_weight, club_cap=True):
+    """One gameweek's squad, XI and captain in `model`: (squad, start, captain, value).
+
+    Every rule but the budget, which the caller adds because what a player
+    costs depends on the caller (fpl.plan's differs by week). `worth` is each
+    player's predicted points in fpl.evaluation.xi's units; `value` counts a
+    starter's, again for the captain, and bench_weight of a bench player's.
+    `club_cap` False drops the three-per-club cap, for a squad kept as it is.
+    Shared with fpl.plan, so one gameweek's rules exist once.
+    """
+    n = len(pool)
+    squad = model.addBinaries(n)
+    start = model.addBinaries(n)
+    captain = model.addBinaries(n)
+
+    for i in range(n):
+        model.addConstr(start[i] <= squad[i])
+        model.addConstr(captain[i] <= start[i])
+    model.addConstr(model.qsum(captain[i] for i in range(n)) == 1)
+    model.addConstr(model.qsum(start[i] for i in range(n)) == XI_SIZE)
+    for position in POSITIONS:
+        members = [i for i in range(n) if pool[i]["position"] == position]
+        model.addConstr(model.qsum(squad[i] for i in members) == SQUAD[position])
+        low, high = XI_BOUNDS[position]
+        model.addConstr(model.qsum(start[i] for i in members) >= low)
+        model.addConstr(model.qsum(start[i] for i in members) <= high)
+    for club in sorted({p["team"] for p in pool}) if club_cap else ():
+        model.addConstr(
+            model.qsum(squad[i] for i in range(n) if pool[i]["team"] == club) <= MAX_PER_CLUB
+        )
+
+    bench = [round(worth[i] * bench_weight) for i in range(n)]
+    value = model.qsum(
+        worth[i] * start[i] + worth[i] * captain[i] + bench[i] * (squad[i] - start[i])
+        for i in range(n)
+    )
+    return squad, start, captain, value
+
+
 def _solve(
     pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=False, deadline=None
 ):
@@ -274,35 +313,10 @@ def _solve(
                 raise SolverTimeout("the solver's time limit was reached")
             model.setOptionValue("time_limit", remaining)
 
-    squad = model.addBinaries(n)
-    start = model.addBinaries(n)
-    captain = model.addBinaries(n)
-
-    for i in range(n):
-        model.addConstr(start[i] <= squad[i])
-        model.addConstr(captain[i] <= start[i])
-    model.addConstr(model.qsum(captain[i] for i in range(n)) == 1)
-    model.addConstr(model.qsum(start[i] for i in range(n)) == XI_SIZE)
-    for position in POSITIONS:
-        members = [i for i in range(n) if pool[i]["position"] == position]
-        model.addConstr(model.qsum(squad[i] for i in members) == SQUAD[position])
-        low, high = XI_BOUNDS[position]
-        model.addConstr(model.qsum(start[i] for i in members) >= low)
-        model.addConstr(model.qsum(start[i] for i in members) <= high)
-    for club in sorted({p["team"] for p in pool}) if not keep else ():
-        model.addConstr(
-            model.qsum(squad[i] for i in range(n) if pool[i]["team"] == club) <= MAX_PER_CLUB
-        )
-    model.addConstr(model.qsum(cost[pool[i]["player_id"]] * squad[i] for i in range(n)) <= budget)
-
-    # Expected points in fpl.evaluation.xi's units: a starter's, again for the captain,
-    # and bench_weight of a bench player's.
-    worth = [points(p["predicted_points"]) for p in pool]
-    bench = [round(worth[i] * bench_weight) for i in range(n)]
-    value = model.qsum(
-        worth[i] * start[i] + worth[i] * captain[i] + bench[i] * (squad[i] - start[i])
-        for i in range(n)
+    squad, start, captain, value = add_squad(
+        model, pool, [points(p["predicted_points"]) for p in pool], bench_weight, club_cap=not keep
     )
+    model.addConstr(model.qsum(cost[pool[i]["player_id"]] * squad[i] for i in range(n)) <= budget)
 
     transfers = None
     if owned is not None:
