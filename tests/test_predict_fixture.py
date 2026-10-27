@@ -250,47 +250,66 @@ class TestImportBoundary(unittest.TestCase):
         self.assertNotIn("fpl.models.predict_baseline", imported)
 
 
+def rated_league(case, deadline, later=()):
+    """A 20-club snapshot with GW1-3 played, with xG, and GW4 next, as LATEST.
+
+    `later` adds gameweeks after GW4, each a full round of fixtures not yet
+    played, for a test that predicts past the next deadline (tests/test_plan.py).
+    """
+    clubs = range(1, fixtures.LEAGUE_SIZE + 1)
+    fx, histories, elements, pid = [], {}, [], 0
+    for gw in (1, 2, 3):
+        for i in range(0, len(clubs), 2):
+            fx.append(played(gw * 100 + i, gw, clubs[i], clubs[i + 1], (gw + i) % 3, i % 2))
+    fx += fixtures.full_round(4, clubs)
+    for gw in later:
+        # Each club meets a different opponent from GW4's, with its own fixture ids.
+        order = list(clubs[1:]) + [clubs[0]]
+        fx += [
+            fixtures.fixture(gw, order[i], order[i + 1], fid=gw * 100 + i)
+            for i in range(0, len(order), 2)
+        ]
+    for club in clubs:
+        for slot in range(4):
+            pid += 1
+            elements.append(
+                fixtures.element(pid, team=club, element_type=slot + 1, now_cost=45 + slot * 5)
+            )
+            histories[pid] = []
+            for f in fx:
+                if f["event"] < 4 and club in (f["team_h"], f["team_a"]):
+                    histories[pid].append(
+                        row(
+                            f["id"],
+                            f["event"],
+                            f["team_h"] == club,
+                            minutes=90 - slot * 10,
+                            points=2 + slot,
+                            xg=0.1 * (slot + 1),
+                        )
+                    )
+    events = fixtures.season(4, deadline) + [
+        fixtures.event(gw, deadline=f"2026-09-{10 + 7 * (gw - 4):02d}T10:00:00Z") for gw in later
+    ]
+    return case.snapshot(
+        SNAPSHOT_ID,
+        elements=elements,
+        teams=[fixtures.team(t) for t in clubs],
+        events=events,
+        fixtures=fx,
+        histories=histories,
+        pasts={1: [{"season_name": "2025/26", "minutes": 3000, "total_points": 150}]},
+        latest=True,
+    )
+
+
 class TestEndToEnd(fixtures.TempCwd):
     """A full run through main(), checked by the verifier, as baseline-v1's is."""
 
     def setUp(self):
         super().setUp()
         self.deadline = fixtures.future_deadline()
-        clubs = range(1, fixtures.LEAGUE_SIZE + 1)
-        fx, histories, elements, pid = [], {}, [], 0
-        for gw in (1, 2, 3):
-            for i in range(0, len(clubs), 2):
-                fx.append(played(gw * 100 + i, gw, clubs[i], clubs[i + 1], (gw + i) % 3, i % 2))
-        fx += fixtures.full_round(4, clubs)
-        for club in clubs:
-            for slot in range(4):
-                pid += 1
-                elements.append(
-                    fixtures.element(pid, team=club, element_type=slot + 1, now_cost=45 + slot * 5)
-                )
-                histories[pid] = []
-                for f in fx:
-                    if f["event"] < 4 and club in (f["team_h"], f["team_a"]):
-                        histories[pid].append(
-                            row(
-                                f["id"],
-                                f["event"],
-                                f["team_h"] == club,
-                                minutes=90 - slot * 10,
-                                points=2 + slot,
-                                xg=0.1 * (slot + 1),
-                            )
-                        )
-        self.snapshot(
-            SNAPSHOT_ID,
-            elements=elements,
-            teams=[fixtures.team(t) for t in clubs],
-            events=fixtures.season(4, self.deadline),
-            fixtures=fx,
-            histories=histories,
-            pasts={1: [{"season_name": "2025/26", "minutes": 3000, "total_points": 150}]},
-            latest=True,
-        )
+        rated_league(self, self.deadline)
 
     def predict(self, out="predictions"):
         stream = io.StringIO()
