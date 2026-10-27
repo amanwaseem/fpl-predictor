@@ -51,7 +51,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fpl.ingest.fetch import get
-from fpl.log.contract import LOG_DIR_NAME, TIMESTAMP, parse_entry_filename
+from fpl.log.contract import (
+    LOG_DIR_NAME,
+    TIMESTAMP,
+    parse_entry_filename,
+    season_directory,
+    season_of_deadline,
+)
 
 # The entry workflow acts from 12 hours out and retries hourly. Two hours of
 # its retries go by before this fires, and ten hours are left to merge its PR
@@ -106,9 +112,13 @@ def deadline_of(bootstrap, gameweek):
 
 
 def season_of(deadline):
-    """The season a deadline falls in, as "2026-27". Seasons start in August."""
-    start = deadline.year if deadline.month >= 7 else deadline.year - 1
-    return f"{start}-{(start + 1) % 100:02d}"
+    """The season a deadline falls in, as "2026-27", for branch names."""
+    return season_of_deadline(deadline).replace("/", "-")
+
+
+def log_dir_for(deadline):
+    """The log directory a deadline's entries go in: predictions/ for 2026/27 (#72)."""
+    return season_directory(season_of_deadline(deadline))
 
 
 def entries_for(gameweek, names):
@@ -160,11 +170,12 @@ def classify_entries(gameweek, deadline, directory):
     return found
 
 
-def prs_adding(gameweek, prs):
-    """Open PRs that add an entry for `gameweek`, as [(number, [entry names])].
+def prs_adding(gameweek, prs, log_dir=LOG_DIR_NAME):
+    """Open PRs that add an entry for `gameweek` to `log_dir`, as [(number, [entry names])].
 
-    Only a file directly in predictions/ is an entry: tests/fixtures/predictions/
-    is not the log, and must not stand in for it.
+    Only a file directly in the season's log directory is an entry:
+    tests/fixtures/predictions/ is not the log, and must not stand in for it,
+    and another season's directory holds another season's gameweek.
     """
     found = []
     for pr in prs:
@@ -173,7 +184,7 @@ def prs_adding(gameweek, prs):
         names = [
             Path(f["path"]).name
             for f in pr.get("files", [])
-            if Path(f["path"]).parent == Path(LOG_DIR_NAME)
+            if Path(f["path"]).parent == Path(log_dir)
         ]
         entries = entries_for(gameweek, names)
         if entries:
@@ -240,14 +251,14 @@ def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS):
             if classified["moved"]
             else ""
         )
-        return PASS, f"{when}. Entry in predictions/: {', '.join(entries)}.{moved}"
+        return PASS, f"{when}. Entry in {log_dir_for(deadline)}/: {', '.join(entries)}.{moved}"
 
     notes = ""
     if classified["other_season"]:
         notes += f" Not counted, made for another season: {', '.join(classified['other_season'])}."
     if classified["unreadable"]:
         notes += f" Not counted, no readable deadline_utc: {', '.join(classified['unreadable'])}."
-    pending = prs_adding(gameweek, prs)
+    pending = prs_adding(gameweek, prs, log_dir_for(deadline))
     if pending:
         status_line = "Open PR: " + "; ".join(f"#{n} ({', '.join(e)})" for n, e in pending) + "."
     else:
@@ -290,7 +301,12 @@ def main(predictions_dir, prs_file=None, now=None, fake_hours=None, fake_gamewee
         return 0
     prs = load_prs(prs_file)
     status, message = check(
-        bootstrap, lambda gw, deadline: classify_entries(gw, deadline, predictions_dir), prs, now
+        bootstrap,
+        lambda gw, deadline: classify_entries(
+            gw, deadline, predictions_dir or log_dir_for(deadline)
+        ),
+        prs,
+        now,
     )
     report(status, message)
     return 0 if status == PASS else 1
@@ -300,9 +316,10 @@ def cli(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument(
         "--predictions",
-        default=LOG_DIR_NAME,
+        default=None,
         metavar="DIR",
-        help=f"the log directory to look in (default: {LOG_DIR_NAME}/)",
+        help="the log directory to look in (default: the deadline's season's, "
+        f"{LOG_DIR_NAME}/ for 2026/27)",
     )
     ap.add_argument(
         "--prs",

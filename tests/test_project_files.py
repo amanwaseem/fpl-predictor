@@ -4,7 +4,8 @@ import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from fpl.db.project import read_log, season_for
+from fpl.db.project import read_log
+from fpl.log.contract import season_of_deadline
 from tests.fixtures import TempCwd, read_csv, write_csv
 from tests.log_files import write_entry, write_score
 
@@ -13,7 +14,7 @@ class TestSeason(unittest.TestCase):
     def test_august_to_may_is_one_season(self):
         for deadline in (datetime(2026, 8, 14, tzinfo=UTC), datetime(2027, 5, 23, tzinfo=UTC)):
             with self.subTest(deadline=deadline):
-                self.assertEqual(season_for(deadline), "2026/27")
+                self.assertEqual(season_of_deadline(deadline), "2026/27")
 
 
 class TestReadLog(TempCwd):

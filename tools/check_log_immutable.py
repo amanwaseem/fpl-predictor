@@ -1,7 +1,8 @@
 """Enforce hard rule 1: a committed prediction is never rewritten.
 
-Compares every entry committed under `predictions/` at a reference commit
-against the working tree. A modified or deleted entry exits non-zero and is
+Compares every entry committed under `predictions/`, and under every later
+season's `predictions-2027-28/` (#72), at a reference commit against the
+working tree. A modified or deleted entry exits non-zero and is
 named; a new entry passes, because appending is the whole point.
 
 The rule was previously enforced by nothing but the "file already exists"
@@ -22,11 +23,16 @@ Usage:
 """
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 LOG_DIR = "predictions"
+# Every season's log directory: predictions/, then predictions-2027-28/ and
+# on. A copy of fpl.log.contract's naming, since this runs without the
+# package installed; tests/test_log_immutability.py checks the two agree.
+LOG_DIRS = re.compile(r"^predictions(-\d{4}-\d{2})?$")
 DEFAULT_REF = "origin/main"
 
 
@@ -45,9 +51,18 @@ def repo_root():
         raise SystemExit(f"Not a git repository: {e}") from None
 
 
+def log_dirs_at(ref, root):
+    """Every season's log directory at `ref`, by name."""
+    out = git("ls-tree", "-z", "-d", "--name-only", ref, root=root)
+    return sorted(name for name in out.decode().split("\0") if LOG_DIRS.match(name))
+
+
 def committed_entries(ref, root):
-    """Paths under predictions/ that exist at `ref`, repo-relative."""
-    out = git("ls-tree", "-r", "-z", "--name-only", ref, "--", LOG_DIR, root=root)
+    """Paths under every season's log directory at `ref`, repo-relative."""
+    dirs = log_dirs_at(ref, root)
+    if not dirs:
+        return []
+    out = git("ls-tree", "-r", "-z", "--name-only", ref, "--", *dirs, root=root)
     return [p for p in out.decode().split("\0") if p]
 
 
@@ -90,13 +105,17 @@ def main(ref):
             "\nEntries in predictions/ are immutable once pushed. If a "
             "prediction was wrong it stays wrong and gets scored as wrong — "
             "the log is only evidence because it cannot be edited after the "
-            f"fact.\nRestore them with: git checkout {ref} -- {LOG_DIR}/",
+            f"fact.\nRestore them with: git checkout {ref} -- "
+            + " ".join(f"{d}/" for d in log_dirs_at(ref, root)),
             file=sys.stderr,
         )
         return 1
 
     if not committed:
-        print(f"No entries committed under {LOG_DIR}/ at {ref} — nothing to protect yet.")
+        print(
+            f"No entries committed under {LOG_DIR}/ or a later season's at {ref} "
+            "— nothing to protect yet."
+        )
     else:
         print(
             f"{len(committed)} committed entr"
@@ -106,14 +125,12 @@ def main(ref):
     # Additions are the normal case and are reported rather than counted as
     # violations: a new gameweek is exactly what appending to the log means.
     tracked = set(committed)
-    added = (
-        sorted(
-            str(p.relative_to(root))
-            for p in (root / LOG_DIR).glob("*.csv")
-            if str(p.relative_to(root)) not in tracked
-        )
-        if (root / LOG_DIR).is_dir()
-        else []
+    added = sorted(
+        str(p.relative_to(root))
+        for d in root.iterdir()
+        if d.is_dir() and LOG_DIRS.match(d.name)
+        for p in d.glob("*.csv")
+        if str(p.relative_to(root)) not in tracked
     )
     for path in added:
         print(f"  new entry (not yet at {ref}): {path}")

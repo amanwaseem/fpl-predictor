@@ -42,7 +42,7 @@ from pathlib import Path
 
 from fpl.ingest.snapshot import load_snapshot, resolve_target_gw
 from fpl.log import roles, summarise, verify_entry
-from fpl.log.contract import TIMESTAMP
+from fpl.log.contract import REPORTS, TIMESTAMP, season_directory, season_of_deadline
 from fpl.models import gbm, predict_baseline, predict_fixture
 from fpl.paths import require_project_root
 
@@ -172,8 +172,11 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
     # stops here, not after every scratch run. A dry run only warns: it is how
     # a past gameweek gets replayed, and it should still say whether the real
     # run would be refused.
+    # This season's directories (#72): predictions/ and reports/ for 2026/27.
+    season = season_of_deadline(deadline)
+    the_log = season_directory(season)
     names = [f"gw{target_gw:02d}_{m}.csv" for m, _ in models]
-    taken = [str(Path("predictions") / n) for n in names if (Path("predictions") / n).exists()]
+    taken = [str(the_log / n) for n in names if (the_log / n).exists()]
     if taken:
         refusal = (
             f"Already in the log: {', '.join(taken)}.\n"
@@ -207,7 +210,7 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
     log_dir, reports_dir = (
         (run_dir / "entry", run_dir / "reports")
         if dry_run
-        else (Path("predictions"), Path("reports"))
+        else (the_log, season_directory(season, REPORTS))
     )
     entries = {m: log_dir / n for (m, _), n in zip(models, names, strict=True)}
 
@@ -256,7 +259,9 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
     print(text)
     print(f"digest saved to {run_dir / 'digest.md'}")
     if dry_run:
-        print("Dry run: nothing was written to predictions/ or reports/.")
+        print(
+            f"Dry run: nothing was written to {the_log}/ or {season_directory(season, REPORTS)}/."
+        )
     else:
         print("Nothing has been committed. Read the above, then RUNBOOK section 7.")
     return 0

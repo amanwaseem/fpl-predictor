@@ -79,7 +79,8 @@ NON_NEGATIVE = ["gameweek", "player_id", "price", "expected_minutes", "n_fixture
 
 TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
 
-# The one directory carrying SPEC section 5 rules 1 and 2.
+# The first season's log directory. Every season's directory carries SPEC
+# section 5 rules 1 and 2; season_directory names the later ones.
 LOG_DIR_NAME = "predictions"
 
 # SPEC section 5: gw<NN>_<model_version>.csv, zero-padded, and model_version
@@ -294,7 +295,8 @@ def parse_timestamp(value, what):
 def _is_the_log(out_dir):
     """Whether this directory is the append-only log rather than scratch space.
 
-    Only `predictions/` carries hard rules 1 and 2. Exploratory runs against a
+    Only the log (`predictions/`, or a later season's `predictions-2027-28/`)
+    carries hard rules 1 and 2. Exploratory runs against a
     past gameweek are legitimate and must stay possible, so the post-deadline
     guard is fatal here and advisory everywhere else.
 
@@ -309,7 +311,7 @@ def _is_the_log(out_dir):
     gets the strict treatment, which costs a rename. The other direction costs
     a committed entry that cannot be told from one written knowing the result.
     """
-    return Path(out_dir).resolve().name == LOG_DIR_NAME
+    return season_of_directory(Path(out_dir).resolve()) is not None
 
 
 def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
@@ -318,6 +320,8 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
     Stamps the provenance columns onto every row: which model produced the
     entry, which snapshot it was produced from, and when. A committed entry
     that cannot be traced back to its inputs is not evidence of anything.
+
+    `out_dir` None is the log: the directory of the deadline's season.
     """
     if not rows:
         raise SystemExit(
@@ -337,6 +341,8 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
     deadline_at = parse_timestamp(deadline, "deadline")
     now = datetime.now(UTC)
     generated_at = now.strftime(TIMESTAMP)
+    if out_dir is None:
+        out_dir = season_directory(season_of_deadline(deadline_at))
 
     # SPEC section 5 rule 5. A prediction made at or after its own deadline
     # cannot be distinguished from one made knowing the result, so it is not
@@ -357,6 +363,24 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
             f"         Fine for an exploratory run in {out_dir}, but this "
             "could never go in predictions/."
         )
+
+    # Each season's entries in its own directory (#72): a 2027/28 GW4 written
+    # into predictions/ would sit where 2026/27's GW4 is, or beside it as the
+    # wrong season's.
+    if _is_the_log(out_dir):
+        holds = season_of_directory(Path(out_dir).resolve())
+        season = season_of_deadline(deadline_at)
+        if holds != season:
+            raise SystemExit(
+                f"{out_dir} holds {holds}'s entries, and the GW{target_gw} deadline "
+                f"{deadline} is {season}'s. "
+                + (
+                    f"Its directory is {season_directory(season)}/."
+                    if season >= FIRST_SEASON
+                    else f"The log began in {FIRST_SEASON}."
+                )
+                + "\nNothing was written."
+            )
 
     # Provenance is write_entry's to state, from its own arguments. A row that
     # arrives carrying it is either a model that misunderstands the contract or
@@ -437,3 +461,90 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
         tmp.unlink(missing_ok=True)
 
     return outpath
+
+
+# --- Seasons (#72, ADR 0023) --------------------------------------------------
+#
+#     predictions/                2026/27, the season the log began in, for good
+#     predictions-2027-28/        every later season, each in its own directory
+#
+# Entry names carry the gameweek and not the season, so 2027/28's GW4 needs a
+# directory of its own beside 2026/27's. 2026/27 stays in predictions/
+# because moving a committed entry is rewriting it (hard rule 1). The derived
+# directories follow the same pattern (scores/, scores-2027-28/, and the same
+# for reports/), so each season's scores sit beside its entries. An entry's
+# season is read from its own deadline_utc, and the log's readers check that
+# it agrees with the directory the entry is in.
+
+# The season the log began in, which keeps the plain directory names.
+FIRST_SEASON = "2026/27"
+
+LOG = LOG_DIR_NAME
+SCORES = "scores"
+REPORTS = "reports"
+
+SEASON = re.compile(r"^(\d{4})/(\d{2})$")
+# tools/check_log_immutable.py has its own copy, as it runs without the
+# package installed; tests/test_seasons.py checks the two agree.
+SUFFIX = re.compile(r"^-(\d{4})-(\d{2})$")
+
+
+def season_of_deadline(deadline):
+    """'2026/27' for any deadline from July 2026 to June 2027.
+
+    `deadline` is a datetime or an ISO 8601 string. Seasons start in August;
+    July is the cut so a deadline can never fall on the wrong side of it.
+    """
+    if isinstance(deadline, str):
+        deadline = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
+    start = deadline.year if deadline.month >= 7 else deadline.year - 1
+    return f"{start}/{(start + 1) % 100:02d}"
+
+
+def _check(season):
+    match = SEASON.match(season or "")
+    if match is None or (int(match.group(1)) + 1) % 100 != int(match.group(2)):
+        raise ValueError(f"{season!r} is not a season: expected '2027/28'")
+    if season < FIRST_SEASON:
+        raise ValueError(f"{season} is before the log began, in {FIRST_SEASON}")
+    return match
+
+
+def season_directory(season, base=LOG):
+    """`base` for the first season, `base`-2027-28 for a later one, as a Path."""
+    match = _check(season)
+    if season == FIRST_SEASON:
+        return Path(base)
+    return Path(f"{base}-{match.group(1)}-{match.group(2)}")
+
+
+def season_of_directory(path, base=LOG):
+    """The season a directory holds, from its own name, or None if it is not one.
+
+    Matched on the name alone, as fpl.log.contract matches the log, so the
+    same directory reached by any path is recognised.
+    """
+    name = Path(path).name
+    if name == base:
+        return FIRST_SEASON
+    if not name.startswith(base):
+        return None
+    match = SUFFIX.match(name[len(base) :])
+    if match is None:
+        return None
+    season = f"{match.group(1)}/{match.group(2)}"
+    try:
+        _check(season)
+    except ValueError:
+        return None
+    return season
+
+
+def season_directories(root=".", base=LOG):
+    """{season: Path} for every season's `base` directory under `root`, in season order."""
+    found = {}
+    for path in sorted(Path(root).iterdir()) if Path(root).is_dir() else ():
+        season = season_of_directory(path, base) if path.is_dir() else None
+        if season is not None:
+            found[season] = path
+    return dict(sorted(found.items()))

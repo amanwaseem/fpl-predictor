@@ -70,13 +70,22 @@ from check_deadline import (
     deadline_of,
     load_bootstrap,
     load_prs,
+    log_dir_for,
     next_deadline,
     prs_adding,
     season_of,
 )
 
 from fpl.ingest.snapshot import SNAPSHOT_ID, load_snapshot, resolve_target_gw
-from fpl.log.contract import LOG_DIR_NAME, TIMESTAMP, parse_entry_filename
+from fpl.log.contract import (
+    LOG_DIR_NAME,
+    REPORTS,
+    TIMESTAMP,
+    parse_entry_filename,
+    season_directory,
+    season_of_deadline,
+    season_of_directory,
+)
 
 # Late enough for the final press conferences before most deadlines, early
 # enough that a failed run is retried a dozen times before the deadline. The
@@ -121,7 +130,8 @@ def late_prs(bootstrap, prs, now):
         gameweeks = set()
         for f in pr.get("files", []):
             path = Path(f["path"])
-            if path.parent != Path(LOG_DIR_NAME):
+            # Any season's log directory, at the top of the repository.
+            if len(path.parts) != 2 or season_of_directory(path.parent) is None:
                 continue
             try:
                 gameweeks.add(parse_entry_filename(path.name)[0])
@@ -145,6 +155,8 @@ def decide(
         "deadline": None,
         "season": None,
         "branch": None,
+        "log_dir": None,
+        "reports_dir": None,
         "late": [],
         "why": "",
     }
@@ -167,8 +179,16 @@ def decide(
     hours = (deadline - now).total_seconds() / 3600
     inside = 0 < hours and (hours <= window_hours or ignore_window)
     branch = bot_branch(season, gameweek)
+    # The season's log directory as the repository names it, for PR paths and
+    # the workflow; `predictions_dir`, if given, is where to read it from.
+    log_dir = log_dir_for(deadline)
     out.update(
-        gameweek=gameweek, deadline=deadline.strftime(TIMESTAMP), season=season, branch=branch
+        gameweek=gameweek,
+        deadline=deadline.strftime(TIMESTAMP),
+        season=season,
+        branch=branch,
+        log_dir=str(log_dir),
+        reports_dir=str(season_directory(season_of_deadline(deadline), REPORTS)),
     )
     when = f"GW{gameweek:02d} ({season}) deadline {deadline.strftime(TIMESTAMP)}, {hours:.1f}h away"
 
@@ -176,11 +196,11 @@ def decide(
         out.update(action=action, why=f"{when}. {why}")
         return out
 
-    classified = classify_entries(gameweek, deadline, predictions_dir)
+    classified = classify_entries(gameweek, deadline, predictions_dir or log_dir)
     entries = classified["current"] + classified["moved"]
     if entries:
-        return result(SKIP, f"Already in predictions/ on main: {', '.join(entries)}.")
-    pending = prs_adding(gameweek, prs)
+        return result(SKIP, f"Already in {log_dir}/ on main: {', '.join(entries)}.")
+    pending = prs_adding(gameweek, prs, log_dir)
     if pending:
         listed = "; ".join(f"#{n} ({', '.join(e)})" for n, e in pending)
         return result(SKIP, f"An open PR already adds an entry: {listed}. Merge that one.")
@@ -194,11 +214,10 @@ def decide(
     if stale:
         return result(
             FAIL,
-            f"predictions/ holds {', '.join(stale)}, for this gameweek "
-            "number but not this deadline (another season, or no readable "
-            "deadline_utc). Entry names carry no season, so a new entry "
-            "would collide with it. A person has to decide how the log "
-            "holds two seasons. Nothing was made.",
+            f"{log_dir}/ holds {', '.join(stale)}, for this gameweek "
+            "number but not this deadline (another season's, or no readable "
+            "deadline_utc), in this season's directory. A new entry would "
+            "collide with it. A person has to look. Nothing was made.",
         )
 
     if branch in branches:
@@ -208,7 +227,7 @@ def decide(
             return result(
                 FAIL,
                 f"{branch} has an open PR ({numbers}) that adds no entry "
-                "in predictions/. A person has to look.",
+                f"in {log_dir}/. A person has to look.",
             )
         if any(pr.get("state") == "MERGED" for pr in from_branch):
             return result(
@@ -298,6 +317,8 @@ def cmd_decide(args, now=None):
         deadline=out["deadline"],
         season=out["season"],
         branch=out["branch"],
+        log_dir=out["log_dir"],
+        reports_dir=out["reports_dir"],
         late=" ".join(str(n) for n, _ in out["late"]),
     )
     return 1 if out["action"] == FAIL else 0
@@ -337,11 +358,15 @@ def cmd_check_snapshot(args, now=None):
     return 1 if problem else 0
 
 
-def unexpected_changes(lines, gameweek):
-    """Problems with `git diff --name-status` lines for an entry, or [] if none."""
+def unexpected_changes(lines, gameweek, log_dir=LOG_DIR_NAME, reports_dir=REPORTS):
+    """Problems with `git diff --name-status` lines for an entry, or [] if none.
+
+    `log_dir` and `reports_dir` are the season's (#72): predictions/ and
+    reports/ for 2026/27.
+    """
     gw = f"gw{gameweek:02d}"
-    entry = re.compile(rf"^{LOG_DIR_NAME}/{gw}_([^_/]+)\.csv$")
-    digest = re.compile(rf"^reports/{gw}_([^_/]+)\.md$")
+    entry = re.compile(rf"^{re.escape(str(log_dir))}/{gw}_([^_/]+)\.csv$")
+    digest = re.compile(rf"^{re.escape(str(reports_dir))}/{gw}_([^_/]+)\.md$")
     problems, models, digests = [], set(), set()
     for line in lines:
         if not line.strip():
@@ -356,16 +381,18 @@ def unexpected_changes(lines, gameweek):
         else:
             problems.append(f"{path}: not a GW{gameweek} entry or digest")
     if not models:
-        problems.append(f"no {LOG_DIR_NAME}/{gw}_*.csv among the changes")
+        problems.append(f"no {log_dir}/{gw}_*.csv among the changes")
     for model in sorted(models - digests):
-        problems.append(f"{gw}_{model}.csv has no reports/{gw}_{model}.md")
+        problems.append(f"{gw}_{model}.csv has no {reports_dir}/{gw}_{model}.md")
     for model in sorted(digests - models):
-        problems.append(f"reports/{gw}_{model}.md has no entry beside it")
+        problems.append(f"{reports_dir}/{gw}_{model}.md has no entry beside it")
     return problems
 
 
 def cmd_check_changes(args):
-    problems = unexpected_changes(sys.stdin.read().splitlines(), args.gameweek)
+    problems = unexpected_changes(
+        sys.stdin.read().splitlines(), args.gameweek, args.log_dir, args.reports_dir
+    )
     for problem in problems:
         print(f"UNEXPECTED: {problem}")
     if not problems:
@@ -539,7 +566,7 @@ def cli(argv=None):
     sub = ap.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("decide", help="act, resume, skip or fail")
-    p.add_argument("--predictions", default=LOG_DIR_NAME, metavar="DIR")
+    p.add_argument("--predictions", default=None, metavar="DIR")
     p.add_argument("--prs", required=True, metavar="FILE")
     p.add_argument("--branches", required=True, metavar="FILE")
     p.add_argument(
@@ -557,6 +584,8 @@ def cli(argv=None):
 
     p = sub.add_parser("check-changes", help="git diff --name-status on stdin")
     p.add_argument("--gameweek", type=int, required=True)
+    p.add_argument("--log-dir", default=LOG_DIR_NAME, help="the season's log directory")
+    p.add_argument("--reports-dir", default=REPORTS, help="the season's reports directory")
 
     p = sub.add_parser("commit-message")
     for name in ("--deadline", "--snapshot", "--tag", "--sha"):

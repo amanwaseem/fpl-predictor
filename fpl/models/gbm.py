@@ -271,9 +271,10 @@ def cli(argv=None):
     ap.add_argument("--gw", type=int, default=None, help="target gameweek (default: next)")
     ap.add_argument(
         "--out",
-        default="predictions",
+        default=None,
         metavar="DIR",
-        help="output directory (default: predictions/, the append-only log)",
+        help="output directory (default: the log, predictions/ for 2026/27 and "
+        "predictions-<season>/ after). Use a scratch directory for exploratory runs",
     )
     ap.add_argument(
         "--snapshot",
