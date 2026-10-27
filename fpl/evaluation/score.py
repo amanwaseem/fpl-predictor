@@ -384,6 +384,29 @@ def pooled_block(groups):
     }
 
 
+def pooled_comparators(results):
+    """Each comparator pooled over a model's scored gameweeks, as the model is.
+
+    A gameweek counts only where its comparators were computed or carried.
+    MAE is a mean over rows, so the n-weighted mean of each gameweek's is the
+    pooled figure; the XI points add up over the gameweeks that had an XI.
+    """
+    with_comparators = [r for r in results if r["comparators"]["available"]]
+    if not with_comparators:
+        return {"available": False, "gameweeks": []}
+    out: dict = {"available": True, "gameweeks": [r["gameweek"] for r in with_comparators]}
+    for name in COMPARATORS:
+        blocks = [(r["comparators"][name], r["metrics"]["all"]["n"]) for r in with_comparators]
+        n = sum(count for _, count in blocks)
+        pooled = {"n": n, "mae": sum(b["mae"] * count for b, count in blocks) / n}
+        xis = [b["xi_actual"] for b, _ in blocks if b.get("xi_actual") is not None]
+        if COMPARATORS[name] is not None:
+            pooled["xi_actual"] = sum(xis)
+            pooled["xi_gameweeks"] = len(xis)
+        out[name] = pooled
+    return out
+
+
 def cumulative(scored, events, entries):
     """Pooled figures per model, with pending and missed gameweeks listed.
 
@@ -414,6 +437,7 @@ def cumulative(scored, events, entries):
             "gameweeks_pending": [gw for gw in logged if gw not in settled],
             "gameweeks_missed": missed_gameweeks(logged, settled, last),
             "pooled": pooled_block([matched for _, matched, _ in mine]),
+            "comparators": pooled_comparators([res for _, _, res in mine]),
             "xi": {
                 "gameweeks": len(with_xi),
                 "captured": captured,

@@ -9,9 +9,9 @@ sit a squad optimiser and a live API over all of it.
 ### The record so far
 
 2026/27, pooled over every player in every scored gameweek, from
-[`scores/cumulative.json`](scores/cumulative.json) and the per-gameweek files beside it
-(actuals from snapshot `20261027T032902Z`, after GW8 settled). Lower MAE is better; `form` is
-FPL's own form figure, the naive prediction a model has to beat.
+[`scores/cumulative.json`](scores/cumulative.json) (actuals from snapshot `20261027T032902Z`,
+taken once the latest of them settled). Lower MAE is better; `form` is FPL's own form figure,
+the naive prediction a model has to beat.
 
 | Model | Role | Scored | Missed | MAE | `form` MAE | XI points | `form` XI points |
 |---|---|---|---|---|---|---|---|
@@ -101,8 +101,9 @@ the points cost of transfers.
 
 ## Current status
 
-Logging predictions for the 2026/27 season. Entries are on `main` for GW4, GW6 and GW8, and all
-three are scored. GW5 and GW7 were missed and stay missed, recorded as missed in `scores/`.
+Logging predictions for the 2026/27 season. Which gameweeks each model has logged, had scored
+and missed is in [the record](#the-record-so-far); a missed one stays missed, recorded as
+missed in `scores/`.
 
 **Logged models**, each with a role (ADR 0020): `baseline-v1` the fixed yardstick, the main model,
 and at most one challenger. A challenger that beats the main model replaces it, and the beaten
@@ -131,9 +132,9 @@ points of each one's best predicted XI. Lower MAE is better. From `scores/gw*_*.
 | GW8 | `baseline-v1` | 1.114 | 0.728 | 1.377 | 50 | 30 |
 | GW8 | `form-fixture-v1` | 1.103 | 0.729 | 1.377 | 49 | 30 |
 
-Both models beat `form` on per-player error every gameweek so far, and in GW8 both XIs beat
-`form`'s too; `form-fixture-v1`'s GW6 XI is the one that did not. Two shared gameweeks are too
-few to tell the two models apart; the cumulative record is `scores/cumulative.json`.
+The pooled record is `scores/cumulative.json`. A handful of gameweeks is too few to tell two
+models apart by eye; held-out backtests over past seasons are what judge that
+(`reports/gbm-v1.md`).
 
 **Working**
 

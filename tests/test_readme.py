@@ -12,6 +12,8 @@ import unittest
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
+from fpl.log import roles
+
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 SCORES = ROOT / "scores"
@@ -36,14 +38,20 @@ def gameweeks(cell):
 
 
 def three(x):
-    """A metric as the README shows it: three places, rounded half up from the
-    four that scores/ stores."""
+    """A metric as the README shows it: the four places scores/ stores, rounded
+    half up to three, or n/a where scores/ has none."""
+    if x is None:
+        return "n/a"
     return str(Decimal(str(x)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
+
+
+def points(x):
+    return "n/a" if x is None else str(x)
 
 
 def entries():
     """Every scored entry, from scores/gwNN_<model>.json."""
-    return [json.loads(p.read_text()) for p in sorted(SCORES.glob("gw*_*.json"))]
+    return {p.name: json.loads(p.read_text()) for p in sorted(SCORES.glob("gw*_*.json"))}
 
 
 class TestRecordSoFar(unittest.TestCase):
@@ -52,54 +60,51 @@ class TestRecordSoFar(unittest.TestCase):
         self.cumulative = json.loads((SCORES / "cumulative.json").read_text())["models"]
         self.rows = {row[0]: row for row in table_after(self.text, "### The record so far")}
 
-    def test_every_scored_model_has_a_row(self):
-        self.assertLessEqual(set(self.cumulative), set(self.rows))
+    def test_every_model_has_a_row(self):
+        self.assertEqual(set(self.rows), set(self.cumulative) | set(roles.ROLES))
 
     def test_the_actuals_snapshot_is_the_one_scored_against(self):
-        snapshots = {e["actuals_snapshot_id"] for e in entries()}
-        self.assertEqual(len(snapshots), 1)
+        by_snapshot = {}
+        for name, e in entries().items():
+            by_snapshot.setdefault(e["actuals_snapshot_id"], []).append(name)
+        self.assertEqual(len(by_snapshot), 1, f"scores/ mixes actuals snapshots: {by_snapshot}")
         section = self.text[self.text.index("### The record so far") :]
-        self.assertIn(f"`{snapshots.pop()}`", section[: section.index("|")])
+        self.assertIn(f"`{next(iter(by_snapshot))}`", section[: section.index("|")])
 
     def test_each_row_matches_scores(self):
-        mine = {}
-        for e in entries():
-            n = e["metrics"]["all"]["n"]
-            m = mine.setdefault(e["model_version"], {"n": 0, "form": 0.0, "xi": 0, "form_xi": 0})
-            m["n"] += n
-            m["form"] += e["comparators"]["form"]["mae"] * n
-            m["xi"] += e["xi"]["captured"]["actual"]
-            m["form_xi"] += e["comparators"]["form"]["xi_actual"]
         for model, row in self.rows.items():
             with self.subTest(model=model):
                 _, role, scored, missed, mae, form_mae, xi, form_xi = row
                 block = self.cumulative.get(model)
                 if block is None:
+                    self.assertEqual(role, roles.ROLES.get(model))
                     self.assertEqual([mae, form_mae, xi, form_xi], ["", "", "", ""])
                     continue
+                form = block["comparators"].get("form", {})
                 self.assertEqual(role, block["role"])
                 self.assertEqual(gameweeks(scored), block["gameweeks_scored"])
                 self.assertEqual(gameweeks(missed), block["gameweeks_missed"])
                 self.assertEqual(mae, three(block["pooled"]["all"]["mae"]))
-                totals = mine[model]
-                self.assertEqual(form_mae, three(totals["form"] / totals["n"]))
-                self.assertEqual(int(xi), block["xi"]["captured"])
-                self.assertEqual(int(form_xi), totals["form_xi"])
+                self.assertEqual(form_mae, three(form.get("mae")))
+                self.assertEqual(xi, points(block["xi"]["captured"]))
+                self.assertEqual(form_xi, points(form.get("xi_actual")))
 
 
 class TestResultsPerGameweek(unittest.TestCase):
     def test_each_row_matches_its_entry(self):
         rows = table_after(README.read_text(), "**Results so far**")
-        by_key = {(f"GW{e['gameweek']}", e["model_version"]): e for e in entries()}
+        by_key = {(f"GW{e['gameweek']}", e["model_version"]): e for e in entries().values()}
         self.assertEqual({(r[0], r[1]) for r in rows}, set(by_key))
         for gw, model, mae, rho, form_mae, xi, form_xi in rows:
             with self.subTest(gameweek=gw, model=model):
                 e = by_key[(gw, model)]
+                form = e["comparators"].get("form", {})
+                captured = e["xi"]["captured"]["actual"] if e["xi"]["available"] else None
                 self.assertEqual(mae, three(e["metrics"]["all"]["mae"]))
                 self.assertEqual(rho, three(e["metrics"]["all"]["spearman"]))
-                self.assertEqual(form_mae, three(e["comparators"]["form"]["mae"]))
-                self.assertEqual(int(xi), e["xi"]["captured"]["actual"])
-                self.assertEqual(int(form_xi), e["comparators"]["form"]["xi_actual"])
+                self.assertEqual(form_mae, three(form.get("mae")))
+                self.assertEqual(xi, points(captured))
+                self.assertEqual(form_xi, points(form.get("xi_actual")))
 
 
 if __name__ == "__main__":

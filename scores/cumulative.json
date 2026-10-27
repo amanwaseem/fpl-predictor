@@ -2,6 +2,30 @@
   "harness_version": "harness-v1",
   "models": {
     "baseline-v1": {
+      "comparators": {
+        "available": true,
+        "form": {
+          "mae": 1.294,
+          "n": 1989,
+          "xi_actual": 100,
+          "xi_gameweeks": 3
+        },
+        "gameweeks": [
+          4,
+          6,
+          8
+        ],
+        "points_per_game": {
+          "mae": 1.4013,
+          "n": 1989,
+          "xi_actual": 106,
+          "xi_gameweeks": 3
+        },
+        "zero": {
+          "mae": 1.3987,
+          "n": 1989
+        }
+      },
       "gameweeks_missed": [
         5,
         7
@@ -65,6 +89,29 @@
       }
     },
     "form-fixture-v1": {
+      "comparators": {
+        "available": true,
+        "form": {
+          "mae": 1.3026,
+          "n": 1335,
+          "xi_actual": 68,
+          "xi_gameweeks": 2
+        },
+        "gameweeks": [
+          6,
+          8
+        ],
+        "points_per_game": {
+          "mae": 1.4193,
+          "n": 1335,
+          "xi_actual": 78,
+          "xi_gameweeks": 2
+        },
+        "zero": {
+          "mae": 1.3805,
+          "n": 1335
+        }
+      },
       "gameweeks_missed": [
         7
       ],

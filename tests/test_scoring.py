@@ -190,6 +190,27 @@ class TestComparisons(ScoringCase):
         self.run_harness()
         self.assertFalse(self.metrics()["comparators"]["available"])
 
+    def test_comparators_pooled_in_cumulative(self):
+        """One gameweek pooled is that gameweek's figures; none available, none pooled."""
+        self.write_entry()
+        self.run_harness()
+        pooled = json.loads(Path("scores/cumulative.json").read_text())["models"]["baseline-v1"][
+            "comparators"
+        ]
+        form = self.metrics()["comparators"]["form"]
+        self.assertEqual(pooled["gameweeks"], [4])
+        self.assertAlmostEqual(pooled["form"]["mae"], form["mae"])
+        self.assertEqual(pooled["form"]["xi_actual"], form["xi_actual"])
+        self.assertNotIn("xi_actual", pooled["zero"])
+
+        (self.pred_snap / "bootstrap.json").unlink()
+        Path("scores/gw04_baseline-v1.json").unlink()
+        self.run_harness()
+        pooled = json.loads(Path("scores/cumulative.json").read_text())["models"]["baseline-v1"][
+            "comparators"
+        ]
+        self.assertEqual(pooled, {"available": False, "gameweeks": []})
+
     def test_baseline_has_no_head_to_head(self):
         self.write_entry()
         self.run_harness()
