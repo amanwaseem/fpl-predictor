@@ -170,8 +170,8 @@ models apart by eye; held-out backtests over past seasons are what judge that
   `GET /v1/entries/{id}/advice`, which reads an FPL team's squad from the FPL API first
 - Automated entries: a scheduled workflow that makes each entry and opens its PR before the
   deadline (#68)
-- A multi-gameweek plan (`fpl-plan`): squads, transfers and free transfers over the next three
-  to six gameweeks in one integer programme, from form-fixture-v1's predictions for each, which
+- A multi-gameweek plan (`fpl-plan`): squads, transfers and free transfers over the next one to
+  six gameweeks (three by default) in one integer programme, from form-fixture-v1's predictions for each, which
   are not logged ([ADR 0022](docs/adr/0022-a-multi-gameweek-plan-from-unlogged-predictions.md))
 
 **Planned** (tracked in #75)
@@ -224,7 +224,7 @@ so they run anywhere, including the deployed image.
 | `fpl-summarise` | A readable digest of an entry, into `reports/` |
 | `fpl-score` | Score every committed entry against actual results, into `scores/` |
 | `fpl-optimise` | The best legal squad, XI and captain for one entry's predictions, under the £100m budget, by integer programming (`--squad FILE`: the best transfers from a squad you own, net of hits) |
-| `fpl-plan` | Transfers over the next three to six gameweeks, from a squad (`--squad FILE`, as `fpl-optimise`'s) or from scratch, with free transfers rolling and later weeks discounted. Predictions for later weeks are form-fixture-v1's, computed for the plan and never logged |
+| `fpl-plan` | Transfers over the next one to six gameweeks (three by default), from a squad (`--squad FILE`, as `fpl-optimise`'s) or from scratch, with free transfers rolling and later weeks discounted. Predictions for later weeks are form-fixture-v1's, computed for the plan and never logged |
 | `fpl-backtest` | Replay settled gameweeks offline, without leaking the future (`--held-out`: the gate for a new factor) |
 | `fpl-load` | Load a snapshot into Postgres: teams, players, fixtures, club spells and per-fixture stats (needs `DATABASE_URL`) |
 | `fpl-features` | Build `player_gameweek_features`, one row of pre-deadline model inputs per player per gameweek, for every season in the database (`--rebuild`: all of it) |

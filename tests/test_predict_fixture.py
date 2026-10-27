@@ -262,9 +262,9 @@ def rated_league(case, deadline, later=()):
         for i in range(0, len(clubs), 2):
             fx.append(played(gw * 100 + i, gw, clubs[i], clubs[i + 1], (gw + i) % 3, i % 2))
     fx += fixtures.full_round(4, clubs)
-    for gw in later:
-        # Each club meets a different opponent from GW4's, with its own fixture ids.
-        order = list(clubs[1:]) + [clubs[0]]
+    for k, gw in enumerate(later, start=1):
+        # Each later round pairs the clubs differently, with its own fixture ids.
+        order = list(clubs[k:]) + list(clubs[:k])
         fx += [
             fixtures.fixture(gw, order[i], order[i + 1], fid=gw * 100 + i)
             for i in range(0, len(order), 2)
@@ -289,7 +289,8 @@ def rated_league(case, deadline, later=()):
                         )
                     )
     events = fixtures.season(4, deadline) + [
-        fixtures.event(gw, deadline=f"2026-09-{10 + 7 * (gw - 4):02d}T10:00:00Z") for gw in later
+        fixtures.event(gw, deadline=fixtures.future_deadline(hours=24 + 168 * (gw - 4)))
+        for gw in later
     ]
     return case.snapshot(
         SNAPSHOT_ID,

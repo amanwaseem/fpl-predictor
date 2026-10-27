@@ -39,6 +39,7 @@ from fpl.ingest.snapshot import (
     availability,
     fixture_counts,
     load_snapshot,
+    player_summaries,
     resolve_target_gw,
     usable_rounds,
 )
@@ -252,14 +253,7 @@ def main(requested_gw, out_dir, snapshot_id=None):
     # After the refusals above, so a run that will not predict fetches nothing.
     bundle = load()
     print(f"model:     {MODEL_VERSION}, artifact {(bundle.sha256 or 'unregistered')[:12]}")
-    elements = {p["id"] for p in bootstrap["elements"]}
-    histories, pasts = {}, {}
-    for pid in elements:
-        path = players_dir / f"{pid}.json"
-        if path.exists():
-            summary = json.loads(path.read_text())
-            histories[pid] = summary.get("history", [])
-            pasts[pid] = summary.get("history_past", [])
+    histories, pasts = player_summaries(bootstrap, players_dir)
     rows = predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, bundle)
     outpath = write_entry(rows, out_dir, target_gw, MODEL_VERSION, snap.name, deadline)
     print(f"\nwrote {len(rows)} predictions -> {outpath}\n")

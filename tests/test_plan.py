@@ -14,6 +14,7 @@ import unittest
 from pathlib import Path
 
 from fpl import plan
+from fpl.ingest.snapshot import player_summaries, usable_rounds
 from fpl.models import predict_fixture
 from fpl.optimise import MAX_FREE_TRANSFERS, best_squad, best_transfers
 from fpl.plan import best_plan, horizon_predictions
@@ -214,12 +215,71 @@ class TestHorizonPredictions(fixtures.TempCwd):
             )
 
     def test_later_weeks_know_only_what_the_first_deadline_did(self):
+        # GW4 marked settled and played, as a snapshot taken after it would
+        # be: a later week predicted from the rounds before itself would use
+        # GW4, and one predicted from the first week's deadline does not.
+        bootstrap = json.loads((self.snap / "bootstrap.json").read_text())
+        events = [dict(e, data_checked=True) if e["id"] == 4 else e for e in bootstrap["events"]]
+        (self.snap / "bootstrap.json").write_text(json.dumps(bootstrap | {"events": events}))
+        for path in (self.snap / "players").glob("*.json"):
+            summary = json.loads(path.read_text())
+            summary["history"].append(
+                {
+                    "fixture": 999,
+                    "round": 4,
+                    "was_home": True,
+                    "minutes": 90,
+                    "total_points": 20,
+                    "expected_goals": "2.00",
+                    "goals_scored": 3,
+                    "assists": 0,
+                    "clean_sheets": 0,
+                }
+            )
+            path.write_text(json.dumps(summary))
+        _, _, by_week = horizon_predictions(weeks=2)
+
+        bootstrap = json.loads((self.snap / "bootstrap.json").read_text())
+        fixture_list = json.loads((self.snap / "fixtures.json").read_text())
+        histories, pasts = player_summaries(bootstrap, self.snap / "players")
+        first_deadline, _ = usable_rounds(events, 4)
+        own_deadline, _ = usable_rounds(events, 5)
+        self.assertEqual(
+            by_week[5],
+            predict_fixture.predict_rows(
+                bootstrap, fixture_list, histories, pasts, 5, first_deadline
+            ),
+        )
+        self.assertNotEqual(
+            by_week[5],
+            predict_fixture.predict_rows(
+                bootstrap, fixture_list, histories, pasts, 5, own_deadline
+            ),
+        )
+
+    def test_later_weeks_are_priced_against_their_own_fixtures(self):
+        # Club 1 blanks in GW6 alone: its players score that week only.
+        path = self.snap / "fixtures.json"
+        fixture_list = json.loads(path.read_text())
+        path.write_text(
+            json.dumps(
+                [
+                    f
+                    for f in fixture_list
+                    if not (f["event"] == 6 and 1 in (f["team_h"], f["team_a"]))
+                ]
+            )
+        )
         _, _, by_week = horizon_predictions(weeks=3)
-        self.assertTrue(all(r["gameweek"] == 5 for r in by_week[5]))
-        # A later round settling in the snapshot would not change these: the
-        # rounds used are those settled before the first week.
-        events = json.loads((self.snap / "bootstrap.json").read_text())["events"]
-        self.assertFalse(any(e["data_checked"] for e in events if e["id"] >= 4))
+        club = {
+            p["id"]
+            for p in json.loads((self.snap / "bootstrap.json").read_text())["elements"]
+            if p["team"] == 1
+        }
+        for gw, expect_points in ((4, True), (5, True), (6, False)):
+            with self.subTest(gameweek=gw):
+                scored = [r["predicted_points"] > 0 for r in by_week[gw] if r["player_id"] in club]
+                self.assertEqual(set(scored), {expect_points})
 
 
 class TestCommand(unittest.TestCase):

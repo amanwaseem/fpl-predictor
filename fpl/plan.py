@@ -46,7 +46,6 @@ Writes nothing. Needs the HiGHS solver, in the optimise group.
 import argparse
 import json
 import sys
-import time
 from dataclasses import asdict, dataclass
 
 from fpl.evaluation.xi import MAX_PER_CLUB, POSITIONS, SCALE, best_xi, check_positions
@@ -62,17 +61,18 @@ from fpl.optimise import (
     SolverTimeout,
     Squad,
     Transfer,
-    _deadline,
-    _pick,
-    _solver,
-    _squad,
     add_squad,
+    build_squad,
     check_current,
+    deadline_in,
     describe,
     eligible,
+    new_model,
+    pick,
     points,
     read_squad,
     shortfalls,
+    solve_lexicographic,
     tenths,
 )
 from fpl.paths import require_project_root
@@ -84,9 +84,14 @@ MAX_WEEKS = 6
 # the last of MAX_WEEKS still counts for something.
 DISCOUNT = 0.9
 MIN_DISCOUNT = 0.5
-# Week weights in ten-thousandths, so every coefficient is an integer and the
-# optimum exact, as in fpl.optimise; 0.5**5 is still 312 of them.
-WEIGHT_SCALE = 10_000
+# Week weights in hundredths, so every coefficient is an integer and the
+# optimum exact, as in fpl.optimise, while staying small enough (a starter is
+# at most a few thousand units, times 100) that the solver's integrality
+# tolerance cannot move the objective by half a unit. 0.5**5 is still 3.
+WEIGHT_SCALE = 100
+# Seconds for all of a plan's solves: generous, since it is a command and a
+# real pool plans six weeks in under ten.
+TIME_LIMIT = 60.0
 
 
 @dataclass
@@ -213,7 +218,7 @@ def best_plan(
         weights,
         bench_weight,
         free_transfers if current is not None else None,
-        deadline=_deadline(time_limit),
+        deadline=deadline_in(time_limit),
     )
 
     # Free transfers and hits as FPL counts them, from the transfers made.
@@ -227,7 +232,7 @@ def best_plan(
         held = held & new
         cost = {pid: selling[pid] if pid in held else price[pid] for pid in price}
         sells_for = {pid: current[pid] for pid in held} if current else None
-        result = _squad(
+        result = build_squad(
             [dict(p, predicted_points=worth[p["player_id"]]) for p in squad],
             [dict(p, predicted_points=worth[p["player_id"]]) for p in starters],
             dict(captain, predicted_points=worth[captain["player_id"]]),
@@ -249,9 +254,9 @@ def best_plan(
             )
             transfers += [
                 Transfer(
-                    out=_pick(o, previous_sells_for),
+                    out=pick(o, previous_sells_for),
                     selling_price=previous_cost[o["player_id"]] / 10,
-                    into=_pick(b),
+                    into=pick(b),
                 )
                 for o, b in zip(sold, bought, strict=True)
             ]
@@ -267,10 +272,8 @@ def best_plan(
                 squad=result,
             )
         )
-        value += (
-            weights[k]
-            / WEIGHT_SCALE
-            * (result.expected_points + bench_weight * result.bench_points - HIT * hits)
+        value += weights[k] * (
+            _units(result.xi, result.bench, result.captain, bench_weight) - HIT * SCALE * hits
         )
         free = 1 if free is None else min(MAX_FREE_TRANSFERS, max(0, free - len(transfers)) + 1)
         before, previous_cost, previous_sells_for = new, cost, sells_for
@@ -279,9 +282,10 @@ def best_plan(
     if current is not None:
         kept_points = kept_value = 0.0
         for k, gw in enumerate(gameweeks):
-            xi, bench_points = _kept_week(first, current, predicted[gw])
-            kept_points += xi
-            kept_value += weights[k] / WEIGHT_SCALE * (xi + bench_weight * bench_points)
+            kept = _kept_week(first, current, predicted[gw], bench_weight)
+            kept_points += kept.expected_points
+            kept_value += weights[k] * _units(kept.xi, kept.bench, kept.captain, bench_weight)
+        kept_value /= WEIGHT_SCALE * SCALE
 
     return HorizonPlan(
         weeks=weeks,
@@ -291,25 +295,44 @@ def best_plan(
         money=money / 10,
         expected_points=round(sum(w.squad.expected_points - w.hit_points for w in weeks), 2),
         kept_points=None if kept_points is None else round(kept_points, 2),
-        value=round(value, 2),
+        value=round(value / (WEIGHT_SCALE * SCALE), 2),
         kept_value=None if kept_value is None else round(kept_value, 2),
     )
 
 
-def _kept_week(first, current, worth):
-    """(XI points with the captain's twice, bench points) for the owned squad in one week.
+def _units(xi, bench, captain, bench_weight):
+    """A week's value as the model counts it, in fpl.evaluation.xi's units: the
+    XI, the captain again, and each bench player at bench_weight, rounded as
+    fpl.optimise.add_squad rounds it."""
+    return (
+        sum(points(p.predicted_points) for p in xi)
+        + points(captain.predicted_points)
+        + sum(round(points(p.predicted_points) * bench_weight) for p in bench)
+    )
 
-    The best XI of a fixed squad holds its best player, so he is the captain,
-    and the rest is the bench: no solver needed.
+
+def _kept_week(first, current, worth, bench_weight):
+    """The owned squad's best line-up in one week, as a Squad.
+
+    Its best XI holds its best player, who captains it, and the rest is the
+    bench: no solver needed.
     """
     squad = [
         dict(p, predicted_points=worth[p["player_id"]]) for p in first if p["player_id"] in current
     ]
-    total, xi, _ = best_xi(squad, lambda p: p["predicted_points"])
-    captain = max(points(p["predicted_points"]) for p in xi)
-    everyone = sum(points(p["predicted_points"]) for p in squad)
-    starting = sum(points(p["predicted_points"]) for p in xi)
-    return (starting + captain) / SCALE, (everyone - starting) / SCALE
+    _, xi, _ = best_xi(squad, lambda p: p["predicted_points"])
+    captain = max(xi, key=lambda p: (p["predicted_points"], -p["player_id"]))
+    starting = {p["player_id"] for p in xi}
+    cost = {pid: tenths(price) for pid, price in current.items()}
+    return build_squad(
+        squad,
+        [p for p in squad if p["player_id"] in starting],
+        captain,
+        cost,
+        sum(cost.values()) / 10,
+        current,
+        verify=False,
+    )
 
 
 def _solve(
@@ -326,20 +349,9 @@ def _solve(
     player ids with the points held, the first answer standing if that runs
     out of time.
     """
-    highspy = _solver()
+    highspy, model = new_model()
     n = len(pool)
     owned = [i for i in range(n) if pool[i]["player_id"] in selling]
-    model = highspy.Highs()
-    model.silent()
-    model.setOptionValue("mip_rel_gap", 0.0)
-    model.setOptionValue("mip_abs_gap", 0.5)
-
-    def limit_time():
-        if deadline is not None:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise SolverTimeout("the solver's time limit was reached")
-            model.setOptionValue("time_limit", remaining)
 
     weeks = []
     value = 0
@@ -413,27 +425,6 @@ def _solve(
         )
         value = value + weights[k] * week_value
 
-    limit_time()
-    model.maximize(value)
-    status = model.getModelStatus()
-    if status == highspy.HighsModelStatus.kTimeLimit:
-        raise SolverTimeout("the solver's time limit was reached before it proved an optimum")
-    # Every variable is bounded, so "unbounded or infeasible" can only be infeasible.
-    if status not in (
-        highspy.HighsModelStatus.kOptimal,
-        highspy.HighsModelStatus.kInfeasible,
-        highspy.HighsModelStatus.kUnboundedOrInfeasible,
-    ):
-        raise SolverFailure(
-            f"the solver stopped without an answer: {model.modelStatusToString(status)}"
-        )
-    if status != highspy.HighsModelStatus.kOptimal:
-        raise ValueError(
-            f"no legal plan within £{money / 10:.1f}m: each rule can be met alone, but the "
-            "budget and the three-per-club cap leave no squad"
-        )
-    best = round(model.getObjectiveValue())
-
     def read():
         out = []
         for week in weeks:
@@ -444,23 +435,23 @@ def _solve(
             out.append((squad, starters, captains[0]))
         return out
 
-    solution = read()
-    # As fpl.optimise: hold the points, then fewer transfers outweigh any
-    # difference in rank, which is at most 27 chosen variables a week each
-    # ranked below n.
-    model.addConstr(value >= best - 0.5)
+    # As fpl.optimise: fewer transfers outweigh any difference in rank, which
+    # is at most 27 chosen variables a week each ranked below n.
     rank = model.qsum(
         i * (week["squad"][i] + week["start"][i] + week["captain"][i])
         for week in weeks
         for i in range(n)
     )
-    try:
-        limit_time()
-        model.minimize((27 * n * len(weeks) + 1) * transfer_count + rank)
-        if model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-            solution = read()
-    except SolverTimeout:
-        pass
+    _, solution = solve_lexicographic(
+        highspy,
+        model,
+        value,
+        (27 * n * len(weeks) + 1) * transfer_count + rank,
+        read,
+        deadline,
+        f"no legal plan within £{money / 10:.1f}m: each rule can be met alone, but the "
+        "budget and the three-per-club cap leave no squad",
+    )
     return solution
 
 
@@ -516,7 +507,9 @@ def describe_plan(plan):
     return "\n".join(lines) + "\n\n" + describe(plan.weeks[0].squad)
 
 
-def main(weeks, squad_file, budget, discount, bench_weight, as_json, include_unavailable):
+def main(
+    weeks, squad_file, budget, discount, bench_weight, as_json, include_unavailable, time_limit
+):
     snapshot, excluded, by_week = horizon_predictions(weeks=weeks)
     try:
         if squad_file is None:
@@ -526,6 +519,7 @@ def main(weeks, squad_file, budget, discount, bench_weight, as_json, include_una
                 discount=discount,
                 bench_weight=bench_weight,
                 include_unavailable=include_unavailable,
+                time_limit=time_limit,
                 weeks_requested=weeks,
             )
         else:
@@ -538,8 +532,14 @@ def main(weeks, squad_file, budget, discount, bench_weight, as_json, include_una
                 discount=discount,
                 bench_weight=bench_weight,
                 include_unavailable=include_unavailable,
+                time_limit=time_limit,
                 weeks_requested=weeks,
             )
+    except SolverTimeout:
+        raise SystemExit(
+            f"No plan proved best within {time_limit:g} seconds. Plan fewer weeks, or "
+            "allow longer with --time-limit."
+        ) from None
     except (ValueError, ImportError, SolverFailure) as e:
         raise SystemExit(str(e)) from None
     if as_json:
@@ -592,8 +592,17 @@ def cli(argv=None):
         action="store_true",
         help="allow injured, suspended and not-available players",
     )
+    ap.add_argument(
+        "--time-limit",
+        type=float,
+        default=TIME_LIMIT,
+        metavar="SECONDS",
+        help=f"for all the solves together (default: {TIME_LIMIT:g})",
+    )
     ap.add_argument("--json", action="store_true", help="print the plan as JSON")
     args = ap.parse_args(argv)
+    if args.time_limit <= 0:
+        ap.error("--time-limit must be above zero")
     if not 1 <= args.weeks <= MAX_WEEKS:
         ap.error(f"--weeks must be from 1 to {MAX_WEEKS}")
     if not MIN_DISCOUNT <= args.discount <= 1:
@@ -611,6 +620,7 @@ def cli(argv=None):
         args.bench_weight,
         args.json,
         args.include_unavailable,
+        args.time_limit,
     )
 
 
