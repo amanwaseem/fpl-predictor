@@ -223,11 +223,12 @@ def load_prs(path):
     return prs
 
 
-def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS):
+def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS, log_dir=None):
     """(PASS or FAIL, a sentence saying why) for the next deadline.
 
     `classified` is classify_entries() for the next gameweek, or a function of
-    (gameweek, deadline) returning it.
+    (gameweek, deadline) returning it. `log_dir` is the directory it read, to
+    name; by default the deadline's season's.
     """
     try:
         upcoming = next_deadline(bootstrap)
@@ -239,6 +240,7 @@ def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS):
     if upcoming is None:
         return PASS, "No next gameweek in bootstrap-static: nothing to warn about."
     gameweek, deadline = upcoming
+    log_dir = log_dir or log_dir_for(deadline)
     if callable(classified):
         classified = classified(gameweek, deadline)
     hours = (deadline - now).total_seconds() / 3600
@@ -251,7 +253,7 @@ def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS):
             if classified["moved"]
             else ""
         )
-        return PASS, f"{when}. Entry in {log_dir_for(deadline)}/: {', '.join(entries)}.{moved}"
+        return PASS, f"{when}. Entry in {log_dir}/: {', '.join(entries)}.{moved}"
 
     notes = ""
     if classified["other_season"]:
@@ -307,6 +309,7 @@ def main(predictions_dir, prs_file=None, now=None, fake_hours=None, fake_gamewee
         ),
         prs,
         now,
+        log_dir=predictions_dir,
     )
     report(status, message)
     return 0 if status == PASS else 1

@@ -165,7 +165,7 @@ What it does in the cases that are not the usual one:
 | an open PR adding one, by hand or not | skips; merge that one |
 | its own branch with no PR (an earlier run pushed, then failed to open it) | **resumes**: re-checks the branch, re-verifies the entry against the release asset, opens the PR |
 | its own branch whose PR was closed without merging | skips: you closed it, it is not reopened. The watchdog still warns |
-| `predict/gwNN` with no PR, inside the window | fails: you are making the entry by hand. Open its PR |
+| `predict/gwNN` (from 2027/28 `predict/<season>-gwNN`) with no PR, inside the window | fails: you are making the entry by hand. Open its PR |
 | an entry on `main` for this gameweek number from another season | fails: the log has no season dimension yet. Your call |
 | an open PR for a gameweek whose deadline has passed | comments on it, once: close it, do not merge |
 | the deadline under 5 minutes away mid-run | stops before pushing or opening anything |
@@ -453,6 +453,10 @@ git add predictions/gwNN_<model-version>.csv reports/gwNN_<model-version>.md
 git commit
 git push -u origin predict/gwNN
 ```
+
+From 2027/28 the branch carries the season, as branches are never deleted
+and last season's `predict/gwNN` is still there: `predict/2027-28-gwNN`,
+adding `predictions-2027-28/` and `reports-2027-28/`.
 
 Entries go in through a PR, not a push to `main`. Branch off `main`, and rebase
 rather than merging `main` into the branch.

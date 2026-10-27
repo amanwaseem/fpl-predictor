@@ -342,7 +342,14 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
     now = datetime.now(UTC)
     generated_at = now.strftime(TIMESTAMP)
     if out_dir is None:
-        out_dir = season_directory(season_of_deadline(deadline_at))
+        season = season_of_deadline(deadline_at)
+        if season < FIRST_SEASON:
+            raise SystemExit(
+                f"The GW{target_gw} deadline {deadline} is {season}'s, before the log began "
+                f"in {FIRST_SEASON}: there is no log to write it to. Pass --out scratch/ "
+                "for an exploratory run.\nNothing was written."
+            )
+        out_dir = season_directory(season)
 
     # SPEC section 5 rule 5. A prediction made at or after its own deadline
     # cannot be distinguished from one made knowing the result, so it is not
@@ -479,13 +486,13 @@ def write_entry(rows, out_dir, target_gw, model_version, snapshot_id, deadline):
 # The season the log began in, which keeps the plain directory names.
 FIRST_SEASON = "2026/27"
 
-LOG = LOG_DIR_NAME
 SCORES = "scores"
 REPORTS = "reports"
 
 SEASON = re.compile(r"^(\d{4})/(\d{2})$")
-# tools/check_log_immutable.py has its own copy, as it runs without the
-# package installed; tests/test_seasons.py checks the two agree.
+# tools/check_log_immutable.py has its own, looser pattern, as it runs
+# without the package installed; tests/test_log_immutability.py checks it
+# covers every directory named here (it may protect more, never less).
 SUFFIX = re.compile(r"^-(\d{4})-(\d{2})$")
 
 
@@ -510,7 +517,7 @@ def _check(season):
     return match
 
 
-def season_directory(season, base=LOG):
+def season_directory(season, base=LOG_DIR_NAME):
     """`base` for the first season, `base`-2027-28 for a later one, as a Path."""
     match = _check(season)
     if season == FIRST_SEASON:
@@ -518,7 +525,7 @@ def season_directory(season, base=LOG):
     return Path(f"{base}-{match.group(1)}-{match.group(2)}")
 
 
-def season_of_directory(path, base=LOG):
+def season_of_directory(path, base=LOG_DIR_NAME):
     """The season a directory holds, from its own name, or None if it is not one.
 
     Matched on the name alone, as fpl.log.contract matches the log, so the
@@ -540,7 +547,7 @@ def season_of_directory(path, base=LOG):
     return season
 
 
-def season_directories(root=".", base=LOG):
+def season_directories(root=".", base=LOG_DIR_NAME):
     """{season: Path} for every season's `base` directory under `root`, in season order."""
     found = {}
     for path in sorted(Path(root).iterdir()) if Path(root).is_dir() else ():
