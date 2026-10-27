@@ -6,12 +6,11 @@
         5,
         7
       ],
-      "gameweeks_pending": [
-        8
-      ],
+      "gameweeks_pending": [],
       "gameweeks_scored": [
         4,
-        6
+        6,
+        8
       ],
       "per_gameweek": [
         {
@@ -29,43 +28,50 @@
           "n": 667,
           "rmse": 2.0596,
           "spearman": 0.7465
+        },
+        {
+          "bias": -0.2218,
+          "gameweek": 8,
+          "mae": 1.1141,
+          "n": 668,
+          "rmse": 2.1443,
+          "spearman": 0.7276
         }
       ],
       "pooled": {
         "all": {
-          "bias": -0.1706,
-          "mae": 1.0914,
-          "n": 1321,
-          "rmse": 2.1244,
-          "spearman": 0.7289
+          "bias": -0.1878,
+          "mae": 1.0991,
+          "n": 1989,
+          "rmse": 2.1311,
+          "spearman": 0.7279
         },
-        "minutes_mae": 10.9225,
+        "minutes_mae": 11.5826,
         "predicted_to_play": {
-          "bias": -0.2292,
-          "mae": 1.8468,
-          "n": 752,
-          "rmse": 2.7735,
-          "spearman": 0.5092
+          "bias": -0.2743,
+          "mae": 1.86,
+          "n": 1143,
+          "rmse": 2.7824,
+          "spearman": 0.4812
         }
       },
       "retired_after": null,
       "role": "baseline",
       "xi": {
-        "captured": 105,
-        "captured_share": 0.3777,
-        "gameweeks": 2,
-        "optimum": 278
+        "captured": 155,
+        "captured_share": 0.3818,
+        "gameweeks": 3,
+        "optimum": 406
       }
     },
     "form-fixture-v1": {
       "gameweeks_missed": [
         7
       ],
-      "gameweeks_pending": [
-        8
-      ],
+      "gameweeks_pending": [],
       "gameweeks_scored": [
-        6
+        6,
+        8
       ],
       "per_gameweek": [
         {
@@ -75,32 +81,40 @@
           "n": 667,
           "rmse": 2.0784,
           "spearman": 0.7438
+        },
+        {
+          "bias": -0.2522,
+          "gameweek": 8,
+          "mae": 1.1033,
+          "n": 668,
+          "rmse": 2.1109,
+          "spearman": 0.7289
         }
       ],
       "pooled": {
         "all": {
-          "bias": -0.2257,
-          "mae": 1.0275,
-          "n": 667,
-          "rmse": 2.0784,
-          "spearman": 0.7438
+          "bias": -0.239,
+          "mae": 1.0654,
+          "n": 1335,
+          "rmse": 2.0947,
+          "spearman": 0.7358
         },
-        "minutes_mae": 10.9325,
+        "minutes_mae": 11.911,
         "predicted_to_play": {
-          "bias": -0.3383,
-          "mae": 1.7456,
-          "n": 380,
-          "rmse": 2.72,
-          "spearman": 0.5063
+          "bias": -0.3762,
+          "mae": 1.8072,
+          "n": 771,
+          "rmse": 2.7382,
+          "spearman": 0.4696
         }
       },
       "retired_after": null,
       "role": "main",
       "xi": {
-        "captured": 30,
-        "captured_share": 0.2273,
-        "gameweeks": 1,
-        "optimum": 132
+        "captured": 79,
+        "captured_share": 0.3038,
+        "gameweeks": 2,
+        "optimum": 260
       }
     }
   }
