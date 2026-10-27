@@ -68,9 +68,8 @@ the points cost of transfers.
 
 ## Current status
 
-Logging predictions for the 2026/27 season. Entries are on `main` for GW4, GW6 and GW8; GW4 and
-GW6 are scored, and GW8 is scored once it settles. GW5 and GW7 were missed and stay missed,
-recorded as missed in `scores/`.
+Logging predictions for the 2026/27 season. Entries are on `main` for GW4, GW6 and GW8, and all
+three are scored. GW5 and GW7 were missed and stay missed, recorded as missed in `scores/`.
 
 **Logged models**, each with a role (ADR 0020): `baseline-v1` the fixed yardstick, the main model,
 and at most one challenger. A challenger that beats the main model replaces it, and the beaten
@@ -96,10 +95,12 @@ points of each one's best predicted XI. Lower MAE is better. From `scores/gw*_*.
 | GW4 | `baseline-v1` | 1.153 | 0.713 | 1.277 | 56 | 32 |
 | GW6 | `baseline-v1` | 1.031 | 0.747 | 1.228 | 49 | 38 |
 | GW6 | `form-fixture-v1` | 1.028 | 0.744 | 1.228 | 30 | 38 |
+| GW8 | `baseline-v1` | 1.114 | 0.728 | 1.377 | 50 | 30 |
+| GW8 | `form-fixture-v1` | 1.103 | 0.729 | 1.377 | 49 | 30 |
 
-Both models beat `form` on per-player error every gameweek so far. The XI is another matter:
-`form-fixture-v1`'s GW6 XI scored less than `form`'s. Two gameweeks are too few to tell the
-two models apart; the cumulative record is `scores/cumulative.json`.
+Both models beat `form` on per-player error every gameweek so far, and in GW8 both XIs beat
+`form`'s too; `form-fixture-v1`'s GW6 XI is the one that did not. Two shared gameweeks are too
+few to tell the two models apart; the cumulative record is `scores/cumulative.json`.
 
 **Working**
 
