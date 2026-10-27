@@ -27,3 +27,4 @@ answer.
 | [0018](0018-past-seasons-are-training-data.md) | Past seasons are training data, from a pinned archive | Accepted |
 | [0019](0019-a-learned-model-evaluated-without-its-library.md) | A learned model, trained with LightGBM and evaluated without it | Accepted |
 | [0020](0020-one-baseline-one-main-model-one-challenger.md) | One baseline, one main model, at most one challenger | Accepted |
+| [0021](0021-observability-with-what-the-project-already-has.md) | Observability with what the project already has | Accepted |
