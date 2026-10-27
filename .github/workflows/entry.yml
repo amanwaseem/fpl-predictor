@@ -165,10 +165,13 @@ jobs:
         if: steps.plan.outputs.action == 'act' && env.DRY_RUN != 'true'
         env:
           PLANNED: ${{ steps.plan.outputs.gameweek }}
+          LOG_DIR: ${{ steps.plan.outputs.log_dir }}
+          REPORTS_DIR: ${{ steps.plan.outputs.reports_dir }}
         run: |
           git add -A
           git diff --cached --name-status
-          git diff --cached --name-status | python tools/entry_bot.py check-changes --gameweek "$PLANNED"
+          git diff --cached --name-status | python tools/entry_bot.py check-changes --gameweek "$PLANNED" \
+            --log-dir "$LOG_DIR" --reports-dir "$REPORTS_DIR"
           python tools/check_log_immutable.py --ref origin/main
 
       - name: Upload the snapshot and digest as a release
@@ -207,9 +210,10 @@ jobs:
           SNAPSHOT: ${{ steps.snapshot.outputs.id }}
           TAG: ${{ steps.release.outputs.tag }}
           SHA: ${{ steps.release.outputs.sha }}
+          LOG_DIR: ${{ steps.plan.outputs.log_dir }}
         run: |
           gw=$(printf "%02d" "$PLANNED")
-          models=($(ls predictions/gw${gw}_*.csv | sed -E "s|predictions/gw${gw}_(.*)\.csv|\1|"))
+          models=($(ls "$LOG_DIR"/gw${gw}_*.csv | sed -E "s|^$LOG_DIR/gw${gw}_(.*)\.csv|\1|"))
           python tools/entry_bot.py commit-message --gameweek "$PLANNED" --deadline "$DEADLINE" \
             --snapshot "$SNAPSHOT" --tag "$TAG" --sha "$SHA" --models "${models[@]}" > "$RUNNER_TEMP/message.txt"
           git config user.name "github-actions[bot]"
@@ -241,11 +245,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PLANNED: ${{ steps.plan.outputs.gameweek }}
           BRANCH: ${{ steps.plan.outputs.branch }}
+          LOG_DIR: ${{ steps.plan.outputs.log_dir }}
+          REPORTS_DIR: ${{ steps.plan.outputs.reports_dir }}
         run: |
           git fetch origin "$BRANCH"
           commits=$(git rev-list --count origin/main..FETCH_HEAD)
           [ "$commits" = "1" ] || { echo "$BRANCH has $commits commits on main, not 1: a person has to look."; exit 1; }
-          git diff --name-status origin/main...FETCH_HEAD | python tools/entry_bot.py check-changes --gameweek "$PLANNED"
+          git diff --name-status origin/main...FETCH_HEAD | python tools/entry_bot.py check-changes --gameweek "$PLANNED" \
+            --log-dir "$LOG_DIR" --reports-dir "$REPORTS_DIR"
           # Both validated by read-trailers: a snapshot tag and 64 hex digits.
           read -r tag sha < <(git log -1 --format=%B FETCH_HEAD | python tools/entry_bot.py read-trailers --plain)
           [ -n "${sha:-}" ] || { echo "The commit's trailers could not be read; see above."; exit 1; }
@@ -259,7 +266,7 @@ jobs:
           cp "$RUNNER_TEMP/release/digest-gw$PLANNED.md" "$RUNNER_TEMP/digest.md"
           git switch --detach FETCH_HEAD
           python tools/check_log_immutable.py --ref origin/main
-          for entry in $(git diff --name-only origin/main...HEAD -- predictions/); do
+          for entry in $(git diff --name-only origin/main...HEAD -- "$LOG_DIR/"); do
             fpl-verify "$entry"
           done
           { echo "tag=$tag"; echo "sha=$sha"; echo "snapshot=$snapshot"; } >> "$GITHUB_OUTPUT"
@@ -277,6 +284,7 @@ jobs:
           TAG: ${{ steps.release.outputs.tag || steps.resume.outputs.tag }}
           SHA: ${{ steps.release.outputs.sha || steps.resume.outputs.sha }}
           RESUMED: ${{ steps.plan.outputs.action == 'resume' }}
+          LOG_DIR: ${{ steps.plan.outputs.log_dir }}
         run: |
           python tools/entry_bot.py before-deadline --deadline "$DEADLINE" --margin-minutes 1
           flags=()
@@ -287,7 +295,7 @@ jobs:
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --digest "$RUNNER_TEMP/digest.md" "${flags[@]}" > "$RUNNER_TEMP/body.md"
           gw=$(printf "%02d" "$PLANNED")
-          models=$(ls predictions/gw${gw}_*.csv | sed -E "s|predictions/gw${gw}_(.*)\.csv|\1|" | paste -sd, - | sed 's/,/, /g')
+          models=$(ls "$LOG_DIR"/gw${gw}_*.csv | sed -E "s|^$LOG_DIR/gw${gw}_(.*)\.csv|\1|" | paste -sd, - | sed 's/,/, /g')
           # A create that times out may still have opened the PR, so each
           # failure checks before trying again.
           for attempt in 1 2 3; do

@@ -261,9 +261,9 @@ nothing can be corrected.
 | Path | What it holds |
 |---|---|
 | `fpl/` | The package: `ingest`, `models`, `log`, `evaluation` (scoring and backtesting), `db`, `api`, and the optimiser |
-| `predictions/` | **The log.** Append-only; never rewritten |
-| `scores/` | Scored results, derived from the log; rewritten whenever scoring changes |
-| `reports/` | Readable digests of each entry, also derived |
+| `predictions/` | **The log**, 2026/27. Append-only; never rewritten. Later seasons go in `predictions-<season>/`, e.g. `predictions-2027-28/` ([ADR 0023](docs/adr/0023-each-season-in-its-own-log-directory.md)) |
+| `scores/` | Scored results, derived from the log; rewritten whenever scoring changes. `scores-<season>/` from 2027/28 |
+| `reports/` | Readable digests of each entry, also derived. `reports-<season>/` from 2027/28 |
 | `data/raw/` | Snapshots, gitignored. `data/raw/LATEST` names the most recent |
 | `scratch/` | Exploratory runs, gitignored. Never a real prediction |
 | `tests/` | The test suite |

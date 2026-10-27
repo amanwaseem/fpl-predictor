@@ -48,7 +48,11 @@ Work out three things and write them down:
 | **Deadline** | GW N's `deadline_time`, UTC — see below |
 | **Model version** | `baseline-v1`; from GW6, `form-fixture-v1`; from GW9, `gbm-v1` — one entry each |
 
-The entry will be written to `predictions/gwNN_<model-version>.csv`.
+The entry will be written to `predictions/gwNN_<model-version>.csv` in
+2026/27, and to `predictions-<season>/` from 2027/28 (`predictions-2027-28/`),
+with its digest in `reports/` or `reports-<season>/`. Every command finds the
+season from the deadline; where this runbook says `predictions/`, read the
+season's directory.
 
 Each model has its own command, and every step below runs once per model:
 
@@ -372,8 +376,9 @@ fpl-predict-baseline --gw N
 fpl-predict-fixture --gw N
 ```
 
-Writes `predictions/gwNN_<model-version>.csv` — the default `--out` is
-`predictions/`, so omitting the flag is what makes it a real entry.
+Writes `predictions/gwNN_<model-version>.csv` (or the season's
+`predictions-<season>/` from 2027/28) — the default `--out` is the log, so
+omitting the flag is what makes it a real entry.
 
 This is the point of no return once committed. `fpl/log/contract.py` refuses to write a
 log entry at or after its own deadline, and refuses to overwrite an existing

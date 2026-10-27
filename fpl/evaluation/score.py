@@ -48,7 +48,16 @@ from fpl.evaluation import metrics
 from fpl.evaluation.xi import best_xi
 from fpl.ingest.snapshot import SNAPSHOT_ID, load_live, load_snapshot
 from fpl.log import roles
-from fpl.log.contract import LOG_DIR_NAME, parse_entry_filename, read_entry
+from fpl.log.contract import (
+    LOG_DIR_NAME,
+    SCORES,
+    parse_entry_filename,
+    parse_timestamp,
+    read_entry,
+    season_directory,
+    season_of_deadline,
+    season_of_directory,
+)
 from fpl.models.feature_table import season_after
 from fpl.models.features import previous_season
 from fpl.paths import require_project_root
@@ -517,30 +526,35 @@ def refuse_log_output(out, log_dir=LOG_DIR_NAME):
 
     Compared against the log directory itself, not by name anywhere in the
     path: a clone living under ~/work/predictions/ must still be able to write
-    its output. The name check catches a second copy of the log reached some
-    other way. Shared by everything that writes derived output.
+    its output. The name check, any season's log name, catches a second copy
+    of the log reached some other way. Shared by everything that writes
+    derived output.
     """
     out, log = Path(out).resolve(), Path(log_dir).resolve()
-    if out == log or out.is_relative_to(log) or out.name == LOG_DIR_NAME:
+    if out == log or out.is_relative_to(log) or season_of_directory(out) is not None:
         raise SystemExit(
             f"Refusing to write into {out}: predictions/ is the append-only "
             "log, and nothing derived is ever written there."
         )
 
 
-def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
-    out = Path(out_dir)
+def main(actuals_id, out_dir=None, log_dir=None):
+    """Score the actuals snapshot's season: its log directory into its scores
+    directory, unless `log_dir` and `out_dir` say otherwise (#72)."""
+    snap, bootstrap, _, _ = load_snapshot(actuals_id)
+    events = bootstrap["events"]
+    settled = settled_gameweeks(events)
+    season = season_after(previous_season(events))
+    log_dir = season_directory(season) if log_dir is None else log_dir
+    out = Path(season_directory(season, SCORES) if out_dir is None else out_dir)
     refuse_log_output(out, log_dir)
 
     entries = find_entries(log_dir)
     if not entries:
         raise SystemExit(f"No entries in {log_dir}/ — nothing to score.")
 
-    snap, bootstrap, _, _ = load_snapshot(actuals_id)
-    events = bootstrap["events"]
-    settled = settled_gameweeks(events)
-
     print(f"actuals:   {snap.name}")
+    print(f"season:    {season}, from {log_dir}/")
     print(f"harness:   {HARNESS_VERSION}")
 
     # Baseline first, so every other model's head-to-head can see it.
@@ -557,6 +571,13 @@ def main(actuals_id, out_dir, log_dir=LOG_DIR_NAME):
         # The comparators and the provenance stamp both take the snapshot from
         # the rows. verify_entry refuses an entry that names two, but the
         # harness does not get to assume it was run.
+        # A season's directory holds that season's entries only.
+        made_for = season_of_deadline(parse_timestamp(rows[0]["deadline_utc"], f"{path}"))
+        if made_for != season:
+            raise SystemExit(
+                f"{path} was made for a {made_for} deadline, and {log_dir}/ holds {season}'s "
+                f"entries. Its directory is {season_directory(made_for)}/."
+            )
         snapshot_ids = sorted({row["snapshot_id"] for row in rows})
         if len(snapshot_ids) != 1:
             raise SystemExit(
@@ -621,7 +642,11 @@ def cli(argv=None):
         help="snapshot holding the actual results (default: LATEST)",
     )
     ap.add_argument(
-        "--out", default="scores", metavar="DIR", help="output directory (default: scores/)"
+        "--out",
+        default=None,
+        metavar="DIR",
+        help="output directory (default: the season's, scores/ for 2026/27 and "
+        "scores-<season>/ after)",
     )
     args = ap.parse_args(argv)
     require_project_root()

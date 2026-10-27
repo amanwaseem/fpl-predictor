@@ -29,3 +29,4 @@ answer.
 | [0020](0020-one-baseline-one-main-model-one-challenger.md) | One baseline, one main model, at most one challenger | Accepted |
 | [0021](0021-observability-with-what-the-project-already-has.md) | Observability with what the project already has | Accepted |
 | [0022](0022-a-multi-gameweek-plan-from-unlogged-predictions.md) | A multi-gameweek plan, from predictions that are not logged | Accepted |
+| [0023](0023-each-season-in-its-own-log-directory.md) | Each season in its own log directory | Accepted |

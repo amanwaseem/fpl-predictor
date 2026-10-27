@@ -141,3 +141,48 @@ class TestImmutabilityChecker(FixtureRepo):
         shutil.rmtree(empty, ignore_errors=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("nothing to protect yet", result.stdout)
+
+
+class TestEverySeason(FixtureRepo):
+    """#72: a later season's directory is the log too."""
+
+    def setUp(self):
+        super().setUp()
+        self.write("predictions-2027-28/gw04_baseline-v1.csv", ENTRY)
+        self.git("add", "-A")
+        self.git("commit", "-qm", "Commit 2027/28's GW4 entry")
+
+    def test_a_later_seasons_entry_is_protected(self):
+        self.write("predictions-2027-28/gw04_baseline-v1.csv", ENTRY.replace("6.30", "9.99"))
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("predictions-2027-28/gw04_baseline-v1.csv: modified", result.stderr)
+
+    def test_both_seasons_gw4_are_counted(self):
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("2 committed entries unchanged", result.stdout)
+
+    def test_a_directory_merely_named_like_the_log_is_not_it(self):
+        self.write("predictions-old/gw04_baseline-v1.csv", ENTRY)
+        self.git("add", "-A")
+        self.git("commit", "-qm", "Not the log")
+        self.write("predictions-old/gw04_baseline-v1.csv", "edited\n")
+        self.assertEqual(self.check().returncode, 0)
+
+    def test_the_tools_pattern_matches_the_contracts_naming(self):
+        sys.path.insert(0, str(TOOL.parent))
+        try:
+            import check_log_immutable
+        finally:
+            sys.path.remove(str(TOOL.parent))
+        from fpl.log.contract import season_directory, season_of_directory
+
+        for season in ("2026/27", "2027/28", "2040/41"):
+            name = str(season_directory(season))
+            self.assertTrue(check_log_immutable.LOG_DIRS.match(name), name)
+        # The tool may protect more than the contract names, never less: a
+        # malformed season name is matched (fails closed), other names are not.
+        for name in ("predictions-old", "predictions-2027", "scores-2027-28"):
+            self.assertIsNone(check_log_immutable.LOG_DIRS.match(name), name)
+            self.assertIsNone(season_of_directory(name), name)

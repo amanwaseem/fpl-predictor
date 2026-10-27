@@ -130,8 +130,13 @@ the target has final results, the run writes nothing and exits non-zero.
 
 ## 5. Prediction log
 
-The core artifact. One CSV per gameweek per model version, in `predictions/`,
-named `gw<NN>_<model_version>.csv`.
+The core artifact. One CSV per gameweek per model version, named
+`gw<NN>_<model_version>.csv`, in its season's directory: `predictions/` for
+2026/27, the season the log began in, and `predictions-<season>/` for each
+later one (`predictions-2027-28/`). Scores and reports follow the same pattern
+(`scores/`, `scores-2027-28/`). An entry's season is read from its own
+`deadline_utc`, and every reader checks it agrees with the directory (#72,
+ADR 0023). Rules 1 and 2 below apply to every season's directory.
 
 | Column | Type | Description |
 |---|---|---|

@@ -37,6 +37,8 @@ from fpl.log.contract import (
     TIMESTAMP,
     parse_entry_filename,
     read_entry,
+    season_of_deadline,
+    season_of_directory,
     validate_rows,
 )
 from fpl.paths import require_project_root
@@ -314,6 +316,14 @@ def _provenance_faults(rows, bootstrap, target_gw, model_version, entry_path):
             f"generated_at_utc {rows[0]['generated_at_utc']} is at or after "
             f"the deadline {deadline} — a prediction made after its deadline "
             "cannot be distinguished from one made knowing the result"
+        )
+
+    # An entry in the log is in its own season's directory (#72).
+    holds = season_of_directory(Path(entry_path).resolve().parent)
+    if deadline_at and holds is not None and holds != season_of_deadline(deadline_at):
+        faults.append(
+            f"the entry is in {Path(entry_path).parent}/, which holds {holds}'s entries, "
+            f"but its deadline {deadline} is {season_of_deadline(deadline_at)}'s"
         )
     return faults
 

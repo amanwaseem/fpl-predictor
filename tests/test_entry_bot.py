@@ -83,6 +83,54 @@ class LogDir(unittest.TestCase):
         return entry_bot.decide(boot, self.log, list(prs), set(branches), NOW, **kwargs)
 
 
+class TestNextSeason(fixtures.TempCwd):
+    """#72: 2027/28's GW9 reads and writes predictions-2027-28/, not predictions/."""
+
+    def setUp(self):
+        super().setUp()
+        self.now = datetime(2027, 10, 30, 23, 0, tzinfo=UTC)
+        deadline = self.now + timedelta(hours=6)
+        self.boot = {
+            "events": [
+                {"id": 8, "deadline_time": "2027-10-23T17:30:00Z", "is_next": False},
+                {"id": 9, "deadline_time": deadline.strftime(STAMP), "is_next": True},
+            ]
+        }
+        # 2026/27's GW9, already in the log.
+        fixtures.write_csv(
+            Path("predictions/gw09_baseline-v1.csv"),
+            [{"gameweek": 9, "player_id": 1, "deadline_utc": "2026-10-31T11:00:00Z"}],
+            fieldnames=["gameweek", "player_id", "deadline_utc"],
+        )
+
+    def decide(self, prs=()):
+        return entry_bot.decide(self.boot, None, list(prs), {"main"}, self.now)
+
+    def test_last_seasons_entry_neither_counts_nor_blocks(self):
+        out = self.decide()
+        self.assertEqual(out["action"], entry_bot.ACT, out["why"])
+        self.assertEqual(out["log_dir"], "predictions-2027-28")
+        self.assertEqual(out["reports_dir"], "reports-2027-28")
+        self.assertEqual(out["branch"], "entry-bot/2027-28-gw09")
+
+    def test_a_pr_adding_last_seasons_directory_is_not_this_seasons_entry(self):
+        out = self.decide([pr(90, "predictions/gw09_gbm-v1.csv")])
+        self.assertEqual(out["action"], entry_bot.ACT, out["why"])
+        out = self.decide([pr(91, "predictions-2027-28/gw09_gbm-v1.csv")])
+        self.assertEqual(out["action"], entry_bot.SKIP)
+        self.assertIn("#91", out["why"])
+
+    def test_the_change_check_takes_the_seasons_directories(self):
+        lines = [
+            "A\tpredictions-2027-28/gw09_gbm-v1.csv",
+            "A\treports-2027-28/gw09_gbm-v1.md",
+        ]
+        self.assertEqual(
+            entry_bot.unexpected_changes(lines, 9, "predictions-2027-28", "reports-2027-28"), []
+        )
+        self.assertTrue(entry_bot.unexpected_changes(lines, 9))
+
+
 class TestWindow(LogDir):
     def test_acts_inside_the_window(self):
         out = self.decide(hours=6)
@@ -359,6 +407,8 @@ class TestDecideCommand(unittest.TestCase):
                 "deadline": "2026-10-31T05:00:00Z",
                 "season": SEASON,
                 "branch": BOT,
+                "log_dir": "predictions",
+                "reports_dir": "reports",
                 "late": "",
             },
         )

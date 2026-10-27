@@ -26,10 +26,17 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from fpl.db.models import PlayerScore, Prediction, PredictionEntry, ScoreEntry, Season
 from fpl.db.session import exits_on_bad_url, make_engine
 from fpl.evaluation.score import SCORE_FIELDS, find_entries
-from fpl.log.contract import LOG_DIR_NAME, parse_entry_filename, parse_timestamp, read_entry
+from fpl.log.contract import (
+    SCORES,
+    parse_entry_filename,
+    parse_timestamp,
+    read_entry,
+    season_directories,
+    season_directory,
+    season_of_deadline,
+)
 from fpl.paths import require_project_root
 
-SCORES_DIR = "scores"
 # Any fixed key will do: it only has to be the same for every fpl-project.
 PROJECT_LOCK = 80
 
@@ -54,12 +61,6 @@ class Log:
         )
 
 
-def season_for(deadline):
-    """'2026/27' for any deadline from July 2026 to June 2027."""
-    start = deadline.year if deadline.month >= 7 else deadline.year - 1
-    return f"{start}/{(start + 1) % 100:02d}"
-
-
 def raw_decimals(path):
     """Each row's decimal columns as written in the file, digit for digit.
 
@@ -73,8 +74,9 @@ def raw_decimals(path):
         ]
 
 
-def read_entries(log_dir):
-    """(entries, predictions) from every file in the log. Unreadable files are fatal."""
+def read_entries(log_dir, season=None):
+    """(entries, predictions) from every file in one season's log. Unreadable files,
+    and an entry made for another season than `season`'s, are fatal."""
     entries, predictions = [], []
     for (gameweek, model_version), path in find_entries(log_dir).items():
         rows, faults = read_entry(path)
@@ -94,7 +96,13 @@ def read_entries(log_dir):
             )
 
         deadline = parse_timestamp(provenance["deadline_utc"], f"{path}: deadline_utc")
-        key = {"season": season_for(deadline), "gameweek": gameweek, "model_version": model_version}
+        made_for = season_of_deadline(deadline)
+        if season is not None and made_for != season:
+            raise SystemExit(
+                f"{path} was made for a {made_for} deadline, in {log_dir}/, which holds "
+                f"{season}'s entries"
+            )
+        key = {"season": made_for, "gameweek": gameweek, "model_version": model_version}
         entries.append(
             key
             | {
@@ -200,9 +208,18 @@ def read_scores(scores_dir, entries, predictions):
     return score_entries, player_scores
 
 
-def read_log(log_dir=LOG_DIR_NAME, scores_dir=SCORES_DIR):
-    entries, predictions = read_entries(log_dir)
-    return Log(entries, predictions, *read_scores(scores_dir, entries, predictions))
+def read_log(root="."):
+    """Every season's log and scores under `root` (fpl.log.contract's season directories)."""
+    entries, predictions, score_entries, player_scores = [], [], [], []
+    for season, log_dir in season_directories(root).items():
+        mine, rows = read_entries(log_dir, season)
+        scores_dir = Path(root) / season_directory(season, SCORES)
+        scored, players = read_scores(scores_dir, mine, rows)
+        entries += mine
+        predictions += rows
+        score_entries += scored
+        player_scores += players
+    return Log(entries, predictions, score_entries, player_scores)
 
 
 def project(engine, log):
