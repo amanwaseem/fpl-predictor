@@ -78,6 +78,7 @@ from check_deadline import (
 
 from fpl.ingest.snapshot import SNAPSHOT_ID, load_snapshot, resolve_target_gw
 from fpl.log.contract import (
+    FIRST_SEASON,
     LOG_DIR_NAME,
     REPORTS,
     TIMESTAMP,
@@ -112,9 +113,15 @@ def bot_branch(season, gameweek):
     return f"entry-bot/{season}-gw{gameweek:02d}"
 
 
-def hand_branch(gameweek):
-    """The branch an entry made by hand goes on (RUNBOOK section 7)."""
-    return f"predict/gw{gameweek:02d}"
+def hand_branch(gameweek, season=None):
+    """The branch an entry made by hand goes on (RUNBOOK section 7).
+
+    predict/gwNN in 2026/27, as the runbook has always said; predict/<season>-gwNN
+    after (#72), since branches are never deleted and last season's would clash.
+    """
+    if season is None or season == FIRST_SEASON.replace("/", "-"):
+        return f"predict/gw{gameweek:02d}"
+    return f"predict/{season}-gw{gameweek:02d}"
 
 
 def _prs_from(branch, prs):
@@ -130,15 +137,19 @@ def late_prs(bootstrap, prs, now):
         gameweeks = set()
         for f in pr.get("files", []):
             path = Path(f["path"])
-            # Any season's log directory, at the top of the repository.
+            # Any season's log directory, at the top of the repository; kept
+            # with the directory, so a gameweek is only late against its own
+            # season's deadline.
             if len(path.parts) != 2 or season_of_directory(path.parent) is None:
                 continue
             try:
-                gameweeks.add(parse_entry_filename(path.name)[0])
+                gameweeks.add((parse_entry_filename(path.name)[0], path.parent))
             except ValueError:
                 continue
-        for gw in sorted(gameweeks):
+        for gw, directory in sorted(gameweeks):
             deadline = deadline_of(bootstrap, gw)
+            if deadline is not None and log_dir_for(deadline) != directory:
+                continue
             if deadline is not None and deadline <= now:
                 late.append((pr["number"], gw))
                 break
@@ -249,7 +260,7 @@ def decide(
             "did not open it. Opening it from that branch.",
         )
 
-    hand = hand_branch(gameweek)
+    hand = hand_branch(gameweek, season)
     if hand in branches and not _prs_from(hand, prs):
         return result(
             FAIL,

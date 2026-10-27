@@ -210,8 +210,15 @@ def read_scores(scores_dir, entries, predictions):
 
 def read_log(root="."):
     """Every season's log and scores under `root` (fpl.log.contract's season directories)."""
+    logs = season_directories(root)
+    orphans = sorted(set(season_directories(root, SCORES)) - set(logs))
+    if orphans:
+        raise SystemExit(
+            "Scores with no log beside them: "
+            + ", ".join(str(season_directory(season, SCORES)) for season in orphans)
+        )
     entries, predictions, score_entries, player_scores = [], [], [], []
-    for season, log_dir in season_directories(root).items():
+    for season, log_dir in logs.items():
         mine, rows = read_entries(log_dir, season)
         scores_dir = Path(root) / season_directory(season, SCORES)
         scored, players = read_scores(scores_dir, mine, rows)

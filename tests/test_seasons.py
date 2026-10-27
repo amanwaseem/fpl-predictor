@@ -115,6 +115,13 @@ class TestWriting(fixtures.TempCwd):
         path = write_entry(self.rows, None, 4, "baseline-v1", NEXT_PREDICTED_AT, NEXT_DEADLINE)
         self.assertEqual(path, Path("predictions-2027-28/gw04_baseline-v1.csv"))
 
+    def test_a_deadline_before_the_log_has_no_log_to_go_to(self):
+        with self.assertRaises(SystemExit) as raised:
+            write_entry(
+                self.rows, None, 4, "baseline-v1", NEXT_PREDICTED_AT, "2025-09-13T10:00:00Z"
+            )
+        self.assertIn("before the log began", str(raised.exception.code))
+
     def test_another_seasons_directory_is_refused(self):
         with self.assertRaises(SystemExit) as raised:
             write_entry(
@@ -164,6 +171,26 @@ class TestTwoSeasonsSideBySide(ScoringCase):
         )
         self.assertEqual(sorted(s["season"] for s in log.score_entries), ["2026/27", "2027/28"])
         self.assertEqual(list(season_directories()), ["2026/27", "2027/28"])
+
+    def test_a_wrong_seasons_entry_is_refused_even_before_it_settles(self):
+        # GW6 has not settled in 2027/28's actuals: still refused, not pending.
+        Path("predictions-2027-28/gw06_baseline-v1.csv").write_text(
+            Path("predictions/gw04_baseline-v1.csv").read_text().replace("\n4,", "\n6,")
+        )
+        with self.assertRaises(SystemExit) as raised, contextlib.redirect_stdout(io.StringIO()):
+            score.main(NEXT_ACTUALS_AT)
+        self.assertIn("2026/27", str(raised.exception.code))
+
+    def test_scores_with_no_log_beside_them_are_refused(self):
+        Path("scores-2028-29").mkdir()
+        with self.assertRaises(SystemExit) as raised:
+            read_log()
+        self.assertIn("scores-2028-29", str(raised.exception.code))
+
+    def test_out_into_the_log_is_refused_before_a_snapshot_is_read(self):
+        with self.assertRaises(SystemExit) as raised:
+            score.main("20990101T000000Z", "predictions-2027-28")
+        self.assertIn("Refusing to write", str(raised.exception.code))
 
     def test_an_entry_in_the_wrong_seasons_directory_is_refused(self):
         # 2026/27's GW4, as another model, among 2027/28's entries.

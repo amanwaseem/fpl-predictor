@@ -49,6 +49,7 @@ from fpl.evaluation.xi import best_xi
 from fpl.ingest.snapshot import SNAPSHOT_ID, load_live, load_snapshot
 from fpl.log import roles
 from fpl.log.contract import (
+    FIRST_SEASON,
     LOG_DIR_NAME,
     SCORES,
     parse_entry_filename,
@@ -541,6 +542,10 @@ def refuse_log_output(out, log_dir=LOG_DIR_NAME):
 def main(actuals_id, out_dir=None, log_dir=None):
     """Score the actuals snapshot's season: its log directory into its scores
     directory, unless `log_dir` and `out_dir` say otherwise (#72)."""
+    # A given --out is refused before anything else is read, so the guard on
+    # the log never waits on a snapshot.
+    if out_dir is not None:
+        refuse_log_output(out_dir, LOG_DIR_NAME if log_dir is None else log_dir)
     snap, bootstrap, _, _ = load_snapshot(actuals_id)
     events = bootstrap["events"]
     settled = settled_gameweeks(events)
@@ -552,6 +557,22 @@ def main(actuals_id, out_dir=None, log_dir=None):
     entries = find_entries(log_dir)
     if not entries:
         raise SystemExit(f"No entries in {log_dir}/ — nothing to score.")
+    # A season's directory holds that season's entries only, settled or not.
+    for path in entries.values():
+        rows, faults = read_entry(path)
+        if faults or not rows:
+            continue  # reported below, once the entry is scored
+        made_for = season_of_deadline(parse_timestamp(rows[0]["deadline_utc"], f"{path}"))
+        if made_for != season:
+            raise SystemExit(
+                f"{path} was made for a {made_for} deadline, and {log_dir}/ holds {season}'s "
+                f"entries."
+                + (
+                    f" Its directory is {season_directory(made_for)}/."
+                    if made_for >= FIRST_SEASON
+                    else ""
+                )
+            )
 
     print(f"actuals:   {snap.name}")
     print(f"season:    {season}, from {log_dir}/")
@@ -571,13 +592,6 @@ def main(actuals_id, out_dir=None, log_dir=None):
         # The comparators and the provenance stamp both take the snapshot from
         # the rows. verify_entry refuses an entry that names two, but the
         # harness does not get to assume it was run.
-        # A season's directory holds that season's entries only.
-        made_for = season_of_deadline(parse_timestamp(rows[0]["deadline_utc"], f"{path}"))
-        if made_for != season:
-            raise SystemExit(
-                f"{path} was made for a {made_for} deadline, and {log_dir}/ holds {season}'s "
-                f"entries. Its directory is {season_directory(made_for)}/."
-            )
         snapshot_ids = sorted({row["snapshot_id"] for row in rows})
         if len(snapshot_ids) != 1:
             raise SystemExit(

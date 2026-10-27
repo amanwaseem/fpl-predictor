@@ -120,6 +120,23 @@ class TestNextSeason(fixtures.TempCwd):
         self.assertEqual(out["action"], entry_bot.SKIP)
         self.assertIn("#91", out["why"])
 
+    def test_a_hand_branch_carries_the_season_after_the_first(self):
+        self.assertEqual(entry_bot.hand_branch(9, "2026-27"), "predict/gw09")
+        self.assertEqual(entry_bot.hand_branch(9, "2027-28"), "predict/2027-28-gw09")
+        # Last season's predict/gw09, never deleted, is not this season's hand entry.
+        out = entry_bot.decide(self.boot, None, [], {"main", "predict/gw09"}, self.now)
+        self.assertEqual(out["action"], entry_bot.ACT, out["why"])
+
+    def test_a_pr_is_late_only_against_its_own_seasons_deadline(self):
+        after = self.now + timedelta(hours=7)
+        self.assertEqual(
+            entry_bot.late_prs(self.boot, [pr(92, "predictions/gw09_gbm-v1.csv")], after), []
+        )
+        self.assertEqual(
+            entry_bot.late_prs(self.boot, [pr(93, "predictions-2027-28/gw09_gbm-v1.csv")], after),
+            [(93, 9)],
+        )
+
     def test_the_change_check_takes_the_seasons_directories(self):
         lines = [
             "A\tpredictions-2027-28/gw09_gbm-v1.csv",
