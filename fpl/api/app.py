@@ -108,10 +108,6 @@ def create_app(engine=None):
     app.middleware("http")(http_caching)
     # Outermost, so its line covers the whole request, caching included.
     app.middleware("http")(observability.request_logging)
-    # Once per process, however the app is started; fpl-serve also formats the
-    # logs, which reach the whole process and so are not set up here.
-    observability.configure_sentry()
-    observability.configure_telemetry(app)
     app.openapi = openapi_with_problems(app)
     return app
 

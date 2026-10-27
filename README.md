@@ -129,9 +129,8 @@ two models apart; the cumulative record is `scores/cumulative.json`.
   from a pinned archive by `fpl-backfill` and checked against pinned counts (ADR 0018)
 - A feature table: one row per player per gameweek, from data before its deadline, for all ten
   past seasons and this one (`fpl-features`), leak-tested by corrupting everything after the cut
-- Operations: JSON logs with request ids, Sentry and OpenTelemetry when configured, `/v1/status`
-  for data freshness, an hourly uptime and freshness check, and SLOs with an incident runbook
-  ([`docs/operations.md`](docs/operations.md))
+- Operations: JSON logs with request ids, `/v1/status` for data freshness, an hourly uptime and
+  freshness check, and SLOs with an incident runbook ([`docs/operations.md`](docs/operations.md))
 - "Optimise my team" on the API: `POST /v1/optimise` for a squad sent in, and
   `GET /v1/entries/{id}/advice`, which reads an FPL team's squad from the FPL API first
 
