@@ -4,8 +4,8 @@
 # 12 hours away or less, with nothing for that gameweek on main or in an open
 # PR, it snapshots, runs fpl-entry, uploads the snapshot as a release asset and
 # opens the PR with auto-merge on, so it merges itself once `ci` is green
-# (#119, ADR 0024): GW9 was missed with a correct entry in an open PR that
-# nobody merged. A human can still read it, and closing it is the veto. Every
+# (#119, ADR 0024): GW9's correct entry sat in an open PR that nobody merged
+# before the deadline, and was only accepted afterwards (ADR 0026). A human can still read it, and closing it is the veto. Every
 # decision and check is in tools/entry_bot.py, where it is tested. `ci`
 # refuses a new entry minutes from its deadline or past it, so a late green
 # cannot merge a late entry. Every acting run re-arms auto-merge on the open
