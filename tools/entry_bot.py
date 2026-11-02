@@ -470,7 +470,7 @@ def pr_body(gameweek, deadline, snapshot_id, tag, sha, release_url, run_url, dig
     lines = [
         f"Made by the entry workflow (#68). **Merges itself once `ci` is green, "
         f"before `{deadline}`** (ADR 0024). Close it to stop it; the gameweek is "
-        "then made by hand. `ci` refuses this entry from 30 minutes before the deadline.",
+        "then made by hand. `ci` refuses this entry once its deadline is minutes away.",
         "",
         f"- snapshot: `{snapshot_id}`, release asset [`{tag}`]({release_url}), SHA-256 `{sha}`",
         f"- run: {run_url}",

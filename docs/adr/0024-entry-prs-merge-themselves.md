@@ -1,7 +1,7 @@
 # 0024. Entry PRs merge themselves once ci is green
 
 - **Status:** Accepted
-- **Date:** 2026-11-02
+- **Date:** 2026-11-01
 - **Issues:** #119, #118, #117, #68
 
 ## Context
@@ -23,13 +23,16 @@ against its snapshot and its deadline. `ci` gates the rest.
 - **The entry workflow turns on auto-merge** (rebase) when it opens its PR,
   with `ENTRY_BOT_TOKEN`, so the merge triggers the deploy like any other.
   The PR merges itself the moment `ci` is green.
-- **`ci` refuses a late entry.** On a PR, `tools/check_log_immutable.py
-  --new-before-deadline 30` fails when a new entry's own `deadline_utc` is 30
-  minutes away or less, or past. A green `ci` therefore means the entry is
-  on time. A re-run or a slow queue after the deadline stays red and cannot
-  merge a late entry. The 30 minutes covers the rest of the run.
-- **The late-entry guard turns auto-merge off** on any open PR for a past
-  deadline before it comments.
+- **`ci` refuses a late entry.** On a PR, the last step of the `ci` job runs
+  `tools/check_log_immutable.py --on-time`. It fails when a new entry's
+  `deadline_utc` is under `MERGE_MARGIN` (five minutes) away, past, or not
+  one readable value on every row. The step sits in the gate job, not an
+  earlier one, because that job runs last and runs again whenever any job is
+  re-run. A pass therefore comes seconds before the merge, and an earlier
+  pass cannot carry a late entry through "Re-run failed jobs".
+- **Every acting run arms auto-merge** on open entry PRs that are not late,
+  so one failure to arm is retried an hour later and not left as GW9 was.
+  The late-entry guard turns auto-merge off on a PR for a past deadline.
 - **Closing the PR is the veto.** A person can still read it. If something is
   wrong, closing it before `ci` goes green stops the merge, and the gameweek
   goes back to the hand runbook.
@@ -40,8 +43,8 @@ against its snapshot and its deadline. `ci` gates the rest.
   making it; now it is true of committing it.
 - A red `ci` still blocks the entry, so tests must not depend on the newest
   log files (#118). A flaky test on an entry PR is a missed gameweek.
-- Hand-made entries get the same guard: a PR opened in the last half hour
-  cannot go green. The runbook's own margin is hours, not minutes.
+- Hand-made entries get the same guard, but the margin is short enough
+  that the runbook's last-quarter-hour fallback can still merge.
 
 ## Revisit if
 
