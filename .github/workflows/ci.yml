@@ -199,12 +199,67 @@ jobs:
           uid=$(docker run --rm fpl-api:ci id -u)
           [ "$uid" != "0" ] || { echo "the image runs as root"; exit 1; }
 
+  # The web frontend (#121): its API types are current with docs/openapi.json,
+  # it typechecks and builds, and Playwright drives it in a browser, served
+  # by fpl-serve over the projected log as the deploy serves it (ADR 0025).
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: fpl
+          POSTGRES_PASSWORD: fpl
+          POSTGRES_DB: fpl
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fpl -d fpl"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql+psycopg://fpl:fpl@localhost:5432/fpl
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/uv
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: The API types are current with docs/openapi.json
+        run: |
+          npm run gen:api
+          git diff --exit-code src/api/schema.d.ts \
+            || { echo "Stale: run 'npm run gen:api' in web/ and commit src/api/schema.d.ts."; exit 1; }
+      - run: npm run build
+      - name: The committed log, projected
+        run: |
+          alembic upgrade head
+          fpl-project
+        working-directory: .
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke tests against fpl-serve serving the build
+        env:
+          FPL_WEB_DIR: web/dist
+        working-directory: .
+        run: |
+          fpl-serve --port 8000 > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:8000/readyz > /dev/null && break; sleep 1; done
+          (cd web && CI=1 npm run e2e) || { echo "--- API log ---"; cat api.log; exit 1; }
+
   # The one required check. `always()` makes it run, and fail, when a job it
   # needs failed or was cancelled — without it a failed dependency would skip
   # this job, and a skipped required check counts as passing.
   ci:
     if: always()
-    needs: [lint, test, log-immutable, db, image]
+    needs: [lint, test, log-immutable, db, image, web]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

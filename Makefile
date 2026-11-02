@@ -7,7 +7,9 @@
 #   make seed           # load data/raw/LATEST and the committed log into it
 #   make reconcile      # check the database's copy of the log against git
 #   make test-db        # the database tests, against fpl_test
-#   make serve          # the API at http://127.0.0.1:8000/docs, from the checkout
+#   make serve          # the API at http://127.0.0.1:8000/docs, from the checkout,
+#                       # and the site at / once `make web` has built it
+#   make web            # build the web frontend into web/dist (needs Node 24)
 #   make openapi        # regenerate docs/openapi.json after changing the API
 #   make fuzz           # schemathesis against a running `make serve`
 
@@ -17,7 +19,7 @@ TEST_DATABASE_URL ?= postgresql+psycopg://fpl:fpl@localhost:$(FPL_DB_PORT)/fpl_t
 export FPL_DB_PORT DATABASE_URL
 RUN := uv run --locked
 
-.PHONY: up down migrate seed reconcile serve openapi fuzz lint test test-db psql
+.PHONY: up down migrate seed reconcile serve web openapi fuzz lint test test-db psql
 
 up:
 	docker compose up -d --wait db
@@ -36,7 +38,10 @@ reconcile:
 	$(RUN) fpl-reconcile
 
 serve:
-	$(RUN) fpl-serve --reload
+	$(if $(wildcard web/dist/index.html),FPL_WEB_DIR=web/dist) $(RUN) fpl-serve --reload
+
+web:
+	cd web && npm ci && npm run build
 
 openapi:
 	$(RUN) python tools/export_openapi.py

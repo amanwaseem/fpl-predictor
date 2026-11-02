@@ -261,6 +261,7 @@ nothing can be corrected.
 | Path | What it holds |
 |---|---|
 | `fpl/` | The package: `ingest`, `models`, `log`, `evaluation` (scoring and backtesting), `db`, `api`, and the optimiser |
+| `web/` | The web frontend: Vite, React and TypeScript, served by the API at `/` ([ADR 0025](docs/adr/0025-the-frontend-is-served-by-the-api.md)) |
 | `predictions/` | **The log**, 2026/27. Append-only; never rewritten. Later seasons go in `predictions-<season>/`, e.g. `predictions-2027-28/` ([ADR 0023](docs/adr/0023-each-season-in-its-own-log-directory.md)) |
 | `scores/` | Scored results, derived from the log; rewritten whenever scoring changes. `scores-<season>/` from 2027/28 |
 | `reports/` | Readable digests of each entry, also derived. `reports-<season>/` from 2027/28 |
@@ -357,6 +358,20 @@ one-time setup is in [`docs/deploy.md`](docs/deploy.md).
 The contract is [`docs/openapi.json`](docs/openapi.json), committed and checked against the code
 by the tests: regenerate it with `make openapi` after changing a route. CI serves the API over the
 projected log and fuzzes it from that document with [schemathesis](https://schemathesis.io).
+
+### Web frontend
+
+`web/` is a React and TypeScript site over the API, built into `web/dist` and served by the API
+at `/` from the same image ([ADR 0025](docs/adr/0025-the-frontend-is-served-by-the-api.md)). It
+needs Node 24:
+
+```bash
+make web                         # npm ci and build into web/dist
+make serve                       # the API, and the site at / once built
+cd web && npm run dev            # or Vite's dev server, proxying /v1 to `make serve`
+cd web && npm run gen:api        # after `make openapi`: regenerate the typed client
+cd web && npm run e2e            # Playwright against BASE_URL (default 127.0.0.1:8000)
+```
 
 ### Migrations
 
