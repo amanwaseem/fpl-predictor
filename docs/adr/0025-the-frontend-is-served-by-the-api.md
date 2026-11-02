@@ -19,10 +19,13 @@ The API already runs on Fly from one image, deployed on every green `main`.
 - **One image, one origin.** `web/` (Vite, React, TypeScript) is built in a
   stage of the API's Dockerfile, and its static files are copied into the
   image. `fpl.api.site` serves them at `/` from `FPL_WEB_DIR`.
-- **The API keeps every path it owns.** `/v1`, `/docs`, `/openapi.json`,
-  `/healthz` and `/readyz` answer as before, 404 problems included. Any
-  other GET is a file of the build or a client-side route, which gets
-  `index.html`. The catch-all is not in the OpenAPI document.
+- **The API's routing is untouched.** Assets are a static mount at
+  `/assets`. Pages come from the 404 handler: a GET or HEAD that no route
+  matched, outside `/v1` and `/assets`, gets a file at the top of the build
+  or `index.html`, so a client-side route's deep link works. Under `/v1` a
+  miss is the API's 404 problem, and other methods, statuses and
+  trailing-slash redirects are as they were. Nothing is added to the OpenAPI
+  document, and there is no list of the API's paths to keep up to date.
 - **Typed from the contract.** The client's types are generated from
   `docs/openapi.json`, and CI fails when they are stale, so an API change the
   site does not follow is a type error.

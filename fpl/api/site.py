@@ -5,19 +5,23 @@ content-hashed files under `assets/`. FPL_WEB_DIR names that directory; the
 Docker image sets it, and without it the API serves no site, as before, so
 the tests and the CLIs never need Node.
 
-Every path the API owns keeps its own answer, a 404 problem included. Any
-other GET is either a file in the build or one of the site's client-side
-routes, which gets `index.html` so that a deep link or a reload works.
+The API's routing is left exactly as it is: its 404s, 405s and trailing-slash
+redirects. The site only answers a GET or HEAD that no route matched, from
+the 404 handler: a file at the top of the build, or else `index.html`, so
+that a client-side route's deep link or reload works. Under /v1 a miss stays
+the API's 404 problem, and under assets/ a stale page's old asset stays a 404.
 """
 
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 
-# Paths the API owns. A miss under these is the API's 404, never index.html.
-API_PATHS = ("v1", "docs", "openapi.json", "healthz", "readyz")
+from fpl.api import problems
+
 # Vite names files under assets/ by their content, so they can be kept for good.
 IMMUTABLE = "public, max-age=31536000, immutable"
 # index.html names the current assets, so it is re-checked on every load.
@@ -25,34 +29,50 @@ REVALIDATE = "no-cache"
 
 
 def directory():
-    """The built site's directory from FPL_WEB_DIR, or None when there is none."""
+    """The built site's directory from FPL_WEB_DIR, or None when it is unset."""
     value = os.environ.get("FPL_WEB_DIR")
     if not value:
         return None
     path = Path(value).resolve()
     if not (path / "index.html").is_file():
-        raise SystemExit(f"FPL_WEB_DIR={value} has no index.html. Build it with: npm run build")
+        raise SystemExit(f"FPL_WEB_DIR={value} has no index.html. Build it with: make web")
     return path
 
 
-def install(app: FastAPI, root: Path):
-    """Serve the site in `root` for every GET the API's own routes do not take.
+class Assets(StaticFiles):
+    """The build's assets/, each cached for good."""
 
-    Registered after them, so it only sees what they did not match.
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = IMMUTABLE
+        return response
+
+
+def install(app: FastAPI, root: Path):
+    """Serve the site in `root`: its assets, and its pages from the 404 handler.
+
+    Call after problems.install, whose HTTP error handler this one wraps.
     """
     # Resolved, so the containment check below compares like with like.
     root = root.resolve()
     index = root / "index.html"
+    app.mount("/assets", Assets(directory=root / "assets", check_dir=False), name="assets")
 
-    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
-    def site(path: str):
-        if path.split("/", 1)[0] in API_PATHS:
-            raise HTTPException(404, "Not Found")
-        file = (root / path).resolve()
-        if path and file.is_file() and file.is_relative_to(root):
-            cache = IMMUTABLE if path.startswith("assets/") else REVALIDATE
-            return FileResponse(file, headers={"Cache-Control": cache})
-        if path.startswith("assets/"):
-            # A stale page asking for an asset from an older build.
-            raise HTTPException(404, "Not Found")
-        return FileResponse(index, headers={"Cache-Control": REVALIDATE})
+    async def not_found(request: Request, exc: HTTPException):
+        path = request.url.path
+        if (
+            exc.status_code != 404
+            or request.method not in ("GET", "HEAD")
+            or path == "/v1"
+            or path.startswith(("/v1/", "/assets/"))
+        ):
+            return await problems.http_error(request, exc)
+        try:
+            file = (root / path.lstrip("/")).resolve()
+            top_level = file.parent == root and file.is_file()
+        except (OSError, ValueError):  # a NUL byte, say: not a file of the build
+            top_level = False
+        page = file if top_level else index
+        return FileResponse(page, headers={"Cache-Control": REVALIDATE})
+
+    app.add_exception_handler(HTTPException, not_found)  # type: ignore[arg-type]

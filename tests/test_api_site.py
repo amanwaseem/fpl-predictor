@@ -72,16 +72,35 @@ class TestWithASite(SiteCase):
         self.assertEqual(response.headers["cache-control"], site.IMMUTABLE)
 
     def test_a_missing_asset_is_a_404_not_the_page(self):
-        self.assertProblem404(self.client.get("/assets/index-old.js"))
+        response = self.client.get("/assets/index-old.js")
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn(INDEX, response.text)
 
     def test_other_files_in_the_build_are_served(self):
         response = self.client.get("/favicon.svg")
         self.assertEqual(response.text, "<svg/>")
 
     def test_the_api_keeps_its_own_404s(self):
-        for path in ("/v1/nothing-here", "/v1", "/healthz/x", "/docs/x"):
+        for path in ("/v1/nothing-here", "/v1", "/v1/players/x/y"):
             with self.subTest(path=path):
                 self.assertProblem404(self.client.get(path))
+
+    def test_routing_is_as_it_is_without_the_site(self):
+        """Other methods, other statuses and trailing-slash redirects are untouched."""
+        bare = TestClient(create_app(self.engine), raise_server_exceptions=False)
+        for method, path in (
+            ("POST", "/v1/nothing"),
+            ("POST", "/v1/optimise/x"),
+            ("OPTIONS", "/"),
+            ("DELETE", "/healthz"),
+            ("GET", "/healthz/"),
+            ("GET", "/docs/"),
+        ):
+            with self.subTest(method=method, path=path):
+                got = self.client.request(method, path, follow_redirects=False)
+                want = bare.request(method, path, follow_redirects=False)
+                self.assertEqual(got.status_code, want.status_code)
+                self.assertEqual(got.headers.get("location"), want.headers.get("location"))
 
     def test_the_api_and_its_docs_still_answer(self):
         self.assertEqual(self.client.get("/healthz").json(), {"status": "ok"})
@@ -92,12 +111,24 @@ class TestWithASite(SiteCase):
         self.assertFalse([p for p in paths if not p.startswith(("/v1", "/healthz", "/readyz"))])
 
     def test_nothing_outside_the_build_is_served(self):
-        for path in ("/..%2F..%2Fetc%2Fpasswd", "/%2e%2e/%2e%2e/etc/passwd"):
+        for path in (
+            "/..%2F..%2Fetc%2Fpasswd",
+            "/%2e%2e/%2e%2e/etc/passwd",
+            "/assets/../index.html",
+        ):
             with self.subTest(path=path):
                 self.assertNotIn("root:", self.client.get(path).text)
 
+    def test_a_nul_byte_gets_the_page_not_a_500(self):
+        self.assertIndex(self.client.get("/%00"))
+
+    def test_a_head_request_gets_the_page(self):
+        self.assertEqual(self.client.head("/gameweeks/9").status_code, 200)
+
 
 class TestWithoutASite(SiteCase):
+    """create_app() without `web` has no site, whatever FPL_WEB_DIR says."""
+
     def test_the_root_is_a_404_as_before(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 404)
@@ -114,5 +145,5 @@ class TestTheDirectory(unittest.TestCase):
         with mock.patch.dict(os.environ, {"FPL_WEB_DIR": empty}):
             with self.assertRaises(SystemExit) as raised:
                 site.directory()
-        self.assertIn("npm run build", str(raised.exception))
+        self.assertIn("make web", str(raised.exception))
         shutil.rmtree(empty)
