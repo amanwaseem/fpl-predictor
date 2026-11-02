@@ -413,7 +413,13 @@ class TestTheCommittedScorecard(APICase):
         project(self.engine, log)
 
         served = {m["model_version"]: m for m in self.get("/v1/scorecard")["models"]}
-        self.assertEqual(set(served), set(cumulative["models"]))
+        # A model's first entry is served as soon as it is committed, but
+        # cumulative.json only learns of it at scoring: on an entry PR it is
+        # served with nothing scored and is not in the file yet (#118).
+        self.assertLessEqual(set(cumulative["models"]), set(served))
+        for model in set(served) - set(cumulative["models"]):
+            with self.subTest(unscored=model):
+                self.assertEqual(served[model]["gameweeks_scored"], [])
         for model, expected in cumulative["models"].items():
             with self.subTest(model=model):
                 got = served[model]
