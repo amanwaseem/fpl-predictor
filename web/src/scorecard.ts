@@ -1,13 +1,13 @@
 // The scorecard's arithmetic, kept out of the page so it can be read on its own.
 import type { Schemas } from "./api/client";
+import { signed } from "./format";
 
 // A difference from the baseline, as shown: to three places, and a tie when it
 // rounds to zero, so a tie is never shown as a win.
 export function judged(difference: number) {
   const rounded = Number(difference.toFixed(3));
-  const text = `${rounded > 0 ? "+" : rounded < 0 ? "−" : "±"}${Math.abs(rounded).toFixed(3)}`;
   const verdict = rounded < 0 ? "better" : rounded > 0 ? "worse" : "tie";
-  return { text, verdict };
+  return { text: signed(difference), verdict };
 }
 
 export type Model = Schemas["ScorecardModel"];

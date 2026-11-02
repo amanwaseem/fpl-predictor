@@ -2,13 +2,22 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
 import { Problem } from "../components/Problem";
-import { formatUtc } from "../format";
+import { fixed, formatUtc, positiveInt, signed } from "../format";
 import { entryHistoryUrl } from "../log";
+import { NotFound } from "./NotFound";
 
 type Row = Schemas["Prediction"];
 type SortKey = "predicted_points" | "actual_points" | "error" | "price" | "expected_minutes" | "web_name";
 
 const POSITIONS = ["GKP", "DEF", "MID", "FWD"] as const;
+// FPL's availability codes; "a", available, is shown as nothing.
+const STATUS: Record<string, string> = {
+  d: "doubtful",
+  i: "injured",
+  s: "suspended",
+  u: "unavailable",
+  n: "not in the squad",
+};
 // An entry covers every player in the game, about 700; one page holds them all.
 const ENTRY_LIMIT = 1000;
 
@@ -43,14 +52,21 @@ export function LatestGameweek() {
 }
 
 export function Gameweek() {
-  const gameweek = Number(useParams().gameweek);
+  const gameweek = positiveInt(useParams().gameweek);
+  return gameweek === null ? <NotFound /> : <Entry gameweek={gameweek} />;
+}
+
+function Entry({ gameweek }: { gameweek: number }) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const models = useModels();
 
   const logged = (models.data?.models ?? []).filter((m) => m.gameweeks_logged.includes(gameweek));
   const preferred = logged.find((m) => m.role === "main") ?? logged[0];
-  const model = params.get("model") ?? preferred?.model_version;
+  // A ?model= with no entry this gameweek falls back, so the select shows
+  // the model whose entry is on screen.
+  const asked = logged.find((m) => m.model_version === params.get("model"));
+  const model = (asked ?? preferred)?.model_version;
   const allGameweeks = [
     ...new Set((models.data?.models ?? []).flatMap((m) => m.gameweeks_logged)),
   ].sort((a, b) => a - b);
@@ -87,9 +103,15 @@ export function Gameweek() {
       const x = sortValue(a, sort);
       const y = sortValue(b, sort);
       // Unknowns (not yet scored) last, whichever way round.
-      if (x === null || y === null) return x === null ? (y === null ? 0 : 1) : -1;
-      const order = x < y ? -1 : x > y ? 1 : a.player_id - b.player_id;
-      return ascending ? order : -order;
+      if (x === null || y === null) {
+        if (x !== y) return x === null ? 1 : -1;
+      } else {
+        const order =
+          typeof x === "string" && typeof y === "string" ? x.localeCompare(y) : x < y ? -1 : x > y ? 1 : 0;
+        if (order) return ascending ? order : -order;
+      }
+      // Ties by player id, as the log orders them, whichever way round.
+      return a.player_id - b.player_id;
     });
   const teams = [...new Set((entry.data?.items ?? []).map((r) => r.team))].sort();
   const scored = entry.data?.items.some((r) => r.actual_points !== null);
@@ -107,6 +129,7 @@ export function Gameweek() {
   return (
     <section>
       <h1>Gameweek {gameweek} predictions</h1>
+      {models.isPending && <p aria-busy="true">Loading…</p>}
       {models.isError && <Problem error={models.error} />}
       {models.data && !logged.length && <p>No model has an entry for gameweek {gameweek}.</p>}
 
@@ -184,6 +207,12 @@ export function Gameweek() {
             {scored ? "Error is predicted minus actual." : "Not scored yet."} {rows.length} of{" "}
             {entry.data.items.length} players.
           </p>
+          {entry.data.next_cursor && (
+            <p role="alert" className="problem">
+              This entry has more than {ENTRY_LIMIT} players, and only the first {ENTRY_LIMIT} by
+              predicted points are shown.
+            </p>
+          )}
           <div className="table-scroll">
             <table aria-label="Predictions">
               <thead>
@@ -205,15 +234,15 @@ export function Gameweek() {
                     <tr key={r.player_id}>
                       <th scope="row">
                         <Link to={`/players/${r.player_id}`}>{r.web_name}</Link>
-                        {r.status !== "a" && <span className="flag"> {r.status}</span>}
+                        {STATUS[r.status] && <span className="flag"> {STATUS[r.status]}</span>}
                       </th>
                       <td>{r.team}</td>
                       <td>{r.position}</td>
                       <td className="num">£{r.price.toFixed(1)}m</td>
                       <td className="num">{r.expected_minutes.toFixed(0)}</td>
-                      <td className="num">{r.predicted_points.toFixed(2)}</td>
+                      <td className="num">{fixed(r.predicted_points, 2)}</td>
                       <td className="num">{r.actual_points ?? "–"}</td>
-                      <td className="num">{e === null ? "–" : (e > 0 ? "+" : "") + e.toFixed(2)}</td>
+                      <td className="num">{e === null ? "–" : signed(e, 2)}</td>
                     </tr>
                   );
                 })}

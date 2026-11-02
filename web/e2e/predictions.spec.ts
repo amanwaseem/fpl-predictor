@@ -57,3 +57,16 @@ test("an unknown player is the API's problem, worded as the API words it", async
   await page.goto("/players/9999");
   await expect(page.getByRole("alert")).toContainText("No player 9999");
 });
+
+test("a gameweek or player that is not a number is not found, without asking the API", async ({ page }) => {
+  for (const path of ["/gameweeks/abc?model=baseline-v1", "/players/abc"]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: "Not found" })).toBeVisible();
+  }
+});
+
+test("a model with no entry that gameweek falls back to one that has", async ({ page }) => {
+  await page.goto("/gameweeks/4?model=form-fixture-v1");
+  await expect(page.getByLabel("Model")).toHaveValue("baseline-v1");
+  await expect(page.getByRole("table", { name: "Predictions" })).toBeVisible();
+});
