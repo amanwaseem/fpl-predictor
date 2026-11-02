@@ -1,11 +1,11 @@
 import type { Schemas } from "../api/client";
+import { POSITIONS } from "../api/queries";
 import { fixed } from "../format";
 import { Link } from "react-router-dom";
 
 type Squad = Schemas["Squad"];
 type Pick = Schemas["Pick"];
 
-const POSITIONS = ["GKP", "DEF", "MID", "FWD"];
 
 // A squad as the optimiser chose it: the XI by position with the captain and
 // vice-captain marked, then the bench in order.
@@ -28,9 +28,8 @@ export function SquadView({ squad, label }: { squad: Squad; label: string }) {
       <td className="num">{fixed(p.predicted_points, 2)}</td>
     </tr>
   );
-  const xi = [...squad.xi].sort(
-    (a, b) => POSITIONS.indexOf(a.position) - POSITIONS.indexOf(b.position),
-  );
+  const order = (p: Pick) => POSITIONS.indexOf(p.position as (typeof POSITIONS)[number]);
+  const xi = [...squad.xi].sort((a, b) => order(a) - order(b));
 
   return (
     <>

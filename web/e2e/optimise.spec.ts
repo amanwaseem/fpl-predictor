@@ -70,3 +70,19 @@ test("an upstream failure is shown as the API words it", async ({ page }) => {
   await page.goto("/optimise?team=77");
   await expect(page.getByRole("alert")).toContainText("The FPL API did not answer.");
 });
+
+test("the form follows the URL, back and forward included", async ({ page }) => {
+  for (const id of ["11", "22"]) {
+    await page.route(`**/v1/entries/${id}/advice*`, (route) =>
+      route.fulfill({ status: 404, contentType: "application/problem+json",
+        json: { type: "about:blank", title: "Not Found", status: 404, detail: `No team ${id}.` } }),
+    );
+  }
+  await page.goto("/optimise?team=11");
+  await page.getByLabel("FPL team ID").fill("22");
+  await page.getByRole("button", { name: "Get advice" }).click();
+  await expect(page.getByRole("alert")).toContainText("No team 22.");
+  await page.goBack();
+  await expect(page.getByLabel("FPL team ID")).toHaveValue("11");
+  await expect(page.getByRole("alert")).toContainText("No team 11.");
+});

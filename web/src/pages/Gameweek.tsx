@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
+import { POSITIONS, useModels } from "../api/queries";
 import { Problem } from "../components/Problem";
 import { fixed, formatUtc, positiveInt, signed } from "../format";
 import { entryHistoryUrl } from "../log";
@@ -9,7 +10,6 @@ import { NotFound } from "./NotFound";
 type Row = Schemas["Prediction"];
 type SortKey = "predicted_points" | "actual_points" | "error" | "price" | "expected_minutes" | "web_name";
 
-const POSITIONS = ["GKP", "DEF", "MID", "FWD"] as const;
 // FPL's availability codes; "a", available, is shown as nothing.
 const STATUS: Record<string, string> = {
   d: "doubtful",
@@ -34,11 +34,6 @@ const error = (r: Row) => (r.actual_points === null ? null : r.predicted_points 
 
 function sortValue(r: Row, key: SortKey): number | string | null {
   return key === "error" ? error(r) : r[key];
-}
-
-// The models list, for which gameweeks and models exist: it needs only the log.
-function useModels() {
-  return useQuery({ queryKey: ["models"], queryFn: () => unwrap(api.GET("/v1/models")) });
 }
 
 // /gameweeks: the newest gameweek with an entry.
