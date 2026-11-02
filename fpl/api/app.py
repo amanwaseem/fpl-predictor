@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 
-from fpl.api import observability, problems
+from fpl.api import observability, problems, site
 from fpl.api.routes import health, optimiser, v1
 from fpl.db.session import make_engine
 
@@ -82,8 +82,9 @@ def openapi_with_problems(app):
     return build
 
 
-def create_app(engine=None):
-    """The app. Pass `engine` to use a database other than DATABASE_URL's."""
+def create_app(engine=None, web=None):
+    """The app. Pass `engine` to use a database other than DATABASE_URL's, and
+    `web` to serve a built site from a directory other than FPL_WEB_DIR's."""
 
     @asynccontextmanager
     async def lifespan(app):
@@ -104,6 +105,10 @@ def create_app(engine=None):
     app.include_router(v1, prefix="/v1")
     app.include_router(optimiser, prefix="/v1")
     app.include_router(health)
+    # Last, so the site only answers what no API route matched.
+    web = web if web is not None else site.directory()
+    if web is not None:
+        site.install(app, web)
     problems.install(app)
     app.middleware("http")(http_caching)
     # Outermost, so its line covers the whole request, caching included.

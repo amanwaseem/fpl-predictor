@@ -1,8 +1,13 @@
-# The image needs fpl/, pyproject.toml, uv.lock and README.md.
+# The image needs fpl/, pyproject.toml, uv.lock, README.md, and web/'s source.
 # Everything else stays out of the build context, data/raw above all.
 *
 !fpl/
 !pyproject.toml
 !README.md
 !uv.lock
+!web/
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
 **/__pycache__

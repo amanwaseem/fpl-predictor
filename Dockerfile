@@ -1,9 +1,20 @@
 # The API's image: `docker compose up` runs it beside Postgres (#81), and #82
 # deploys it.
 #
-# Two stages: the first installs uv.lock's dependencies and the package into
-# a virtualenv; the second copies only that virtualenv into a slim image that
-# runs as an unprivileged user. No compilers, no source tree, no data.
+# Three stages: the first builds the web frontend (#121) into static files;
+# the second installs uv.lock's dependencies and the package into a
+# virtualenv; the last copies only the virtualenv and the built site into a
+# slim image that runs as an unprivileged user. No compilers, no Node, no
+# source tree, no data.
+
+# The site, from package-lock.json exactly. Dependencies first, in a layer of
+# their own, so a change to the site's source reinstalls nothing.
+FROM node:24.11.1-slim AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web ./
+RUN npm run build
 
 FROM python:3.13.7-slim AS build
 # uv, pinned like CI's, copied from its release image rather than installed.
@@ -26,7 +37,9 @@ RUN uv sync --locked --no-dev --group api --no-editable
 FROM python:3.13.7-slim
 RUN useradd --system --uid 10001 --no-create-home fpl
 COPY --from=build /venv /venv
-ENV PATH=/venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+# Served by the API at / (ADR 0025).
+COPY --from=web /web/dist /web
+ENV PATH=/venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 FPL_WEB_DIR=/web
 USER fpl
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s \
