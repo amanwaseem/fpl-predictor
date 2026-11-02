@@ -1,6 +1,6 @@
 import { NavLink, Route, Routes } from "react-router-dom";
-import { Home } from "./pages/Home";
 import { NotFound } from "./pages/NotFound";
+import { Scorecard } from "./pages/Scorecard";
 
 export function App() {
   return (
@@ -11,14 +11,14 @@ export function App() {
         </NavLink>
         <nav>
           <NavLink to="/" end>
-            Home
+            Scorecard
           </NavLink>
           <a href="/docs">API</a>
         </nav>
       </header>
       <main>
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Scorecard />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

@@ -6,6 +6,7 @@
   --accent: #37003c;
   --surface: #ffffff;
   --bad: #a3271d;
+  --good: #1d6b3a;
   color-scheme: light;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.5;
@@ -19,6 +20,7 @@
     --accent: #e5a4ff;
     --surface: #1c1d20;
     --bad: #ff8a80;
+    --good: #7fd49b;
     color-scheme: dark;
   }
 }
@@ -43,3 +45,17 @@ h1 { font-size: 1.6rem; margin: 1.5rem 0 0.5rem; }
 .problem { border-left: 3px solid var(--bad); padding: 0.5rem 1rem; background: var(--surface); }
 .problem p { margin: 0.25rem 0 0; color: var(--muted); }
 .site-footer { margin-top: 3rem; padding-top: 1rem; padding-bottom: 2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+h2 { font-size: 1.3rem; margin: 2.5rem 0 0.5rem; }
+h3 { font-size: 1.1rem; margin: 2rem 0 0.5rem; }
+.note { color: var(--muted); max-width: 48rem; font-size: 0.95rem; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { padding: 0.45rem 0.75rem; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+thead th { color: var(--muted); font-weight: 600; font-size: 0.82rem; vertical-align: bottom; white-space: normal; }
+tbody tr:last-child > * { border-bottom: none; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.missed { color: var(--bad); }
+.better { color: var(--good); }
+.worse { color: var(--bad); }
+.diff { display: block; font-size: 0.8rem; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
