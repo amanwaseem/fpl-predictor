@@ -252,6 +252,8 @@ jobs:
         run: |
           fpl-serve --port 8000 > api.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:8000/readyz > /dev/null && break; sleep 1; done
+          curl -sf localhost:8000/readyz > /dev/null \
+            || { echo "The API never became ready."; cat api.log; exit 1; }
           (cd web && CI=1 npm run e2e) || { echo "--- API log ---"; cat api.log; exit 1; }
 
   # The one required check. `always()` makes it run, and fail, when a job it

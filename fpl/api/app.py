@@ -84,7 +84,7 @@ def openapi_with_problems(app):
 
 def create_app(engine=None, web=None):
     """The app. Pass `engine` to use a database other than DATABASE_URL's, and
-    `web` to serve a built site from a directory other than FPL_WEB_DIR's."""
+    `web`, a built site's directory, to serve the site at / (ADR 0025)."""
 
     @asynccontextmanager
     async def lifespan(app):
@@ -105,11 +105,9 @@ def create_app(engine=None, web=None):
     app.include_router(v1, prefix="/v1")
     app.include_router(optimiser, prefix="/v1")
     app.include_router(health)
-    # Last, so the site only answers what no API route matched.
-    web = web if web is not None else site.directory()
+    problems.install(app)
     if web is not None:
         site.install(app, web)
-    problems.install(app)
     app.middleware("http")(http_caching)
     # Outermost, so its line covers the whole request, caching included.
     app.middleware("http")(observability.request_logging)
@@ -117,4 +115,4 @@ def create_app(engine=None, web=None):
     return app
 
 
-app = create_app()
+app = create_app(web=site.directory())
