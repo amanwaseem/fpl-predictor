@@ -2,12 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api, unwrap } from "../api/client";
 import { Problem } from "../components/Problem";
-import { formatUtc } from "../format";
+import { fixed, formatUtc } from "../format";
 import { entryHistoryUrl } from "../log";
 import { againstBaseline, cell, gameweeks, judged, type Model } from "../scorecard";
 
-const fixed = (x: number | null | undefined, digits = 3) =>
-  x === null || x === undefined ? "–" : x.toFixed(digits);
 const list = (gws: number[]) => (gws.length ? gws.map((g) => `GW${g}`).join(", ") : "none");
 
 export function Scorecard() {
@@ -157,7 +155,12 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
             {weeks.map((gw) => (
               <tr key={gw}>
                 <th scope="row">
-                  <Link to={`/gameweeks/${gw}`}>GW{gw}</Link>
+                  {/* A week no model logged has no entry to open. */}
+                  {models.some((m) => m.gameweeks_logged.includes(gw)) ? (
+                    <Link to={`/gameweeks/${gw}`}>GW{gw}</Link>
+                  ) : (
+                    `GW${gw}`
+                  )}
                 </th>
                 {models.map((m) => {
                   const c = cell(m, gw, baseline);

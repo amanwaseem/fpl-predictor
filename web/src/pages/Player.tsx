@@ -2,11 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
 import { Problem } from "../components/Problem";
+import { fixed, positiveInt } from "../format";
+import { NotFound } from "./NotFound";
 
 type Fixture = Schemas["PlayedFixture"];
 
 export function Player() {
-  const playerId = Number(useParams().playerId);
+  const playerId = positiveInt(useParams().playerId);
+  return playerId === null ? <NotFound /> : <PlayerPage playerId={playerId} />;
+}
+
+function PlayerPage({ playerId }: { playerId: number }) {
   const player = useQuery({
     queryKey: ["player", playerId],
     queryFn: () =>
@@ -28,6 +34,14 @@ export function Player() {
   );
   const predicted = (gw: number, model: string) =>
     p.predictions.find((x) => x.gameweek === gw && x.model_version === model);
+  // The points a week's entries were scored against, where they were; the
+  // match data otherwise. The two agree once bonus is final.
+  const points = (gw: number, fixtures: Fixture[]) =>
+    p.predictions.find((x) => x.gameweek === gw && x.actual_points !== null)?.actual_points ??
+    (fixtures.length ? fixtures.reduce((s, f) => s + f.total_points, 0) : null);
+  const minutes = (gw: number, fixtures: Fixture[]) =>
+    p.predictions.find((x) => x.gameweek === gw && x.actual_minutes !== null)?.actual_minutes ??
+    (fixtures.length ? fixtures.reduce((s, f) => s + f.minutes, 0) : null);
 
   return (
     <section>
@@ -68,24 +82,24 @@ export function Player() {
                 return (
                   <tr key={gw}>
                     <th scope="row">
-                      <Link to={`/gameweeks/${gw}`}>GW{gw}</Link>
+                      {p.predictions.some((x) => x.gameweek === gw) ? (
+                        <Link to={`/gameweeks/${gw}`}>GW{gw}</Link>
+                      ) : (
+                        `GW${gw}`
+                      )}
                     </th>
                     <td>
                       {fixtures.length
                         ? fixtures.map((f) => `${f.opponent} (${f.was_home ? "H" : "A"})`).join(", ")
                         : "–"}
                     </td>
-                    <td className="num">
-                      {fixtures.length ? fixtures.reduce((s, f) => s + f.minutes, 0) : "–"}
-                    </td>
-                    <td className="num">
-                      {fixtures.length ? fixtures.reduce((s, f) => s + f.total_points, 0) : "–"}
-                    </td>
+                    <td className="num">{minutes(gw, fixtures) ?? "–"}</td>
+                    <td className="num">{points(gw, fixtures) ?? "–"}</td>
                     {models.map((m) => {
                       const x = predicted(gw, m);
                       return (
                         <td className="num" key={m}>
-                          {x ? x.predicted_points.toFixed(2) : "–"}
+                          {fixed(x?.predicted_points, 2)}
                         </td>
                       );
                     })}
