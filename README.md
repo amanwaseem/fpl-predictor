@@ -17,7 +17,7 @@ the naive prediction a model has to beat.
 |---|---|---|---|---|---|---|---|
 | `baseline-v1` | baseline | GW4, GW6, GW8 | GW5, GW7 | 1.099 | 1.294 | 155 | 100 |
 | `form-fixture-v1` | main | GW6, GW8 | GW7 | 1.065 | 1.303 | 79 | 68 |
-| `gbm-v1` | challenger | from GW9 | | | | | |
+| `gbm-v1` | challenger | from GW10 | | | | | |
 
 "XI points" is what each model's best predicted starting eleven actually scored, summed over
 its gameweeks. A missed gameweek had no entry before the deadline, and stays missed. Per
@@ -113,7 +113,7 @@ one retires: no longer logged, its record kept.
 |---|---|---|
 | `baseline-v1` | GW4 | Rolling form: recent minutes and scoring rate, adjusted for availability and fixture count. No training |
 | `form-fixture-v1` | GW6 | The baseline plus last-season priors and opponent-aware team strength |
-| `gbm-v1` | GW9 | LightGBM on ten past seasons: minutes in two stages, points by a Tweedie model; held-out report in `reports/gbm-v1.md` (ADR 0019) |
+| `gbm-v1` | GW10 | LightGBM on ten past seasons: minutes in two stages, points by a Tweedie model; held-out report in `reports/gbm-v1.md` (ADR 0019) |
 
 The rolling-form baseline exists so that the pipeline, optimiser and frontend could be built
 and validated end to end without waiting on model accuracy, and it stays as the yardstick. A

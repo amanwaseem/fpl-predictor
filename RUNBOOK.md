@@ -46,7 +46,7 @@ Work out three things and write them down:
 |---|---|
 | **N** | the gameweek to predict |
 | **Deadline** | GW N's `deadline_time`, UTC — see below |
-| **Model version** | `baseline-v1`; from GW6, `form-fixture-v1`; from GW9, `gbm-v1` — one entry each |
+| **Model version** | `baseline-v1`; from GW6, `form-fixture-v1`; from GW10, `gbm-v1` (its GW9 entry was missed) — one entry each |
 
 The entry will be written to `predictions/gwNN_<model-version>.csv` in
 2026/27, and to `predictions-<season>/` from 2027/28 (`predictions-2027-28/`),
