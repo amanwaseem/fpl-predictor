@@ -59,3 +59,9 @@ tbody tr:last-child > * { border-bottom: none; }
 .worse { color: var(--bad); }
 .diff { display: block; font-size: 0.8rem; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+.controls { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; margin: 1rem 0; }
+.controls label { display: flex; flex-direction: column; font-size: 0.82rem; color: var(--muted); gap: 0.2rem; }
+.controls select, .controls input { font: inherit; font-size: 0.95rem; color: var(--fg); background: var(--surface); border: 1px solid var(--line); padding: 0.3rem 0.4rem; min-width: 7rem; }
+button.sort { all: unset; cursor: pointer; }
+button.sort:focus-visible { outline: 2px solid var(--accent); }
+.flag { color: var(--bad); font-size: 0.8rem; }

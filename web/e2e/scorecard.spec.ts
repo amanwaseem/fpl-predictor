@@ -11,7 +11,8 @@ test("the scorecard shows every model beside the baseline", async ({ page }) => 
 test("each scored entry links to its history in the log", async ({ page }) => {
   await page.goto("/");
   const byWeek = page.getByRole("table", { name: "By gameweek" });
-  const gw4 = byWeek.getByRole("row", { name: /^GW4\b/ }).getByRole("link");
+  // The row's own link goes to the gameweek; the figure's, to the log.
+  const gw4 = byWeek.getByRole("row", { name: /^GW4\b/ }).getByRole("link", { name: /^\d/ });
   await expect(gw4).toHaveAttribute(
     "href",
     "https://github.com/amanwaseem/fpl-predictor/commits/main/predictions/gw04_baseline-v1.csv",

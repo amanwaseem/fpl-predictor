@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { api, unwrap } from "../api/client";
 import { Problem } from "../components/Problem";
 import { formatUtc } from "../format";
@@ -155,7 +156,9 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
           <tbody>
             {weeks.map((gw) => (
               <tr key={gw}>
-                <th scope="row">GW{gw}</th>
+                <th scope="row">
+                  <Link to={`/gameweeks/${gw}`}>GW{gw}</Link>
+                </th>
                 {models.map((m) => {
                   const c = cell(m, gw, baseline);
                   const key = m.model_version;
