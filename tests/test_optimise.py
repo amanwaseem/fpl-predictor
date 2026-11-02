@@ -31,7 +31,18 @@ from fpl.optimise import (
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-ENTRIES = sorted((ROOT / "predictions").glob("gw*_*.csv"))
+# Fixed, settled entries rather than whatever predictions/ holds: an entry PR
+# adds files there, and must not change what the tests test (#118).
+ENTRIES = [
+    ROOT / "predictions" / name
+    for name in (
+        "gw04_baseline-v1.csv",
+        "gw06_baseline-v1.csv",
+        "gw06_form-fixture-v1.csv",
+        "gw08_baseline-v1.csv",
+        "gw08_form-fixture-v1.csv",
+    )
+]
 
 
 def player(pid, position, team, price, predicted, status="a"):

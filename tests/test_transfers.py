@@ -24,6 +24,7 @@ from fpl import optimise
 from fpl.evaluation.xi import FORMATIONS, MAX_PER_CLUB, SCALE
 from fpl.log.contract import read_entry
 from fpl.optimise import (
+    BENCH_WEIGHT,
     HIT,
     MAX_FREE_TRANSFERS,
     SQUAD,
@@ -40,7 +41,9 @@ from fpl.optimise import (
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-ENTRY = sorted((ROOT / "predictions").glob("gw*_*.csv"))[-1]
+# A fixed, settled entry rather than the newest: an entry PR adds files to
+# predictions/, and must not change what the tests test (#118).
+ENTRY = ROOT / "predictions" / "gw08_form-fixture-v1.csv"
 
 
 def player(pid, position, predicted, price=5.0, status="a", team=None):
@@ -394,6 +397,16 @@ class CountingHighs(highspy.Highs):
         return super().getModelStatus()
 
 
+def solved_value(squad):
+    """What the solver maximises, in its units: the XI with the captain twice,
+    and each bench player at BENCH_WEIGHT, rounded as fpl.optimise rounds it.
+    Two squads can tie on it with different expected_points, and the first
+    answer need not be the tie-broken one's (#118)."""
+    return points(squad.expected_points) + sum(
+        round(points(p.predicted_points) * BENCH_WEIGHT) for p in squad.bench
+    )
+
+
 def solver_with(**kwargs):
     return SimpleNamespace(
         Highs=lambda: CountingHighs(**kwargs), HighsModelStatus=highspy.HighsModelStatus
@@ -410,11 +423,11 @@ class TestSolves(unittest.TestCase):
 
     def test_a_tie_break_that_does_not_finish_leaves_the_first_answer(self):
         rows, _ = read_entry(ENTRY)
-        expected = best_squad(rows).expected_points
+        expected = solved_value(best_squad(rows))
         with mock.patch.object(optimise, "solver", lambda: solver_with(stall=True)):
             squad = best_squad(rows)
         self.assertEqual(violations(squad), [])
-        self.assertEqual(squad.expected_points, expected)
+        self.assertEqual(solved_value(squad), expected)
 
 
 class TestSquadFiles(unittest.TestCase):
