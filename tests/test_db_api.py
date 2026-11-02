@@ -420,6 +420,7 @@ class TestTheCommittedScorecard(APICase):
         for model in set(served) - set(cumulative["models"]):
             with self.subTest(unscored=model):
                 self.assertEqual(served[model]["gameweeks_scored"], [])
+                self.assertEqual(served[model]["gameweeks_missed"], [])
         for model, expected in cumulative["models"].items():
             with self.subTest(model=model):
                 got = served[model]
