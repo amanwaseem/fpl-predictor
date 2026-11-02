@@ -144,6 +144,10 @@ class TestImmutabilityChecker(FixtureRepo):
         self.assertIn("nothing to protect yet", result.stdout)
 
 
+def in_minutes(minutes):
+    return (datetime.now(UTC) + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def entry_due(deadline):
     return f"gameweek,player_id,predicted_points,deadline_utc\n5,1,6.30,{deadline}\n"
 
@@ -151,8 +155,8 @@ def entry_due(deadline):
 class TestNewEntriesBeforeTheirDeadline(FixtureRepo):
     """Entry PRs merge themselves once ci is green, so ci refuses a late one (#119)."""
 
-    def check_on_time(self, minutes="30"):
-        return self.check("HEAD", "--new-before-deadline", minutes)
+    def check_on_time(self):
+        return self.check("HEAD", "--on-time")
 
     def test_a_new_entry_well_before_its_deadline_passes(self):
         self.write("predictions/gw05_baseline-v1.csv", entry_due("2999-01-01T11:00:00Z"))
@@ -164,19 +168,39 @@ class TestNewEntriesBeforeTheirDeadline(FixtureRepo):
         result = self.check_on_time()
         self.assertEqual(result.returncode, 1)
         self.assertIn("gw05_baseline-v1.csv", result.stderr)
-        self.assertIn("Close the PR", result.stderr)
+        self.assertIn("has passed", result.stderr)
 
-    def test_a_new_entry_inside_the_margin_fails(self):
-        soon = (datetime.now(UTC) + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        self.write("predictions/gw05_baseline-v1.csv", entry_due(soon))
-        self.assertEqual(self.check_on_time("30").returncode, 1)
-        self.assertEqual(self.check_on_time("1").returncode, 0)
+    def test_a_new_entry_inside_the_margin_fails_without_calling_it_missed(self):
+        self.write("predictions/gw05_baseline-v1.csv", entry_due(in_minutes(2)))
+        result = self.check_on_time()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("too close to merge", result.stderr)
+        self.assertNotIn("Z, has passed", result.stderr)
+
+    def test_a_hand_entry_a_quarter_of_an_hour_out_passes(self):
+        """The runbook's fallback can open an entry PR this late."""
+        self.write("predictions/gw05_baseline-v1.csv", entry_due(in_minutes(15)))
+        self.assertEqual(self.check_on_time().returncode, 0)
+
+    def test_every_row_must_carry_the_same_deadline(self):
+        mixed = entry_due("2999-01-01T11:00:00Z") + "5,2,1.00,2001-01-01T11:00:00Z\n"
+        self.write("predictions/gw05_baseline-v1.csv", mixed)
+        result = self.check_on_time()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no single readable deadline_utc", result.stderr)
+
+    def test_an_entry_that_is_not_text_fails_closed_without_a_traceback(self):
+        path = self.repo / "predictions/gw05_baseline-v1.csv"
+        path.write_bytes(b"\xff\xfe\x00garbage")
+        result = self.check_on_time()
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_a_new_entry_without_a_deadline_fails_closed(self):
         self.write("predictions/gw05_baseline-v1.csv", ENTRY)
         result = self.check_on_time()
         self.assertEqual(result.returncode, 1)
-        self.assertIn("no readable deadline_utc", result.stderr)
+        self.assertIn("no single readable deadline_utc", result.stderr)
 
     def test_committed_entries_are_not_judged_by_the_clock(self):
         """GW4's deadline is long past; only what the PR adds is checked."""

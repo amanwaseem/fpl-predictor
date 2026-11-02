@@ -151,8 +151,9 @@ auto-merge on. The PR merges itself (rebase) once `ci` is green (ADR 0024).
 Every decision is `tools/entry_bot.py decide`; each run's summary page says
 what it decided and why.
 
-`ci` refuses a new entry 30 minutes or less before its deadline, so a green
-`ci` means the entry is on time and a late one cannot merge itself. When the
+`ci` refuses a new entry once its deadline is under five minutes away
+(`MERGE_MARGIN` in `tools/check_log_immutable.py`), so a green `ci` means the
+entry is on time and a late one cannot merge itself. When the
 PR appears you can still read it as you would your own run. **Closing it is
 the veto**, and from there the gameweek is yours to make by hand:
 

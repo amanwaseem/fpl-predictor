@@ -17,16 +17,17 @@ the committed predictions plus a snapshot, and is meant to be rewritten when a
 metric definition changes. Applying the rule there would freeze the metrics
 instead of the evidence.
 
-On a PR, `--new-before-deadline MINUTES` also refuses a new entry whose own
-`deadline_utc` is less than MINUTES away (#119). Entry PRs merge themselves
-once `ci` is green, so `ci` must not go green on an entry whose deadline has
-passed or is about to: a re-run or a slow queue would otherwise merge a late
-entry with nobody looking. The margin covers the rest of the `ci` run.
+`--on-time` also refuses a new entry whose `deadline_utc` is less than
+MERGE_MARGIN away, past, or unreadable (#119). Entry PRs merge themselves once
+`ci` is green, so `ci` must not go green on a late entry: a re-run or a slow
+queue would otherwise merge one with nobody looking. ci.yml runs it last, in
+the `ci` job itself, which re-runs whenever any job does and goes green
+seconds before the merge; the margin covers those seconds.
 
 Usage:
     python tools/check_log_immutable.py
     python tools/check_log_immutable.py --ref origin/main
-    python tools/check_log_immutable.py --ref origin/main --new-before-deadline 30
+    python tools/check_log_immutable.py --ref origin/main --on-time
 """
 
 import argparse
@@ -44,6 +45,10 @@ LOG_DIR = "predictions"
 LOG_DIRS = re.compile(r"^predictions(-\d{4}-\d{2})?$")
 DEFAULT_REF = "origin/main"
 TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
+# How long before its deadline `ci` stops passing a new entry. Short, because
+# the check runs at the end of `ci`, and the runbook's fallback can open an
+# entry PR in the last quarter of an hour.
+MERGE_MARGIN = timedelta(minutes=5)
 
 
 def git(*args, root=None):
@@ -111,24 +116,36 @@ def added_entries(ref, root):
     )
 
 
-def too_late(paths, root, margin, now=None):
-    """The new entries whose deadline is under `margin` away or past, with why."""
+def entry_deadline(path):
+    """The one deadline_utc on every row of an entry, or None if there is not one."""
+    try:
+        with open(path, newline="") as f:
+            deadlines = {row["deadline_utc"] for row in csv.DictReader(f)}
+        (deadline,) = deadlines
+        return datetime.strptime(deadline, TIMESTAMP).replace(tzinfo=UTC)
+    except (OSError, UnicodeDecodeError, csv.Error, KeyError, TypeError, ValueError):
+        return None
+
+
+def too_late(paths, root, now=None):
+    """The new entries under MERGE_MARGIN from their deadline or past it, with why."""
     now = now or datetime.now(UTC)
     late = []
     for path in paths:
-        with open(root / path, newline="") as f:
-            row = next(csv.DictReader(f), None)
-        try:
-            deadline = datetime.strptime(row["deadline_utc"], TIMESTAMP).replace(tzinfo=UTC)
-        except (TypeError, KeyError, ValueError):
-            late.append(f"{path}: no readable deadline_utc, so it cannot be shown to be on time")
-            continue
-        if now >= deadline - margin:
-            late.append(f"{path}: deadline {row['deadline_utc']} is under {margin} away or past")
+        deadline = entry_deadline(root / path)
+        if deadline is None:
+            late.append(f"{path}: no single readable deadline_utc, so it cannot be shown on time")
+        elif now >= deadline:
+            late.append(f"{path}: its deadline, {deadline:%Y-%m-%dT%H:%M:%SZ}, has passed")
+        elif now >= deadline - MERGE_MARGIN:
+            late.append(
+                f"{path}: its deadline, {deadline:%Y-%m-%dT%H:%M:%SZ}, is under "
+                f"{MERGE_MARGIN.seconds // 60} minutes away, too close to merge before it"
+            )
     return late
 
 
-def main(ref, before_deadline=None):
+def main(ref, on_time=False):
     root = repo_root()
     violations = check(ref, root)
     committed = committed_entries(ref, root)
@@ -167,18 +184,20 @@ def main(ref, before_deadline=None):
     for path in added:
         print(f"  new entry (not yet at {ref}): {path}")
 
-    if before_deadline is not None:
-        late = too_late(added, root, timedelta(minutes=before_deadline))
+    if on_time:
+        late = too_late(added, root)
         if late:
             print(
-                f"Too late to merge {len(late)} new entr{'y' if len(late) == 1 else 'ies'}:\n",
+                f"Not mergeable before the deadline, {len(late)} new "
+                f"entr{'y' if len(late) == 1 else 'ies'}:\n",
                 file=sys.stderr,
             )
             for v in late:
                 print(f"  {v}", file=sys.stderr)
             print(
-                "\nA late entry is not evidence of anything, and entry PRs merge "
-                "themselves once ci is green. Close the PR; the gameweek stays "
+                "\nAn entry merged after its deadline is not evidence of anything, "
+                "and entry PRs merge themselves once ci is green, so ci refuses it. "
+                "Once the deadline has passed, close the PR: the gameweek stays "
                 "missed (ADR 0004).",
                 file=sys.stderr,
             )
@@ -192,10 +211,9 @@ if __name__ == "__main__":
         "--ref", default=DEFAULT_REF, help=f"commit to compare against (default: {DEFAULT_REF})"
     )
     ap.add_argument(
-        "--new-before-deadline",
-        type=int,
-        metavar="MINUTES",
-        help="also refuse a new entry whose deadline is under MINUTES away or past",
+        "--on-time",
+        action="store_true",
+        help=f"also refuse a new entry under {MERGE_MARGIN} from its deadline, or past it",
     )
     args = ap.parse_args()
-    sys.exit(main(args.ref, args.new_before_deadline))
+    sys.exit(main(args.ref, args.on_time))
