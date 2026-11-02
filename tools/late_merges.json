@@ -1,0 +1,24 @@
+{
+  "_about": "Entries merged after their deadline that count, because each was pushed to GitHub before it, unchanged since (ADR 0026). Each is accepted by a maintainer, by name; tools/check_log_immutable.py --on-time lets through only these files, at these SHA-256s.",
+  "predictions/gw09_baseline-v1.csv": {
+    "sha256": "7de49dd312378e5b9ecfef1d501bf59138e5eabc94799f4c79aaf3aa12a36508",
+    "pr": 117,
+    "commit": "3ea8e76d90dfc4933cceb9c8f605e9085445f51a",
+    "pr_opened_utc": "2026-10-31T00:53:24Z",
+    "deadline_utc": "2026-10-31T11:00:00Z"
+  },
+  "predictions/gw09_form-fixture-v1.csv": {
+    "sha256": "c2920c938c5ae056fad8955f49465aca85e2fb521cc7a11ecae467344e1fb7b1",
+    "pr": 117,
+    "commit": "3ea8e76d90dfc4933cceb9c8f605e9085445f51a",
+    "pr_opened_utc": "2026-10-31T00:53:24Z",
+    "deadline_utc": "2026-10-31T11:00:00Z"
+  },
+  "predictions/gw09_gbm-v1.csv": {
+    "sha256": "2d0c7a702ae0d45250147d8a7678d0eb21affaac5483ce09d362de409bd0cc79",
+    "pr": 117,
+    "commit": "3ea8e76d90dfc4933cceb9c8f605e9085445f51a",
+    "pr_opened_utc": "2026-10-31T00:53:24Z",
+    "deadline_utc": "2026-10-31T11:00:00Z"
+  }
+}

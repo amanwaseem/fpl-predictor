@@ -32,3 +32,4 @@ answer.
 | [0023](0023-each-season-in-its-own-log-directory.md) | Each season in its own log directory | Accepted |
 | [0024](0024-entry-prs-merge-themselves.md) | Entry PRs merge themselves once ci is green | Accepted |
 | [0025](0025-the-frontend-is-served-by-the-api.md) | The frontend is served by the API | Accepted |
+| [0026](0026-an-entry-pushed-before-its-deadline-counts.md) | An entry pushed before its deadline counts, if a maintainer accepts its late merge | Accepted |

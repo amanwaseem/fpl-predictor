@@ -127,7 +127,7 @@ jobs:
               echo "#$n already warned"; continue
             fi
             gh pr comment "$n" --body "$marker
-          This PR adds an entry for a gameweek whose deadline has passed. Merging it now would put a late entry in the log, and a late entry is not evidence of anything (rule 2). Close it; the gameweek stays missed."
+          This PR adds an entry for a gameweek whose deadline has passed. It will not merge itself. If it was opened before the deadline and is unchanged, a maintainer can accept it in tools/late_merges.json and merge it (ADR 0026); otherwise close it, and the gameweek stays missed."
           done
 
       - name: The bot token works

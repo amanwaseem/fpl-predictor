@@ -9,6 +9,10 @@ entire job is reading git, and a mocked git would test the mock.
 Run from the repository root: python -m unittest discover tests
 """
 
+import contextlib
+import hashlib
+import io
+import json
 import os
 import shutil
 import subprocess
@@ -18,7 +22,8 @@ import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-TOOL = Path(__file__).resolve().parent.parent / "tools" / "check_log_immutable.py"
+ROOT = Path(__file__).resolve().parent.parent
+TOOL = ROOT / "tools" / "check_log_immutable.py"
 
 ENTRY = "gameweek,player_id,predicted_points\n4,1,6.30\n"
 
@@ -257,3 +262,48 @@ class TestEverySeason(FixtureRepo):
         for name in ("predictions-old", "predictions-2027", "scores-2027-28"):
             self.assertIsNone(check_log_immutable.LOG_DIRS.match(name), name)
             self.assertIsNone(season_of_directory(name), name)
+
+
+sys.path.insert(0, str(TOOL.parent))
+import check_log_immutable  # noqa: E402
+
+
+class TestAcceptedLateMerges(unittest.TestCase):
+    """A late entry passes only as a maintainer accepted it, byte for byte (ADR 0026)."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.path = "predictions/gw09_baseline-v1.csv"
+        (self.root / "predictions").mkdir()
+        (self.root / self.path).write_text(entry_due("2001-01-01T11:00:00Z"))
+        digest = hashlib.sha256((self.root / self.path).read_bytes()).hexdigest()
+        self.accepted = {self.path: {"sha256": digest, "pr": 117}}
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def late(self, accepted):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return check_log_immutable.too_late([self.path], self.root, accepted=accepted)
+
+    def test_an_accepted_entry_passes(self):
+        self.assertEqual(self.late(self.accepted), [])
+
+    def test_an_entry_changed_since_it_was_accepted_is_late(self):
+        (self.root / self.path).write_text(entry_due("2001-01-01T11:00:00Z") + "\n")
+        self.assertEqual(len(self.late(self.accepted)), 1)
+
+    def test_an_entry_not_accepted_is_late(self):
+        self.assertEqual(len(self.late({})), 1)
+
+    def test_the_committed_list_is_well_formed(self):
+        records = json.loads(check_log_immutable.LATE_MERGES.read_text())
+        for path, record in records.items():
+            if path.startswith("_"):
+                continue
+            with self.subTest(path=path):
+                self.assertRegex(record["sha256"], r"^[0-9a-f]{64}$")
+                self.assertLess(record["pr_opened_utc"], record["deadline_utc"])
+                if (ROOT / path).exists():
+                    digest = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+                    self.assertEqual(digest, record["sha256"])

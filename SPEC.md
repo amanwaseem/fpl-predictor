@@ -378,7 +378,7 @@ horizon follows (#55).
 | Prediction log schema fixed | Before GW4 |
 | GW4 predictions committed | Done, 2026-09-12 |
 | GW5 predictions committed | **Missed** — deadline 2026-09-18 passed with no entry ([ADR 0004](docs/adr/0004-a-missed-deadline-stays-missed.md)) |
-| GW9 predictions committed | **Missed** — the entry PR (#117) was made in time, but `ci` was red (#118) and nobody merged it before 2026-10-31T11:00Z. Entry PRs now merge themselves ([ADR 0024](docs/adr/0024-entry-prs-merge-themselves.md)) |
+| GW9 predictions committed | Done, 2026-10-31: pushed in PR #117 ten hours before the deadline, merged after it, and accepted as on time ([ADR 0026](docs/adr/0026-an-entry-pushed-before-its-deadline-counts.md)). Entry PRs now merge themselves ([ADR 0024](docs/adr/0024-entry-prs-merge-themselves.md)) |
 | Scoring harness | Done |
 | Package structure, CI, ADRs | Done |
 | Optimiser | International break |

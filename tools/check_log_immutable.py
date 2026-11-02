@@ -18,7 +18,9 @@ metric definition changes. Applying the rule there would freeze the metrics
 instead of the evidence.
 
 `--on-time` also refuses a new entry whose `deadline_utc` is less than
-MERGE_MARGIN away, past, or unreadable (#119). Entry PRs merge themselves once
+MERGE_MARGIN away, past, or unreadable (#119), unless a maintainer accepted it
+in late_merges.json at its SHA-256: pushed before its deadline, merged after
+(ADR 0026). Entry PRs merge themselves once
 `ci` is green, so `ci` must not go green on a late entry: a re-run or a slow
 queue would otherwise merge one with nobody looking. ci.yml runs it last, in
 the `ci` job itself, which re-runs whenever any job does and goes green
@@ -32,6 +34,8 @@ Usage:
 
 import argparse
 import csv
+import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -49,6 +53,9 @@ TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
 # the check runs at the end of `ci`, and the runbook's fallback can open an
 # entry PR in the last quarter of an hour.
 MERGE_MARGIN = timedelta(minutes=5)
+# Entries a maintainer accepted although merged after their deadline, because
+# each was pushed before it and is unchanged since (ADR 0026), by SHA-256.
+LATE_MERGES = Path(__file__).with_name("late_merges.json")
 
 
 def git(*args, root=None):
@@ -127,11 +134,26 @@ def entry_deadline(path):
         return None
 
 
-def too_late(paths, root, now=None):
-    """The new entries under MERGE_MARGIN from their deadline or past it, with why."""
+def accepted_late(path, root, accepted):
+    """Whether `path` is an accepted late merge, byte for byte as accepted."""
+    record = accepted.get(path)
+    if not isinstance(record, dict):
+        return False
+    return hashlib.sha256((root / path).read_bytes()).hexdigest() == record.get("sha256")
+
+
+def too_late(paths, root, now=None, accepted=None):
+    """The new entries under MERGE_MARGIN from their deadline or past it, with why.
+
+    `accepted` is late_merges.json's records: those files pass at those hashes.
+    """
     now = now or datetime.now(UTC)
+    accepted = accepted if accepted is not None else json.loads(LATE_MERGES.read_text())
     late = []
     for path in paths:
+        if accepted_late(path, root, accepted):
+            print(f"  accepted late merge (ADR 0026, PR #{accepted[path].get('pr')}): {path}")
+            continue
         deadline = entry_deadline(root / path)
         if deadline is None:
             late.append(f"{path}: no single readable deadline_utc, so it cannot be shown on time")
@@ -197,8 +219,9 @@ def main(ref, on_time=False):
             print(
                 "\nAn entry merged after its deadline is not evidence of anything, "
                 "and entry PRs merge themselves once ci is green, so ci refuses it. "
-                "Once the deadline has passed, close the PR: the gameweek stays "
-                "missed (ADR 0004).",
+                "If the PR was opened before the deadline and the entry is unchanged, "
+                "a maintainer can accept it in tools/late_merges.json (ADR 0026); "
+                "otherwise close it, and the gameweek stays missed (ADR 0004).",
                 file=sys.stderr,
             )
             return 1

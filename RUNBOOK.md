@@ -46,7 +46,7 @@ Work out three things and write them down:
 |---|---|
 | **N** | the gameweek to predict |
 | **Deadline** | GW N's `deadline_time`, UTC — see below |
-| **Model version** | `baseline-v1`; from GW6, `form-fixture-v1`; from GW10, `gbm-v1` (its GW9 entry was missed) — one entry each |
+| **Model version** | `baseline-v1`; from GW6, `form-fixture-v1`; from GW9, `gbm-v1` — one entry each |
 
 The entry will be written to `predictions/gwNN_<model-version>.csv` in
 2026/27, and to `predictions-<season>/` from 2027/28 (`predictions-2027-28/`),
@@ -174,7 +174,7 @@ What it does in the cases that are not the usual one:
 | its own branch whose PR was closed without merging | skips: you closed it, it is not reopened. The watchdog still warns |
 | `predict/gwNN` (from 2027/28 `predict/<season>-gwNN`) with no PR, inside the window | fails: you are making the entry by hand. Open its PR |
 | an entry on `main` for this gameweek number from another season | fails: the log has no season dimension yet. Your call |
-| an open PR for a gameweek whose deadline has passed | turns its auto-merge off, and comments on it once: close it, do not merge |
+| an open PR for a gameweek whose deadline has passed | turns its auto-merge off, and comments on it once. Opened before the deadline and unchanged: you may accept it in `tools/late_merges.json` and merge it (ADR 0026). Otherwise close it |
 | the deadline under 5 minutes away mid-run | stops before pushing or opening anything |
 
 Nothing fails outside the 12-hour window, so a branch you push days early
