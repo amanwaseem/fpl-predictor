@@ -430,18 +430,18 @@ export interface components {
              * @description £m; with a squad
              * @default 0
              */
-            bank: number;
+            bank?: number;
             /**
              * Budget
              * @description £m; without a squad
              * @default 100
              */
-            budget: number;
+            budget?: number;
             /**
              * Free Transfers
              * @default 1
              */
-            free_transfers: number;
+            free_transfers?: number;
             /**
              * Gameweek
              * @description Defaults to the model's latest entry.
@@ -452,18 +452,18 @@ export interface components {
              * @description Gameweeks to plan over. One, until #55.
              * @default 1
              */
-            horizon: number;
+            horizon?: number;
             /**
              * Include Unavailable
              * @default false
              */
-            include_unavailable: boolean;
+            include_unavailable?: boolean;
             /**
              * Model
              * @default baseline-v1
              * @example baseline-v1
              */
-            model: string;
+            model?: string;
             /**
              * Season
              * @example 2026/27
@@ -694,7 +694,7 @@ export interface components {
              * Type
              * @default about:blank
              */
-            type: string;
+            type?: string;
         };
         /** Readiness */
         Readiness: {
