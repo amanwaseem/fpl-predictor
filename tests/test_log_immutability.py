@@ -9,9 +9,7 @@ entire job is reading git, and a mocked git would test the mock.
 Run from the repository root: python -m unittest discover tests
 """
 
-import contextlib
 import hashlib
-import io
 import json
 import os
 import shutil
@@ -247,11 +245,7 @@ class TestEverySeason(FixtureRepo):
         self.assertEqual(self.check().returncode, 0)
 
     def test_the_tools_pattern_matches_the_contracts_naming(self):
-        sys.path.insert(0, str(TOOL.parent))
-        try:
-            import check_log_immutable
-        finally:
-            sys.path.remove(str(TOOL.parent))
+        check_log_immutable = tool()
         from fpl.log.contract import season_directory, season_of_directory
 
         for season in ("2026/27", "2027/28", "2040/41"):
@@ -264,46 +258,97 @@ class TestEverySeason(FixtureRepo):
             self.assertIsNone(season_of_directory(name), name)
 
 
-sys.path.insert(0, str(TOOL.parent))
-import check_log_immutable  # noqa: E402
+def tool():
+    """The tool as a module, imported without leaving tools/ on sys.path."""
+    sys.path.insert(0, str(TOOL.parent))
+    try:
+        import check_log_immutable
+    finally:
+        sys.path.remove(str(TOOL.parent))
+    return check_log_immutable
 
 
-class TestAcceptedLateMerges(unittest.TestCase):
-    """A late entry passes only as a maintainer accepted it, byte for byte (ADR 0026)."""
+LATE = "2001-01-01T11:00:00Z"
 
-    def setUp(self):
-        self.root = Path(tempfile.mkdtemp())
-        self.path = "predictions/gw09_baseline-v1.csv"
-        (self.root / "predictions").mkdir()
-        (self.root / self.path).write_text(entry_due("2001-01-01T11:00:00Z"))
-        digest = hashlib.sha256((self.root / self.path).read_bytes()).hexdigest()
-        self.accepted = {self.path: {"sha256": digest, "pr": 117}}
 
-    def tearDown(self):
-        shutil.rmtree(self.root, ignore_errors=True)
+class TestAcceptedLateMerges(FixtureRepo):
+    """A late entry passes only as accepted on the base commit (ADR 0026)."""
 
-    def late(self, accepted):
-        with contextlib.redirect_stdout(io.StringIO()):
-            return check_log_immutable.too_late([self.path], self.root, accepted=accepted)
+    path = "predictions/gw09_baseline-v1.csv"
 
-    def test_an_accepted_entry_passes(self):
-        self.assertEqual(self.late(self.accepted), [])
+    def record(self, text, **changes):
+        return {
+            "sha256": hashlib.sha256(text.encode()).hexdigest(),
+            "pr": 117,
+            "pr_opened_utc": "2001-01-01T01:00:00Z",
+            "deadline_utc": LATE,
+        } | changes
+
+    def accept(self, **changes):
+        """Commit an acceptance for the entry, as its own merged PR would."""
+        text = entry_due(LATE)
+        self.write("tools/late_merges.json", json.dumps({self.path: self.record(text, **changes)}))
+        self.git("add", "-A")
+        self.git("commit", "-qm", "Accept a late merge")
+        self.write(self.path, text)
+
+    def on_time(self):
+        return self.check("HEAD", "--on-time")
+
+    def test_an_entry_accepted_on_the_base_commit_passes(self):
+        self.accept()
+        result = self.on_time()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("accepted late merge", result.stdout)
+
+    def test_a_pr_cannot_accept_its_own_late_entry(self):
+        text = entry_due(LATE)
+        self.write(self.path, text)
+        self.write("tools/late_merges.json", json.dumps({self.path: self.record(text)}))
+        self.assertEqual(self.on_time().returncode, 1)
 
     def test_an_entry_changed_since_it_was_accepted_is_late(self):
-        (self.root / self.path).write_text(entry_due("2001-01-01T11:00:00Z") + "\n")
-        self.assertEqual(len(self.late(self.accepted)), 1)
+        self.accept()
+        self.write(self.path, entry_due(LATE) + "\n")
+        result = self.on_time()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("changed since it was accepted", result.stderr)
 
-    def test_an_entry_not_accepted_is_late(self):
-        self.assertEqual(len(self.late({})), 1)
+    def test_a_record_whose_pr_opened_after_the_deadline_accepts_nothing(self):
+        self.accept(pr_opened_utc="2001-01-01T12:00:00Z")
+        self.assertIn("opened after the deadline", self.on_time().stderr)
 
-    def test_the_committed_list_is_well_formed(self):
-        records = json.loads(check_log_immutable.LATE_MERGES.read_text())
+    def test_a_record_for_another_deadline_accepts_nothing(self):
+        self.accept(deadline_utc="2999-01-01T11:00:00Z")
+        self.assertIn("deadline_utc is not the entry's", self.on_time().stderr)
+
+    def test_an_accepted_record_cannot_be_changed_or_removed(self):
+        self.accept()
+        self.write("tools/late_merges.json", "{}")
+        result = self.check()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("changed or removed", result.stderr)
+
+    def test_a_malformed_list_on_the_base_commit_says_so(self):
+        self.write("tools/late_merges.json", "{,}")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "A typo")
+        self.write(self.path, entry_due(LATE))
+        result = self.on_time()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not valid JSON", result.stderr)
+
+
+class TestTheCommittedList(unittest.TestCase):
+    def test_each_record_is_for_a_log_entry_whose_pr_opened_before_its_deadline(self):
+        records = json.loads((ROOT / tool().LATE_MERGES).read_text())
         for path, record in records.items():
             if path.startswith("_"):
                 continue
             with self.subTest(path=path):
+                self.assertRegex(path, r"^predictions(-\d{4}-\d{2})?/gw\d{2}_[^_/]+\.csv$")
                 self.assertRegex(record["sha256"], r"^[0-9a-f]{64}$")
                 self.assertLess(record["pr_opened_utc"], record["deadline_utc"])
+                # Before its entry is merged, the record is all there is to check.
                 if (ROOT / path).exists():
-                    digest = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
-                    self.assertEqual(digest, record["sha256"])
+                    self.assertIsNone(tool().accepted_late(path, ROOT, records))

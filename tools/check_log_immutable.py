@@ -55,7 +55,10 @@ TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
 MERGE_MARGIN = timedelta(minutes=5)
 # Entries a maintainer accepted although merged after their deadline, because
 # each was pushed before it and is unchanged since (ADR 0026), by SHA-256.
-LATE_MERGES = Path(__file__).with_name("late_merges.json")
+# Read at the reference commit, never the working tree: an acceptance must be
+# on main, through its own reviewed PR, before the entry it accepts, so a PR
+# cannot accept its own late entry. Its records are as immutable as the log.
+LATE_MERGES = "tools/late_merges.json"
 
 
 def git(*args, root=None):
@@ -101,6 +104,18 @@ def check(ref, root):
         ) from None
 
     violations = []
+    # Accepted late merges are evidence too: a record may be added, never
+    # changed or removed.
+    before = late_merges_at(ref, root)
+    working = root / LATE_MERGES
+    try:
+        after = json.loads(working.read_text()) if working.exists() else {}
+    except ValueError as e:
+        after = {}
+        violations.append(f"{LATE_MERGES}: not valid JSON ({e})")
+    for path, record in before.items():
+        if after.get(path) != record:
+            violations.append(f"{LATE_MERGES}: the record for {path} was changed or removed")
     for path in committed_entries(ref, root):
         committed = git("show", f"{ref}:{path}", root=root)
         working = root / path
@@ -134,25 +149,58 @@ def entry_deadline(path):
         return None
 
 
+def late_merges_at(ref, root):
+    """The accepted late merges at `ref`, {} if there are none; malformed fails."""
+    try:
+        text = git("show", f"{ref}:{LATE_MERGES}", root=root)
+    except RuntimeError:
+        return {}
+    try:
+        records = json.loads(text)
+    except ValueError as e:
+        raise SystemExit(f"{LATE_MERGES} at {ref} is not valid JSON: {e}") from None
+    return {path: r for path, r in records.items() if not path.startswith("_")}
+
+
 def accepted_late(path, root, accepted):
-    """Whether `path` is an accepted late merge, byte for byte as accepted."""
+    """Why `path` is not an accepted late merge, or None if it is.
+
+    Accepted means: recorded, at this file's SHA-256, for this entry's own
+    deadline, with its PR opened before that deadline.
+    """
     record = accepted.get(path)
     if not isinstance(record, dict):
-        return False
-    return hashlib.sha256((root / path).read_bytes()).hexdigest() == record.get("sha256")
+        return "not accepted"
+    if hashlib.sha256((root / path).read_bytes()).hexdigest() != record.get("sha256"):
+        return "changed since it was accepted"
+    deadline = entry_deadline(root / path)
+    try:
+        opened = datetime.strptime(record["pr_opened_utc"], TIMESTAMP).replace(tzinfo=UTC)
+    except (KeyError, TypeError, ValueError):
+        return "its record has no readable pr_opened_utc"
+    if deadline is None or record.get("deadline_utc") != f"{deadline:{TIMESTAMP}}":
+        return "its record's deadline_utc is not the entry's"
+    if opened >= deadline:
+        return "its PR was opened after the deadline"
+    return None
 
 
 def too_late(paths, root, now=None, accepted=None):
     """The new entries under MERGE_MARGIN from their deadline or past it, with why.
 
-    `accepted` is late_merges.json's records: those files pass at those hashes.
+    `accepted` is the records of late_merges.json at the reference commit:
+    those entries pass, if each is as accepted.
     """
     now = now or datetime.now(UTC)
-    accepted = accepted if accepted is not None else json.loads(LATE_MERGES.read_text())
+    accepted = accepted or {}
     late = []
     for path in paths:
-        if accepted_late(path, root, accepted):
-            print(f"  accepted late merge (ADR 0026, PR #{accepted[path].get('pr')}): {path}")
+        if path in accepted:
+            why = accepted_late(path, root, accepted)
+            if why is None:
+                print(f"  accepted late merge (ADR 0026, PR #{accepted[path].get('pr')}): {path}")
+                continue
+            late.append(f"{path}: listed in {LATE_MERGES}, but {why}")
             continue
         deadline = entry_deadline(root / path)
         if deadline is None:
@@ -207,7 +255,7 @@ def main(ref, on_time=False):
         print(f"  new entry (not yet at {ref}): {path}")
 
     if on_time:
-        late = too_late(added, root)
+        late = too_late(added, root, accepted=late_merges_at(ref, root))
         if late:
             print(
                 f"Not mergeable before the deadline, {len(late)} new "
