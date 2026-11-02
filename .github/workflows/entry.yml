@@ -3,9 +3,12 @@
 # fired and still nothing happened. This runs hourly. Once the next deadline is
 # 12 hours away or less, with nothing for that gameweek on main or in an open
 # PR, it snapshots, runs fpl-entry, uploads the snapshot as a release asset and
-# opens the PR. A human reads the PR and merges it. Every decision and check is
-# in tools/entry_bot.py, where it is tested; RUNBOOK.md says what to check
-# before merging.
+# opens the PR with auto-merge on, so it merges itself once `ci` is green
+# (#119, ADR 0024): GW9 was missed with a correct entry in an open PR that
+# nobody merged. A human can still read it, and closing it is the veto. Every
+# decision and check is in tools/entry_bot.py, where it is tested. `ci`
+# refuses a new entry 30 minutes or less before its deadline, so a late
+# green cannot merge a late entry.
 #
 # The order is chosen so a failure can always be retried. Nothing leaves the
 # runner until the entry is made and checked. The release comes before the
@@ -22,11 +25,12 @@
 # against it later; the commit and PR record the tag and its SHA-256.
 #
 # ENTRY_BOT_TOKEN is a fine-grained personal access token for this repository
-# only (contents and pull requests: read and write). It pushes the branch and
-# opens the PR: a PR opened with the default GITHUB_TOKEN triggers no
-# workflows, so the required `ci` check would never report on it. It is used
-# in those two steps and checked just before them, nowhere else, so an expired
-# token fails one step of an acting run, not every hourly checkout.
+# only (contents and pull requests: read and write). It pushes the branch,
+# opens the PR and turns on its auto-merge: a PR opened with the default
+# GITHUB_TOKEN triggers no workflows, so the required `ci` check would never
+# report on it, and a merge enabled by it would not trigger deploy.yml. It is
+# used in those steps and checked just before them, nowhere else, so an
+# expired token fails one step of an acting run, not every hourly checkout.
 #
 # Manual runs are dry runs unless told otherwise: everything up to the entry,
 # under scratch/, and nothing committed, released or opened. The window is
@@ -106,7 +110,9 @@ jobs:
           python tools/entry_bot.py decide "${args[@]}"
 
       # Runs even when the decision failed: a late PR is worth saying whatever
-      # else is wrong. Once per PR, found again by its marker.
+      # else is wrong. Once per PR, found again by its marker. Auto-merge is
+      # turned off first, every time, so a late PR cannot merge itself; ci
+      # refuses it too.
       - name: Warn on open PRs for a deadline that has passed
         if: always() && steps.plan.outputs.late != '' && env.DRY_RUN != 'true'
         env:
@@ -115,6 +121,7 @@ jobs:
         run: |
           marker='<!-- entry-bot:late -->'
           for n in $LATE; do
+            gh pr merge "$n" --disable-auto 2>/dev/null || true
             if gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$n/comments" -q '.[].body' | grep -qF "$marker"; then
               echo "#$n already warned"; continue
             fi
@@ -310,4 +317,24 @@ jobs:
             echo "Attempt $attempt failed; retrying."; sleep $((attempt * 20))
           done
           echo "Could not open the PR. $BRANCH is pushed; the next run resumes from it."
+          exit 1
+
+      # Merges once `ci` is green, as a rebase like every other PR (#119). ci
+      # refuses an entry 30 minutes or less before its deadline, so this
+      # cannot merge a late one. A failure here leaves an open PR that the
+      # next run will not touch: the failed run's email and the watchdog say
+      # to merge it by hand.
+      - name: Let the PR merge itself once ci is green
+        if: (steps.push.outputs.pushed == 'true' || steps.resume.outputs.tag != '') && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ENTRY_BOT_TOKEN }}
+          BRANCH: ${{ steps.plan.outputs.branch }}
+        run: |
+          for attempt in 1 2 3; do
+            if gh pr merge "$BRANCH" --auto --rebase; then
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying."; sleep $((attempt * 20))
+          done
+          echo "Could not turn on auto-merge. Merge the PR by hand once ci is green."
           exit 1

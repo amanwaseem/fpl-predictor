@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 TOOL = Path(__file__).resolve().parent.parent / "tools" / "check_log_immutable.py"
@@ -58,9 +59,9 @@ class FixtureRepo(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
 
-    def check(self, ref="HEAD"):
+    def check(self, ref="HEAD", *args):
         return subprocess.run(
-            [sys.executable, str(TOOL), "--ref", ref],
+            [sys.executable, str(TOOL), "--ref", ref, *args],
             cwd=self.repo,
             env=self.env,
             capture_output=True,
@@ -141,6 +142,52 @@ class TestImmutabilityChecker(FixtureRepo):
         shutil.rmtree(empty, ignore_errors=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("nothing to protect yet", result.stdout)
+
+
+def entry_due(deadline):
+    return f"gameweek,player_id,predicted_points,deadline_utc\n5,1,6.30,{deadline}\n"
+
+
+class TestNewEntriesBeforeTheirDeadline(FixtureRepo):
+    """Entry PRs merge themselves once ci is green, so ci refuses a late one (#119)."""
+
+    def check_on_time(self, minutes="30"):
+        return self.check("HEAD", "--new-before-deadline", minutes)
+
+    def test_a_new_entry_well_before_its_deadline_passes(self):
+        self.write("predictions/gw05_baseline-v1.csv", entry_due("2999-01-01T11:00:00Z"))
+        result = self.check_on_time()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_new_entry_past_its_deadline_fails_and_names_it(self):
+        self.write("predictions/gw05_baseline-v1.csv", entry_due("2001-01-01T11:00:00Z"))
+        result = self.check_on_time()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("gw05_baseline-v1.csv", result.stderr)
+        self.assertIn("Close the PR", result.stderr)
+
+    def test_a_new_entry_inside_the_margin_fails(self):
+        soon = (datetime.now(UTC) + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.write("predictions/gw05_baseline-v1.csv", entry_due(soon))
+        self.assertEqual(self.check_on_time("30").returncode, 1)
+        self.assertEqual(self.check_on_time("1").returncode, 0)
+
+    def test_a_new_entry_without_a_deadline_fails_closed(self):
+        self.write("predictions/gw05_baseline-v1.csv", ENTRY)
+        result = self.check_on_time()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no readable deadline_utc", result.stderr)
+
+    def test_committed_entries_are_not_judged_by_the_clock(self):
+        """GW4's deadline is long past; only what the PR adds is checked."""
+        self.write("predictions/gw04_baseline-v1.csv", entry_due("2001-01-01T11:00:00Z"))
+        self.git("add", "-A")
+        self.git("commit", "-qm", "An old entry")
+        self.assertEqual(self.check_on_time().returncode, 0)
+
+    def test_without_the_flag_the_clock_is_not_read(self):
+        self.write("predictions/gw05_baseline-v1.csv", entry_due("2001-01-01T11:00:00Z"))
+        self.assertEqual(self.check().returncode, 0)
 
 
 class TestEverySeason(FixtureRepo):

@@ -17,15 +17,24 @@ the committed predictions plus a snapshot, and is meant to be rewritten when a
 metric definition changes. Applying the rule there would freeze the metrics
 instead of the evidence.
 
+On a PR, `--new-before-deadline MINUTES` also refuses a new entry whose own
+`deadline_utc` is less than MINUTES away (#119). Entry PRs merge themselves
+once `ci` is green, so `ci` must not go green on an entry whose deadline has
+passed or is about to: a re-run or a slow queue would otherwise merge a late
+entry with nobody looking. The margin covers the rest of the `ci` run.
+
 Usage:
     python tools/check_log_immutable.py
     python tools/check_log_immutable.py --ref origin/main
+    python tools/check_log_immutable.py --ref origin/main --new-before-deadline 30
 """
 
 import argparse
+import csv
 import re
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 LOG_DIR = "predictions"
@@ -34,6 +43,7 @@ LOG_DIR = "predictions"
 # package installed; tests/test_log_immutability.py checks the two agree.
 LOG_DIRS = re.compile(r"^predictions(-\d{4}-\d{2})?$")
 DEFAULT_REF = "origin/main"
+TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
 
 
 def git(*args, root=None):
@@ -89,7 +99,36 @@ def check(ref, root):
     return violations
 
 
-def main(ref):
+def added_entries(ref, root):
+    """Entries in the working tree that are not at `ref`, repo-relative."""
+    tracked = set(committed_entries(ref, root))
+    return sorted(
+        str(p.relative_to(root))
+        for d in root.iterdir()
+        if d.is_dir() and LOG_DIRS.match(d.name)
+        for p in d.glob("*.csv")
+        if str(p.relative_to(root)) not in tracked
+    )
+
+
+def too_late(paths, root, margin, now=None):
+    """The new entries whose deadline is under `margin` away or past, with why."""
+    now = now or datetime.now(UTC)
+    late = []
+    for path in paths:
+        with open(root / path, newline="") as f:
+            row = next(csv.DictReader(f), None)
+        try:
+            deadline = datetime.strptime(row["deadline_utc"], TIMESTAMP).replace(tzinfo=UTC)
+        except (TypeError, KeyError, ValueError):
+            late.append(f"{path}: no readable deadline_utc, so it cannot be shown to be on time")
+            continue
+        if now >= deadline - margin:
+            late.append(f"{path}: deadline {row['deadline_utc']} is under {margin} away or past")
+    return late
+
+
+def main(ref, before_deadline=None):
     root = repo_root()
     violations = check(ref, root)
     committed = committed_entries(ref, root)
@@ -124,16 +163,26 @@ def main(ref):
 
     # Additions are the normal case and are reported rather than counted as
     # violations: a new gameweek is exactly what appending to the log means.
-    tracked = set(committed)
-    added = sorted(
-        str(p.relative_to(root))
-        for d in root.iterdir()
-        if d.is_dir() and LOG_DIRS.match(d.name)
-        for p in d.glob("*.csv")
-        if str(p.relative_to(root)) not in tracked
-    )
+    added = added_entries(ref, root)
     for path in added:
         print(f"  new entry (not yet at {ref}): {path}")
+
+    if before_deadline is not None:
+        late = too_late(added, root, timedelta(minutes=before_deadline))
+        if late:
+            print(
+                f"Too late to merge {len(late)} new entr{'y' if len(late) == 1 else 'ies'}:\n",
+                file=sys.stderr,
+            )
+            for v in late:
+                print(f"  {v}", file=sys.stderr)
+            print(
+                "\nA late entry is not evidence of anything, and entry PRs merge "
+                "themselves once ci is green. Close the PR; the gameweek stays "
+                "missed (ADR 0004).",
+                file=sys.stderr,
+            )
+            return 1
     return 0
 
 
@@ -142,5 +191,11 @@ if __name__ == "__main__":
     ap.add_argument(
         "--ref", default=DEFAULT_REF, help=f"commit to compare against (default: {DEFAULT_REF})"
     )
+    ap.add_argument(
+        "--new-before-deadline",
+        type=int,
+        metavar="MINUTES",
+        help="also refuse a new entry whose deadline is under MINUTES away or past",
+    )
     args = ap.parse_args()
-    sys.exit(main(args.ref))
+    sys.exit(main(args.ref, args.new_before_deadline))
