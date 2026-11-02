@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-typescript ../docs/openapi.json -o src/api/schema.d.ts",
+    "gen:api": "openapi-typescript ../docs/openapi.json --default-non-nullable false -o src/api/schema.d.ts",
     "e2e": "playwright test"
   },
   "dependencies": {

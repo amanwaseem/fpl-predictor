@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import { Gameweek, LatestGameweek } from "./pages/Gameweek";
 import { NotFound } from "./pages/NotFound";
+import { Optimise } from "./pages/Optimise";
 import { Player } from "./pages/Player";
 import { Scorecard } from "./pages/Scorecard";
 
@@ -16,6 +17,7 @@ export function App() {
             Scorecard
           </NavLink>
           <NavLink to="/gameweeks">Predictions</NavLink>
+          <NavLink to="/optimise">Optimise</NavLink>
           <a href="/docs">API</a>
         </nav>
       </header>
@@ -25,6 +27,7 @@ export function App() {
           <Route path="/gameweeks" element={<LatestGameweek />} />
           <Route path="/gameweeks/:gameweek" element={<Gameweek />} />
           <Route path="/players/:playerId" element={<Player />} />
+          <Route path="/optimise" element={<Optimise />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

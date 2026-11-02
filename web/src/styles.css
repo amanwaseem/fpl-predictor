@@ -65,3 +65,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 button.sort { all: unset; cursor: pointer; }
 button.sort:focus-visible { outline: 2px solid var(--accent); }
 .flag { color: var(--bad); font-size: 0.8rem; }
+.button { font: inherit; align-self: flex-end; padding: 0.4rem 0.9rem; border: 1px solid var(--accent); background: var(--accent); color: var(--bg); cursor: pointer; }
+.button:disabled { opacity: 0.6; cursor: default; }
+.subhead { color: var(--muted); font-size: 0.82rem; font-weight: 600; background: var(--bg); }
+.muted { color: var(--muted); font-size: 0.85rem; }
+section > section { margin-top: 1rem; }
