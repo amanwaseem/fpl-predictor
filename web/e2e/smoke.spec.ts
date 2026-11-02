@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("the home page reads the API's status", async ({ page }) => {
+test("the front page reads the API's status", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByLabel("Status")).toContainText("Season");

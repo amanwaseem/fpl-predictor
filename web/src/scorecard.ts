@@ -1,6 +1,15 @@
 // The scorecard's arithmetic, kept out of the page so it can be read on its own.
 import type { Schemas } from "./api/client";
 
+// A difference from the baseline, as shown: to three places, and a tie when it
+// rounds to zero, so a tie is never shown as a win.
+export function judged(difference: number) {
+  const rounded = Number(difference.toFixed(3));
+  const text = `${rounded > 0 ? "+" : rounded < 0 ? "−" : "±"}${Math.abs(rounded).toFixed(3)}`;
+  const verdict = rounded < 0 ? "better" : rounded > 0 ? "worse" : "tie";
+  return { text, verdict };
+}
+
 export type Model = Schemas["ScorecardModel"];
 export type Week = Schemas["GameweekMetrics"];
 
@@ -40,14 +49,10 @@ function pooledMae(weeks: Week[]): number | null {
 // figures over different gameweeks would compare different weeks, not models.
 export function againstBaseline(model: Model, baseline: Model | undefined) {
   if (!baseline || baseline === model) return null;
-  const shared = model.per_gameweek.filter((w) =>
-    baseline.gameweeks_scored.includes(w.gameweek),
-  );
-  const theirs = baseline.per_gameweek.filter((w) =>
-    shared.some((s) => s.gameweek === w.gameweek),
-  );
+  const baselineWeeks = new Map(baseline.per_gameweek.map((w) => [w.gameweek, w]));
+  const shared = model.per_gameweek.filter((w) => baselineWeeks.has(w.gameweek));
   const mine = pooledMae(shared);
-  const base = pooledMae(theirs);
+  const base = pooledMae(shared.map((w) => baselineWeeks.get(w.gameweek)!));
   if (mine === null || base === null) return null;
   return { gameweeks: shared.length, mae: mine, baselineMae: base, difference: mine - base };
 }

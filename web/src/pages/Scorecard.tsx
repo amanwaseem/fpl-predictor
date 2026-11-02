@@ -3,11 +3,10 @@ import { api, unwrap } from "../api/client";
 import { Problem } from "../components/Problem";
 import { formatUtc } from "../format";
 import { entryHistoryUrl } from "../log";
-import { againstBaseline, cell, gameweeks, type Model } from "../scorecard";
+import { againstBaseline, cell, gameweeks, judged, type Model } from "../scorecard";
 
 const fixed = (x: number | null | undefined, digits = 3) =>
   x === null || x === undefined ? "–" : x.toFixed(digits);
-const signed = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : "±"}${Math.abs(x).toFixed(3)}`;
 const list = (gws: number[]) => (gws.length ? gws.map((g) => `GW${g}`).join(", ") : "none");
 
 export function Scorecard() {
@@ -26,7 +25,9 @@ export function Scorecard() {
           deadline, then scored against what happened. Every gameweek is shown here, good or
           bad, beside the baseline.
         </p>
-        {status.isError && <Problem error={status.error} />}
+        {status.isPending && <p aria-busy="true">Loading…</p>}
+        {/* One error is enough when the whole API is down. */}
+        {status.isError && !scorecard.isError && <Problem error={status.error} />}
         {status.data && (
           <dl className="facts" aria-label="Status">
             <div>
@@ -36,14 +37,17 @@ export function Scorecard() {
             <div>
               <dt>Next deadline</dt>
               <dd>
-                {status.data.next_gameweek ? `GW${status.data.next_gameweek}, ` : ""}
-                {formatUtc(status.data.next_deadline_utc)}
+                {status.data.next_gameweek
+                  ? `GW${status.data.next_gameweek}, ${formatUtc(status.data.next_deadline_utc)}`
+                  : "none scheduled"}
               </dd>
             </div>
-            <div>
-              <dt>Entries for it</dt>
-              <dd>{status.data.next_gameweek_entries.join(", ") || "none yet"}</dd>
-            </div>
+            {status.data.next_gameweek !== null && (
+              <div>
+                <dt>Entries for it</dt>
+                <dd>{status.data.next_gameweek_entries.join(", ") || "none yet"}</dd>
+              </div>
+            )}
             <div>
               <dt>Latest settled gameweek</dt>
               <dd>{status.data.latest_settled_gameweek ?? "none yet"}</dd>
@@ -92,6 +96,7 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
                 MAE, expected to play
               </th>
               <th scope="col" className="num">Minutes MAE</th>
+              <th scope="col" className="num">MAE, weeks the baseline was scored</th>
               <th scope="col" className="num">Baseline MAE, same weeks</th>
               <th scope="col" className="num">Difference</th>
             </tr>
@@ -117,15 +122,10 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
                   <td className="num">{fixed(m.pooled.all?.spearman)}</td>
                   <td className="num">{fixed(m.pooled.predicted_to_play?.mae)}</td>
                   <td className="num">{fixed(m.pooled.minutes_mae, 1)}</td>
+                  <td className="num">{vs ? fixed(vs.mae) : "–"}</td>
                   <td className="num">{vs ? fixed(vs.baselineMae) : "–"}</td>
                   <td className="num">
-                    {vs ? (
-                      <span className={vs.difference <= 0 ? "better" : "worse"}>
-                        {signed(vs.difference)}
-                      </span>
-                    ) : (
-                      "–"
-                    )}
+                    <Difference value={vs?.difference} />
                   </td>
                 </tr>
               );
@@ -162,20 +162,17 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
                   if (c.kind === "missed") return <td key={key} className="num missed">missed</td>;
                   if (c.kind === "none") return <td key={key} className="num">–</td>;
                   const href = entryHistoryUrl(season, gw, m.model_version);
-                  if (c.kind === "pending") {
-                    return (
-                      <td key={key} className="num">
-                        <a href={href}>pending</a>
-                      </td>
-                    );
-                  }
-                  const diff = c.baseline && m !== baseline ? c.week.mae - c.baseline.mae : null;
+                  const text = c.kind === "pending" ? "pending" : fixed(c.week.mae);
+                  const diff =
+                    c.kind === "scored" && c.baseline && m !== baseline
+                      ? c.week.mae - c.baseline.mae
+                      : undefined;
                   return (
                     <td key={key} className="num">
-                      <a href={href}>{fixed(c.week.mae)}</a>
-                      {diff !== null && (
-                        <span className={`diff ${diff <= 0 ? "better" : "worse"}`}>
-                          {signed(diff)}
+                      {href ? <a href={href}>{text}</a> : text}
+                      {diff !== undefined && (
+                        <span className="diff">
+                          <Difference value={diff} />
                         </span>
                       )}
                     </td>
@@ -188,4 +185,10 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
       </div>
     </>
   );
+}
+
+function Difference({ value }: { value: number | undefined }) {
+  if (value === undefined) return <>–</>;
+  const { text, verdict } = judged(value);
+  return <span className={verdict}>{text}</span>;
 }
