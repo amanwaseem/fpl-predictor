@@ -741,12 +741,12 @@ class TestPrBody(unittest.TestCase):
     def test_carries_the_deadline_snapshot_checklist_and_digest(self):
         body = self.body()
         for text in (
-            "Merge before `2026-10-31T11:00:00Z`",
+            "Merges itself once `ci` is green, before `2026-10-31T11:00:00Z`",
             "`20261030T230000Z`",
             "[`snapshot-20261030T230000Z`](https://r)",
             SHA,
             "https://run",
-            "- [ ] `ci` is green",
+            "- [ ] the deadline is right",
             "## GW9 entry",
             "included: 1, 2",
         ):

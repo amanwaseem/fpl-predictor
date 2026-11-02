@@ -110,8 +110,9 @@ when the next deadline is 10 hours away or less and `main` has no
 from 12 hours out, so by then something has gone wrong, and the email says
 which:
 
-- **"Read and merge #N"**: the PR is open and waiting for you. Read it as
-  below and merge it.
+- **"Read and merge #N"**: the PR is open and has not merged itself. Its
+  `ci` is probably red, or auto-merge could not be turned on. Fix `ci` or
+  merge it once it is green.
 - **"no open PR adds one"**: the entry workflow did not make it. Start at §1
   now. If time is short, go straight to §9's fallback. An entry from a stale
   snapshot is still evidence; no entry is not.
@@ -145,17 +146,22 @@ hours should pass; 6 hours with a logged gameweek should pass.
 `.github/workflows/entry.yml` runs hourly. Once the next deadline is 12 hours
 away or less, with nothing for that gameweek on `main` or in an open PR, it
 takes a snapshot, runs `fpl-entry`, uploads the snapshot and digest as the
-release `snapshot-<id>`, and opens a PR from `entry-bot/<season>-gwNN`. It
-never merges. Every decision is `tools/entry_bot.py decide`; each run's summary
-page says what it decided and why.
+release `snapshot-<id>`, and opens a PR from `entry-bot/<season>-gwNN` with
+auto-merge on. The PR merges itself (rebase) once `ci` is green (ADR 0024).
+Every decision is `tools/entry_bot.py decide`; each run's summary page says
+what it decided and why.
 
-When its PR appears, read it as you would your own run, then merge it before
-the deadline:
+`ci` refuses a new entry 30 minutes or less before its deadline, so a green
+`ci` means the entry is on time and a late one cannot merge itself. When the
+PR appears you can still read it as you would your own run. **Closing it is
+the veto**, and from there the gameweek is yours to make by hand:
 
 - `included:` and `excluded:` are what you expect: no unsettled round
   included (§3);
-- the deadline is right, and `generated` is before it;
-- `ci` is green.
+- the deadline is right, and `generated` is before it.
+
+If `ci` goes red, the PR waits. Fix `ci` on `main` and update the branch, or
+merge by hand once it is green, before the deadline.
 
 What it does in the cases that are not the usual one:
 
@@ -167,7 +173,7 @@ What it does in the cases that are not the usual one:
 | its own branch whose PR was closed without merging | skips: you closed it, it is not reopened. The watchdog still warns |
 | `predict/gwNN` (from 2027/28 `predict/<season>-gwNN`) with no PR, inside the window | fails: you are making the entry by hand. Open its PR |
 | an entry on `main` for this gameweek number from another season | fails: the log has no season dimension yet. Your call |
-| an open PR for a gameweek whose deadline has passed | comments on it, once: close it, do not merge |
+| an open PR for a gameweek whose deadline has passed | turns its auto-merge off, and comments on it once: close it, do not merge |
 | the deadline under 5 minutes away mid-run | stops before pushing or opening anything |
 
 Nothing fails outside the 12-hour window, so a branch you push days early
@@ -180,8 +186,10 @@ hand-made entry and an automated one never both happen.
 on it (a PR opened with the default token triggers no workflows). Create a
 fine-grained personal access token: this repository only; Contents and Pull
 requests, read and write. Add it under Settings > Secrets and variables >
-Actions as `ENTRY_BOT_TOKEN`. It is used only to push and to open the PR, and
-checked just before; an acting run without a working one stops there. Put the
+Actions as `ENTRY_BOT_TOKEN`. It is used only to push, to open the PR and to
+turn on its auto-merge, and checked just before; an acting run without a
+working one stops there. "Allow auto-merge" must be on under Settings >
+General, and `main`'s branch protection must require `ci`. Put the
 expiry in your calendar: the watchdog warns a week ahead. A dry run does not
 need it.
 

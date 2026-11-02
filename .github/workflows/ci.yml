@@ -97,14 +97,21 @@ jobs:
       # compare it with itself and always pass. A force-push that rewrote the
       # log leaves `before` unreachable; it is fetched explicitly, and if that
       # fails the check fails closed rather than skipping.
+      #
+      # On a PR a new entry must also be 30 minutes or more before its own
+      # deadline (#119): entry PRs merge themselves once ci is green, so a
+      # re-run after the deadline must not turn it green. 30 minutes covers
+      # the rest of the run.
       - name: Check committed predictions are unchanged (rule 1)
         env:
           EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           BEFORE: ${{ github.event.before }}
         run: |
+          late=()
           if [ "$EVENT" = "pull_request" ]; then
             ref="origin/$BASE_REF"
+            late=(--new-before-deadline 30)
           elif [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "Branch created by this push; no earlier log to compare against."
             exit 0
@@ -113,7 +120,7 @@ jobs:
             ref="$BEFORE"
           fi
           echo "Comparing predictions/ against $ref"
-          python tools/check_log_immutable.py --ref "$ref"
+          python tools/check_log_immutable.py --ref "$ref" "${late[@]}"
 
   # The schema against a real Postgres: migrations up and down, models matching
   # them, and the constraints (#77). A job of its own because service

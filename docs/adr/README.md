@@ -30,3 +30,4 @@ answer.
 | [0021](0021-observability-with-what-the-project-already-has.md) | Observability with what the project already has | Accepted |
 | [0022](0022-a-multi-gameweek-plan-from-unlogged-predictions.md) | A multi-gameweek plan, from predictions that are not logged | Accepted |
 | [0023](0023-each-season-in-its-own-log-directory.md) | Each season in its own log directory | Accepted |
+| [0024](0024-entry-prs-merge-themselves.md) | Entry PRs merge themselves once ci is green | Accepted |
