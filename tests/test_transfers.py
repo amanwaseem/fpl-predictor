@@ -24,7 +24,6 @@ from fpl import optimise
 from fpl.evaluation.xi import FORMATIONS, MAX_PER_CLUB, SCALE
 from fpl.log.contract import read_entry
 from fpl.optimise import (
-    BENCH_WEIGHT,
     HIT,
     MAX_FREE_TRANSFERS,
     SQUAD,
@@ -397,14 +396,26 @@ class CountingHighs(highspy.Highs):
         return super().getModelStatus()
 
 
-def solved_value(squad):
-    """What the solver maximises, in its units: the XI with the captain twice,
-    and each bench player at BENCH_WEIGHT, rounded as fpl.optimise rounds it.
-    Two squads can tie on it with different expected_points, and the first
-    answer need not be the tie-broken one's (#118)."""
-    return points(squad.expected_points) + sum(
-        round(points(p.predicted_points) * BENCH_WEIGHT) for p in squad.bench
-    )
+class TieBreakHighs(highspy.Highs):
+    """The tie-break solve replaced. "skip" leaves the first answer loaded;
+    "min" and "max" solve it that way round and then report the time limit."""
+
+    def __init__(self, how):
+        super().__init__()
+        self.how = how
+        self.stalled = False
+
+    def minimize(self, *args):
+        if self.how == "skip":
+            return None
+        self.stalled = True
+        solve = super().minimize if self.how == "min" else super().maximize
+        return solve(*args)
+
+    def getModelStatus(self):
+        if self.stalled:
+            return highspy.HighsModelStatus.kTimeLimit
+        return super().getModelStatus()
 
 
 def solver_with(**kwargs):
@@ -422,12 +433,27 @@ class TestSolves(unittest.TestCase):
         self.assertEqual(CountingHighs.minimizes, 1)
 
     def test_a_tie_break_that_does_not_finish_leaves_the_first_answer(self):
-        rows, _ = read_entry(ENTRY)
-        expected = solved_value(best_squad(rows))
-        with mock.patch.object(optimise, "solver", lambda: solver_with(stall=True)):
-            squad = best_squad(rows)
-        self.assertEqual(violations(squad), [])
-        self.assertEqual(solved_value(squad), expected)
+        # Two of every player, so the equally good squads differ in ids and a
+        # tie-break solved either way round loads a different one. One of the
+        # two must differ from the first answer, whichever that is (#118).
+        pool = even_squad()
+        pool += [
+            p | {"player_id": p["player_id"] + 100, "team": f"D{p['player_id']}"} for p in pool
+        ]
+
+        def picks(how):
+            highs = SimpleNamespace(
+                Highs=lambda: TieBreakHighs(how), HighsModelStatus=highspy.HighsModelStatus
+            )
+            with mock.patch.object(optimise, "solver", lambda: highs):
+                squad = best_squad(pool)
+            self.assertEqual(violations(squad), [])
+            return [p.player_id for p in squad.xi + squad.bench], squad.captain.player_id
+
+        first = picks("skip")
+        for how in ("min", "max"):
+            with self.subTest(stalled=how):
+                self.assertEqual(picks(how), first)
 
 
 class TestSquadFiles(unittest.TestCase):

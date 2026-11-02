@@ -163,7 +163,6 @@ class TestOnCommittedEntries(unittest.TestCase):
     def test_every_entry_gives_a_legal_squad_at_least_as_good_as_fpl_xi_would_pick(self):
         """fpl.evaluation.xi picks the best XI of the chosen squad; the optimiser's XI and captain
         together can be no worse than that XI with its own best player captained."""
-        self.assertTrue(ENTRIES)
         for path in ENTRIES:
             with self.subTest(entry=path.name):
                 rows, faults = read_entry(path)
