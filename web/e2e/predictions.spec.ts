@@ -1,17 +1,34 @@
-import { readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 
-// The newest gameweek in the committed log, read from predictions/ rather than
-// written in: every new entry moves it, and a test pinned to one number turns
-// the next entry PR's ci red (#118). Against a deployment, that deployment
-// must be loaded from the same commit as this checkout.
+// The newest gameweek of the newest season in the committed log, read from git
+// rather than written in: every new entry moves it, and a test pinned to one
+// number turns the next entry PR's ci red (#118, #134). /gameweeks shows the
+// latest season in the database, and fpl-project loads every season's
+// directory, so this follows the same layout: predictions/ for 2026/27,
+// predictions-2027-28/ and so on after (fpl/log/contract.py season_directory).
+// Against a deployment, it must be loaded from the same commit as this checkout.
+const SEASON_DIR = /^predictions(?:-(\d{4})-(\d{2}))?$/;
+const ENTRY_FILENAME = /^gw(\d{2})_([^_]+)\.csv$/; // fpl/log/contract.py ENTRY_FILENAME
+
 function newestLoggedGameweek(): number {
-  const dir = new URL("../../predictions/", import.meta.url);
-  const gameweeks = readdirSync(dir)
-    .map((name) => /^gw(\d+)_.+\.csv$/.exec(name))
-    .filter((m) => m !== null)
-    .map((m) => Number(m[1]));
-  return Math.max(...gameweeks);
+  const root = new URL("../..", import.meta.url).pathname;
+  const files = execFileSync("git", ["ls-files", "--", ":(glob)predictions*/*.csv"], {
+    cwd: root,
+    encoding: "utf8",
+  }).split("\n");
+  const bySeason = new Map<string, number[]>();
+  for (const file of files) {
+    const [dir, name, ...rest] = file.split("/");
+    const season = SEASON_DIR.exec(dir ?? "");
+    const entry = ENTRY_FILENAME.exec(name ?? "");
+    if (!season || !entry || rest.length) continue;
+    const key = season[1] ? `${season[1]}/${season[2]}` : ""; // "" sorts first: the first season
+    bySeason.set(key, [...(bySeason.get(key) ?? []), Number(entry[1])]);
+  }
+  const newestSeason = [...bySeason.keys()].sort().at(-1);
+  if (newestSeason === undefined) throw new Error(`No committed entries under predictions*/ in ${root}`);
+  return Math.max(...bySeason.get(newestSeason)!);
 }
 
 test("/gameweeks opens the newest gameweek's entry", async ({ page }) => {
