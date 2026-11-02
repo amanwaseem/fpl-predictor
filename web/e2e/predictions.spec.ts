@@ -1,9 +1,22 @@
+import { readdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
-// Against the committed log, projected: GW8 is the newest gameweek with entries.
+// The newest gameweek in the committed log, read from predictions/ rather than
+// written in: every new entry moves it, and a test pinned to one number turns
+// the next entry PR's ci red (#118). Against a deployment, that deployment
+// must be loaded from the same commit as this checkout.
+function newestLoggedGameweek(): number {
+  const dir = new URL("../../predictions/", import.meta.url);
+  const gameweeks = readdirSync(dir)
+    .map((name) => /^gw(\d+)_.+\.csv$/.exec(name))
+    .filter((m) => m !== null)
+    .map((m) => Number(m[1]));
+  return Math.max(...gameweeks);
+}
+
 test("/gameweeks opens the newest gameweek's entry", async ({ page }) => {
   await page.goto("/gameweeks");
-  await expect(page).toHaveURL(/\/gameweeks\/8$/);
+  await expect(page).toHaveURL(new RegExp(`/gameweeks/${newestLoggedGameweek()}$`));
   await expect(page.getByRole("table", { name: "Predictions" }).getByRole("row")).not.toHaveCount(1);
 });
 
