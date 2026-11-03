@@ -61,6 +61,9 @@ class GameweekDetail(Gameweek):
 
 class Prediction(BaseModel):
     player_id: int
+    # FPL's id for the person across seasons, which its photo URLs use. Null
+    # where the database holds the log but not this player's football data.
+    player_code: int | None
     web_name: str
     team: str
     position: str
@@ -121,6 +124,8 @@ class PlayerPrediction(BaseModel):
 class Player(BaseModel):
     season: str
     player_id: int
+    # FPL's id for the person across seasons, which its photo URLs use.
+    player_code: int
     web_name: str
     first_name: str
     second_name: str

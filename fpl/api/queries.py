@@ -228,7 +228,19 @@ def predictions(
         raise not_found(f"No {model} entry for gameweek {number} of {season}.")
 
     query = (
-        select(Prediction, PlayerScore.actual_points, PlayerScore.actual_minutes)
+        select(
+            Prediction,
+            PlayerScore.actual_points,
+            PlayerScore.actual_minutes,
+            SeasonPlayer.player_code,
+        )
+        .outerjoin(
+            SeasonPlayer,
+            and_(
+                SeasonPlayer.season == Prediction.season,
+                SeasonPlayer.element_id == Prediction.player_id,
+            ),
+        )
         .outerjoin(
             PlayerScore,
             and_(
@@ -274,6 +286,7 @@ def player(connection, season, player_id):
         connection.execute(
             select(
                 SeasonPlayer.element_id.label("player_id"),
+                SeasonPlayer.player_code,
                 SeasonPlayer.web_name,
                 SeasonPlayer.position,
                 Player.first_name,

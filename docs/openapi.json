@@ -938,6 +938,10 @@
             "title": "History",
             "type": "array"
           },
+          "player_code": {
+            "title": "Player Code",
+            "type": "integer"
+          },
           "player_id": {
             "title": "Player Id",
             "type": "integer"
@@ -969,6 +973,7 @@
         "required": [
           "season",
           "player_id",
+          "player_code",
           "web_name",
           "first_name",
           "second_name",
@@ -1107,6 +1112,17 @@
             "title": "N Fixtures",
             "type": "integer"
           },
+          "player_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Code"
+          },
           "player_id": {
             "title": "Player Id",
             "type": "integer"
@@ -1142,6 +1158,7 @@
         },
         "required": [
           "player_id",
+          "player_code",
           "web_name",
           "team",
           "position",

@@ -586,6 +586,8 @@ export interface components {
             first_name: string;
             /** History */
             history: components["schemas"]["PlayedFixture"][];
+            /** Player Code */
+            player_code: number;
             /** Player Id */
             player_id: number;
             /** Position */
@@ -634,6 +636,8 @@ export interface components {
             expected_minutes: number;
             /** N Fixtures */
             n_fixtures: number;
+            /** Player Code */
+            player_code: number | null;
             /** Player Id */
             player_id: number;
             /** Points Per 90 */

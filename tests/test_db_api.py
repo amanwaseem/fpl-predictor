@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import insert, update
+from sqlalchemy import delete, insert, update
 from sqlalchemy.dialects.postgresql import Range
 
 from fpl.api.app import create_app
@@ -261,6 +261,17 @@ class TestRoutes(APICase):
         self.assertEqual(ids(team="ARS"), [1, 3])
         self.assertEqual(ids(max_price=5.0), [2, 3])
 
+    def test_predictions_carry_the_player_code_where_the_player_is_known(self):
+        def codes():
+            body = self.get("/v1/gameweeks/8/predictions", model="baseline-v1")
+            return {p["player_id"]: p["player_code"] for p in body["items"]}
+
+        self.assertEqual(codes(), {1: 1001, 2: 1002, 3: 1003})
+        # The log without the football data, as CI's projection-only database has it.
+        with self.engine.begin() as c:
+            c.execute(delete(SeasonPlayer).where(SeasonPlayer.element_id == 2))
+        self.assertEqual(codes(), {1: 1001, 2: None, 3: 1003})
+
     def test_pages_join_up_into_the_whole_entry(self):
         whole = self.get("/v1/gameweeks/8/predictions", model="baseline-v1")["items"]
         pages, after = [], None
@@ -287,7 +298,9 @@ class TestRoutes(APICase):
 
     def test_a_player_has_clubs_history_and_predictions(self):
         body = self.get("/v1/players/1")
-        self.assertEqual((body["first_name"], body["position"]), ("First1", "MID"))
+        self.assertEqual(
+            (body["first_name"], body["position"], body["player_code"]), ("First1", "MID", 1001)
+        )
         self.assertEqual(
             body["clubs"],
             [
