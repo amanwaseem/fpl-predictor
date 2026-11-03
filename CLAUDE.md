@@ -60,6 +60,8 @@ the next snapshot overwrite bonus.
   an edit to `pyproject.toml`, then `uv lock`; `uv.lock` pins every version,
   transitive ones too, and is committed.
 - Tests run under pytest; `make lint` runs ruff, ruff format and mypy.
-- Timestamps are in UTC. Gameweek filenames are zero-padded (`gw04`).
+- Timestamps are in UTC in the log, the database and the API. The website shows
+  them in the reader's time zone, named (`formatLocal` in `web/src/format.ts`).
+  Gameweek filenames are zero-padded (`gw04`).
 - `scratch/` is gitignored and holds exploratory runs.
 - Prefer explicit, readable code over clever code.

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useLocation, useNavigationType } from "react-router-dom";
 import { SITE_NAME } from "./brand";
 import { REPOSITORY } from "./log";
 import { Gameweek, LatestGameweek } from "./pages/Gameweek";
@@ -9,11 +9,13 @@ import { Optimise } from "./pages/Optimise";
 import { Player } from "./pages/Player";
 
 export function App() {
-  // A new page starts at the top, as a link to another site would.
+  // A new page starts at the top, as a link to another site would; Back and
+  // Forward leave the browser to restore where the reader was.
   const { pathname } = useLocation();
+  const navigation = useNavigationType();
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (navigation !== "POP") window.scrollTo(0, 0);
+  }, [pathname, navigation]);
 
   return (
     <>

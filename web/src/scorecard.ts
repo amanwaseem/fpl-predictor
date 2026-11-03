@@ -11,6 +11,14 @@ export function judged(difference: number) {
 }
 
 export type Model = Schemas["ScorecardModel"];
+
+// "GW5, GW7", or "none".
+export const gameweekList = (gws: number[]) => (gws.length ? gws.map((g) => `GW${g}`).join(", ") : "none");
+
+// "Retired after GW6", the role otherwise, as the scorecard shows it.
+export function retiredNote(model: Model): string | null {
+  return model.retired_after ? `Retired after GW${model.retired_after}` : null;
+}
 export type Week = Schemas["GameweekMetrics"];
 
 // What a model's column says for one gameweek.

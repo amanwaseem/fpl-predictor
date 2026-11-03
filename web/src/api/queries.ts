@@ -1,10 +1,15 @@
 // Queries more than one page reads, defined once so their keys and options agree.
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { api, unwrap } from "./client";
 
 // Every logged model: its gameweeks and role. It needs only the log.
 export function useModels() {
   return useQuery({ queryKey: ["models"], queryFn: () => unwrap(api.GET("/v1/models")) });
+}
+
+export function useScorecard() {
+  return useQuery({ queryKey: ["scorecard"], queryFn: () => unwrap(api.GET("/v1/scorecard")) });
 }
 
 export function useStatus() {
@@ -30,10 +35,14 @@ export function useEntry(gameweek: number | null | undefined, model: string | nu
 }
 
 // {player id: FPL player code} from an entry, for photos where a response
-// (the optimiser's picks) has ids but no codes.
+// (the optimiser's picks) has ids but no codes. It is the entry the
+// predictions page fetches, under the same key, so it is often cached.
 export function usePhotoCodes(gameweek: number | null | undefined, model: string | null | undefined) {
   const entry = useEntry(gameweek, model);
-  return new Map((entry.data?.items ?? []).map((p) => [p.player_id, p.player_code]));
+  return useMemo(
+    () => new Map((entry.data?.items ?? []).map((p) => [p.player_id, p.player_code])),
+    [entry.data],
+  );
 }
 
 // FPL's positions, in the order a team sheet lists them.

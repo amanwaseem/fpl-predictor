@@ -85,6 +85,7 @@ main { padding-bottom: 3rem; }
 .lede { color: var(--muted); font-size: 1.05rem; max-width: 44rem; }
 .note { color: var(--muted); font-size: 0.92rem; max-width: 52rem; }
 .muted { color: var(--muted); }
+.after { margin-top: 0.75rem; }
 .small { font-size: 0.85rem; }
 .grid { display: grid; gap: 1rem; }
 .grid-2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }

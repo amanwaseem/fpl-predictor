@@ -80,7 +80,7 @@ export function SquadView({
           </ul>
         </div>
       </div>
-      <p className="note small" style={{ marginTop: "0.75rem" }}>
+      <p className="note small after">
         Points are each player's prediction for the gameweek, the captain's doubled. Expected points
         are the XI's total. Budget £{squad.budget.toFixed(1)}m.
       </p>
