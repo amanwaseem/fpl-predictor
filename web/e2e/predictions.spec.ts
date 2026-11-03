@@ -61,6 +61,17 @@ test("an entry shows its top fifty first, and more on asking", async ({ page }) 
   await expect(page).toHaveTitle(/^Gameweek 8 predictions · /);
 });
 
+test("back from a player returns to the rows the reader had expanded", async ({ page }) => {
+  await page.goto("/gameweeks/8?model=baseline-v1");
+  const rows = page.getByRole("table", { name: "Predictions" }).locator("tbody tr");
+  await page.getByRole("button", { name: /Show more/ }).click();
+  await expect(rows).toHaveCount(100);
+  await rows.nth(80).getByRole("link").click();
+  await expect(page).toHaveURL(/\/players\//);
+  await page.goBack();
+  await expect(rows).toHaveCount(100);
+});
+
 test("a player's page shows each model's prediction beside what happened", async ({ page }) => {
   // The database in CI holds the log only, not football data: the player is stubbed.
   await page.route("**/v1/players/42", (route) =>

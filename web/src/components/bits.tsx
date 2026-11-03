@@ -32,9 +32,10 @@ export function PlayerPhoto({
   team: string;
   size?: number;
 }) {
-  const [failed, setFailed] = useState(false);
+  // The code whose photo failed, so a reused photo tries a new player's afresh.
+  const [failedFor, setFailedFor] = useState<number | null>(null);
   const { bg, fg } = clubColours(team);
-  const showPhoto = PHOTOS && code && !failed;
+  const showPhoto = PHOTOS && code && failedFor !== code;
   return (
     <span
       className="photo"
@@ -42,7 +43,7 @@ export function PlayerPhoto({
       aria-hidden="true"
     >
       {showPhoto ? (
-        <img src={photoUrl(code)} alt="" loading="lazy" onError={() => setFailed(true)} />
+        <img src={photoUrl(code)} alt="" loading="lazy" onError={() => setFailedFor(code)} />
       ) : (
         <span style={{ fontSize: size * 0.36 }}>{initials(name)}</span>
       )}

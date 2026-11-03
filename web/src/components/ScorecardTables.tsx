@@ -4,9 +4,7 @@ import { Link } from "react-router-dom";
 import { fixed } from "../format";
 import { entryHistoryUrl } from "../log";
 import { modelName } from "../models";
-import { againstBaseline, cell, gameweeks, judged, type Model } from "../scorecard";
-
-const list = (gws: number[]) => (gws.length ? gws.map((g) => `GW${g}`).join(", ") : "none");
+import { againstBaseline, cell, gameweekList as list, gameweeks, judged, retiredNote, type Model } from "../scorecard";
 
 export function ScorecardTables({ season, models }: { season: string; models: Model[] }) {
   if (!models.length) return <p>No model has an entry yet.</p>;
@@ -45,6 +43,7 @@ export function ScorecardTables({ season, models }: { season: string; models: Mo
                   <th scope="row">
                     {modelName(m.model_version)}{" "}
                     <code className="muted">{m.model_version}</code>
+                    {retiredNote(m) && <span className="pill pill-neutral"> {retiredNote(m)}</span>}
                   </th>
                   <td>{list(m.gameweeks_scored)}</td>
                   <td className={m.gameweeks_missed.length ? "missed" : undefined}>

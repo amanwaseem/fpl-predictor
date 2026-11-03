@@ -6,7 +6,7 @@ import { useModels, usePhotoCodes } from "../api/queries";
 import { ClubBadge, Loading, PlayerPhoto, useTitle } from "../components/bits";
 import { Problem } from "../components/Problem";
 import { SquadView } from "../components/SquadView";
-import { fixed, formatDeadline, positiveInt, signed } from "../format";
+import { fixed, formatLocal, positiveInt, signed } from "../format";
 import { modelName } from "../models";
 
 type Plan = Schemas["Plan"];
@@ -146,7 +146,7 @@ export function Optimise() {
             <h2 id="advice">Your advice for gameweek {advice.data.gameweek}</h2>
             <span className="muted small">
               From {modelName(advice.data.model_version)} · deadline{" "}
-              {formatDeadline(advice.data.deadline_utc)}
+              {formatLocal(advice.data.deadline_utc)}
             </span>
           </div>
           {advice.data.deadline_passed && (
@@ -158,7 +158,7 @@ export function Optimise() {
           {advice.data.plan && <PlanView plan={advice.data.plan} codes={adviceCodes} />}
           <h3 className="section">Your best XI</h3>
           <SquadView squad={advice.data.squad} label="Advised squad" codes={adviceCodes} />
-          <p className="note small" style={{ marginTop: "0.75rem" }}>
+          <p className="note small after">
             Based on your squad as of gameweek {advice.data.picks_gameweek}. FPL keeps selling
             prices and free transfers private, so unless you gave them they were estimated.
             Selling prices: {advice.data.estimates.selling_prices} Free transfers:{" "}
@@ -216,7 +216,10 @@ function PlanView({ plan, codes }: { plan: Plan; codes: Map<number, number | nul
             "No transfer gains enough this gameweek to be worth making."
           ) : (
             <>
-              Expected gain this gameweek: <strong className="better">{signed(plan.xi_gain, 2)} points</strong>
+              Expected gain this gameweek:{" "}
+              <strong className={plan.xi_gain > 0 ? "better" : plan.xi_gain < 0 ? "worse" : undefined}>
+                {signed(plan.xi_gain, 2)} points
+              </strong>
               {plan.hits ? `, after ${plan.hits} hit${plan.hits === 1 ? "" : "s"} (−${plan.hit_points})` : ""}.
             </>
           )}{" "}

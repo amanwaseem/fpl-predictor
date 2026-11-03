@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { type Schemas } from "../api/client";
 import { ENTRY_LIMIT, POSITION_NAMES, POSITIONS, useEntry, useModels } from "../api/queries";
 import { ClubBadge, Loading, PlayerPhoto, StatusPill, useTitle } from "../components/bits";
 import { Problem } from "../components/Problem";
 import { clubName } from "../clubs";
-import { formatDeadline, formatUtc, positiveInt, signed } from "../format";
+import { formatLocal, formatUtc, positiveInt, signed } from "../format";
 import { entryHistoryUrl } from "../log";
 import { modelAbout, modelName } from "../models";
 import { NotFound } from "./NotFound";
@@ -78,11 +78,30 @@ function Entry({ gameweek }: { gameweek: number }) {
   const sort = (params.get("sort") as SortKey | null) ?? "predicted_points";
   const ascending = params.get("dir") === "asc";
 
-  // A new filter or sort starts from the top of the list again.
-  const [shown, setShown] = useState(PAGE);
-  useEffect(() => {
+  // How far the reader has expanded the list, kept per history entry so Back
+  // from a player returns to the same rows. A new filter or sort starts again.
+  const { key } = useLocation();
+  const remembered = `shown:${key}`;
+  const [shown, setShown] = useState(() => {
+    try {
+      return Number(sessionStorage.getItem(remembered)) || PAGE;
+    } catch {
+      return PAGE;
+    }
+  });
+  const filters = [gameweek, model, position, team, query, sort, ascending].join("|");
+  const [lastFilters, setLastFilters] = useState(filters);
+  if (filters !== lastFilters) {
+    setLastFilters(filters);
     setShown(PAGE);
-  }, [gameweek, model, position, team, query, sort, ascending]);
+  }
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(remembered, String(shown));
+    } catch {
+      // Storage may be unavailable; the list just starts at the top again.
+    }
+  }, [remembered, shown]);
 
   const items = entry.data?.items ?? [];
   const rows = items
@@ -208,8 +227,11 @@ function Entry({ gameweek }: { gameweek: number }) {
             <span>
               {modelName(entry.data.model_version)} <code>{entry.data.model_version}</code>
             </span>
-            <span>Made {formatUtc(entry.data.generated_at_utc)}</span>
-            <span>Deadline {formatDeadline(entry.data.deadline_utc)}</span>
+            <span title={formatUtc(entry.data.generated_at_utc)}>Made {formatLocal(entry.data.generated_at_utc)}</span>
+            <span title={formatUtc(entry.data.deadline_utc)}>Deadline {formatLocal(entry.data.deadline_utc)}</span>
+            <span>
+              Snapshot <code>{entry.data.snapshot_id}</code>
+            </span>
             <span>{scored ? "Scored: error is predicted minus actual" : "Not scored yet"}</span>
             {(() => {
               const href = entryHistoryUrl(entry.data.season, gameweek, entry.data.model_version);
@@ -286,7 +308,7 @@ function Entry({ gameweek }: { gameweek: number }) {
               </div>
             )}
           </div>
-          <p className="note small" style={{ marginTop: "0.75rem" }}>
+          <p className="note small after">
             Showing {Math.min(shown, rows.length)} of {rows.length} players
             {rows.length !== items.length ? ` (${items.length} in all)` : ""}. Minutes and points
             are what the model expected for the whole gameweek.

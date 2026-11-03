@@ -162,7 +162,7 @@ function PlayerPage({ playerId }: { playerId: number }) {
             </table>
           </div>
         )}
-        <p className="note small" style={{ marginTop: "0.75rem" }}>
+        <p className="note small after">
           Points are FPL points for the gameweek; each model's column is what it predicted before
           the deadline.
         </p>

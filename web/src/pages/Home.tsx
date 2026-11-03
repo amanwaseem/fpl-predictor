@@ -1,14 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { api, unwrap, type Schemas } from "../api/client";
-import { POSITION_NAMES, POSITIONS, useEntry, useModels, useStatus } from "../api/queries";
+import { type Schemas } from "../api/client";
+import { POSITION_NAMES, POSITIONS, useEntry, useModels, useScorecard, useStatus } from "../api/queries";
 import { ClubBadge, Countdown, Loading, PlayerPhoto, StatusPill, useTitle } from "../components/bits";
 import { Problem } from "../components/Problem";
 import { ScorecardTables } from "../components/ScorecardTables";
 import { REPOSITORY } from "../log";
-import { formatDeadline } from "../format";
+import { formatLocal } from "../format";
 import { modelAbout, modelName, roleName } from "../models";
-import { againstBaseline, type Model } from "../scorecard";
+import { againstBaseline, gameweekList, retiredNote, type Model } from "../scorecard";
 
 type Row = Schemas["Prediction"];
 
@@ -19,10 +18,7 @@ export function Home() {
   useTitle(null);
   const status = useStatus();
   const models = useModels();
-  const scorecard = useQuery({
-    queryKey: ["scorecard"],
-    queryFn: () => unwrap(api.GET("/v1/scorecard")),
-  });
+  const scorecard = useScorecard();
 
   // The newest gameweek with an entry, and the main model's entry for it.
   const all = models.data?.models ?? [];
@@ -51,7 +47,7 @@ export function Home() {
               </Link>
             </div>
           </div>
-          <DeadlineCard status={status.data} error={status.isError && !scorecard.isError ? status.error : null} />
+          <DeadlineCard status={status.data} error={status.isError ? status.error : null} />
         </div>
       </section>
 
@@ -129,7 +125,7 @@ function DeadlineCard({ status, error }: { status: Schemas["Status"] | undefined
         {next && (
           <>
             <dt>Deadline</dt>
-            <dd>{formatDeadline(status.next_deadline_utc)}</dd>
+            <dd>{formatLocal(status.next_deadline_utc)}</dd>
             <dt>Predictions</dt>
             <dd>
               {status.next_gameweek_entries.length
@@ -208,8 +204,11 @@ function Record({ models }: { models: Model[] }) {
           <article className="card record-card" key={m.model_version}>
             <div className="row">
               <h3>{modelName(m.model_version)}</h3>
-              {roleName(m.role) && roleName(m.role) !== modelName(m.model_version) && (
-                <span className="tag">{roleName(m.role)}</span>
+              {retiredNote(m) ? (
+                <span className="pill pill-neutral">{retiredNote(m)}</span>
+              ) : (
+                roleName(m.role) &&
+                roleName(m.role) !== modelName(m.model_version) && <span className="tag">{roleName(m.role)}</span>
               )}
             </div>
             <p className="muted small">{modelAbout(m.model_version)}</p>
@@ -244,7 +243,7 @@ function Record({ models }: { models: Model[] }) {
             )}
             {m.gameweeks_missed.length > 0 && (
               <p className="small missed">
-                Missed {m.gameweeks_missed.map((g) => `GW${g}`).join(", ")}
+                Missed {gameweekList(m.gameweeks_missed)}
               </p>
             )}
             <p className="small muted">
