@@ -1,73 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+// The full scorecard, for anyone checking the numbers: every model's pooled
+// metrics, then each gameweek, each figure linked to its file in the log.
 import { Link } from "react-router-dom";
-import { api, unwrap } from "../api/client";
-import { Problem } from "../components/Problem";
-import { fixed, formatUtc } from "../format";
+import { fixed } from "../format";
 import { entryHistoryUrl } from "../log";
+import { modelName } from "../models";
 import { againstBaseline, cell, gameweeks, judged, type Model } from "../scorecard";
 
 const list = (gws: number[]) => (gws.length ? gws.map((g) => `GW${g}`).join(", ") : "none");
 
-export function Scorecard() {
-  const status = useQuery({ queryKey: ["status"], queryFn: () => unwrap(api.GET("/v1/status")) });
-  const scorecard = useQuery({
-    queryKey: ["scorecard"],
-    queryFn: () => unwrap(api.GET("/v1/scorecard")),
-  });
-
-  return (
-    <>
-      <section>
-        <h1>FPL points, predicted in public</h1>
-        <p className="lede">
-          Each gameweek, every model's predictions for every player are committed before the
-          deadline, then scored against what happened. Every gameweek is shown here, good or
-          bad, beside the baseline.
-        </p>
-        {status.isPending && <p aria-busy="true">Loading…</p>}
-        {/* One error is enough when the whole API is down. */}
-        {status.isError && !scorecard.isError && <Problem error={status.error} />}
-        {status.data && (
-          <dl className="facts" aria-label="Status">
-            <div>
-              <dt>Season</dt>
-              <dd>{status.data.season}</dd>
-            </div>
-            <div>
-              <dt>Next deadline</dt>
-              <dd>
-                {status.data.next_gameweek
-                  ? `GW${status.data.next_gameweek}, ${formatUtc(status.data.next_deadline_utc)}`
-                  : "none scheduled"}
-              </dd>
-            </div>
-            {status.data.next_gameweek !== null && (
-              <div>
-                <dt>Entries for it</dt>
-                <dd>{status.data.next_gameweek_entries.join(", ") || "none yet"}</dd>
-              </div>
-            )}
-            <div>
-              <dt>Latest settled gameweek</dt>
-              <dd>{status.data.latest_settled_gameweek ?? "none yet"}</dd>
-            </div>
-          </dl>
-        )}
-      </section>
-
-      <section aria-labelledby="scorecard">
-        <h2 id="scorecard">Scorecard</h2>
-        {scorecard.isPending && <p aria-busy="true">Loading…</p>}
-        {scorecard.isError && <Problem error={scorecard.error} />}
-        {scorecard.data && (
-          <ScorecardTables season={scorecard.data.season} models={scorecard.data.models} />
-        )}
-      </section>
-    </>
-  );
-}
-
-function ScorecardTables({ season, models }: { season: string; models: Model[] }) {
+export function ScorecardTables({ season, models }: { season: string; models: Model[] }) {
   if (!models.length) return <p>No model has an entry yet.</p>;
   const baseline = models.find((m) => m.role === "baseline");
   const weeks = gameweeks(models);
@@ -75,28 +16,24 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
   return (
     <>
       <p className="note">
-        Mean absolute error (MAE) of predicted against actual points, pooled over every player
-        in every scored gameweek. Lower is better. Each model is compared with the baseline on
-        the gameweeks both were scored, since pooled figures over different weeks would compare
-        weeks, not models.
+        Error is predicted minus actual points, for every player in every scored gameweek. The
+        average error (MAE) is the headline: lower is better. A model is compared with the baseline
+        only on the gameweeks both were scored, so the comparison is between models, not weeks.
       </p>
-      <div className="table-scroll">
+      <div className="card card-flush table-scroll">
         <table aria-label="Pooled">
           <thead>
             <tr>
               <th scope="col">Model</th>
-              <th scope="col">Role</th>
               <th scope="col">Scored</th>
               <th scope="col">Missed</th>
-              <th scope="col" className="num">MAE</th>
-              <th scope="col" className="num">RMSE</th>
-              <th scope="col" className="num">Spearman</th>
-              <th scope="col" className="num" title="Players the model expected to play">
-                MAE, expected to play
-              </th>
-              <th scope="col" className="num">Minutes MAE</th>
-              <th scope="col" className="num">MAE, weeks the baseline was scored</th>
-              <th scope="col" className="num">Baseline MAE, same weeks</th>
+              <th scope="col" className="num" title="Mean absolute error, points">Avg error</th>
+              <th scope="col" className="num" title="Root mean squared error: big misses count more">RMSE</th>
+              <th scope="col" className="num" title="Spearman rank correlation: how well the order of players matched">Rank match</th>
+              <th scope="col" className="num" title="Average error over players the model expected to play">Avg error, starters</th>
+              <th scope="col" className="num" title="Average error in predicted minutes">Minutes error</th>
+              <th scope="col" className="num">Avg error, shared weeks</th>
+              <th scope="col" className="num">Baseline, same weeks</th>
               <th scope="col" className="num">Difference</th>
             </tr>
           </thead>
@@ -106,12 +43,9 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
               return (
                 <tr key={m.model_version}>
                   <th scope="row">
-                    <code>{m.model_version}</code>
+                    {modelName(m.model_version)}{" "}
+                    <code className="muted">{m.model_version}</code>
                   </th>
-                  <td>
-                    {m.role ?? "–"}
-                    {m.retired_after ? ` after GW${m.retired_after}` : ""}
-                  </td>
                   <td>{list(m.gameweeks_scored)}</td>
                   <td className={m.gameweeks_missed.length ? "missed" : undefined}>
                     {list(m.gameweeks_missed)}
@@ -133,20 +67,20 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
         </table>
       </div>
 
-      <h3>By gameweek</h3>
+      <h3 className="section">By gameweek</h3>
       <p className="note">
-        MAE for each entry, and its difference from the baseline's that week. Each figure links to
-        its file's history in the log, which shows when it was committed. A missed gameweek had no
-        entry before its deadline and stays missed.
+        Average error for each set of predictions, and its difference from the baseline that week.
+        Each figure links to the file's history in the log, which shows when it was committed. A
+        missed gameweek had nothing published before its deadline, and stays missed.
       </p>
-      <div className="table-scroll">
+      <div className="card card-flush table-scroll">
         <table aria-label="By gameweek">
           <thead>
             <tr>
               <th scope="col">Gameweek</th>
               {models.map((m) => (
                 <th scope="col" className="num" key={m.model_version}>
-                  <code>{m.model_version}</code>
+                  {modelName(m.model_version)}
                 </th>
               ))}
             </tr>
@@ -166,7 +100,7 @@ function ScorecardTables({ season, models }: { season: string; models: Model[] }
                   const c = cell(m, gw, baseline);
                   const key = m.model_version;
                   if (c.kind === "missed") return <td key={key} className="num missed">missed</td>;
-                  if (c.kind === "none") return <td key={key} className="num">–</td>;
+                  if (c.kind === "none") return <td key={key} className="num muted">–</td>;
                   const href = entryHistoryUrl(season, gw, m.model_version);
                   const text = c.kind === "pending" ? "pending" : fixed(c.week.mae);
                   const diff =

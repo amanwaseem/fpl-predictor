@@ -1,29 +1,40 @@
-import { NavLink, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { SITE_NAME } from "./brand";
+import { REPOSITORY } from "./log";
 import { Gameweek, LatestGameweek } from "./pages/Gameweek";
+import { Home } from "./pages/Home";
 import { NotFound } from "./pages/NotFound";
 import { Optimise } from "./pages/Optimise";
 import { Player } from "./pages/Player";
-import { Scorecard } from "./pages/Scorecard";
 
 export function App() {
+  // A new page starts at the top, as a link to another site would.
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   return (
     <>
       <header className="site-header">
-        <NavLink to="/" className="brand">
-          fpl-predictor
-        </NavLink>
-        <nav>
-          <NavLink to="/" end>
-            Scorecard
-          </NavLink>
-          <NavLink to="/gameweeks">Predictions</NavLink>
-          <NavLink to="/optimise">Optimise</NavLink>
-          <a href="/docs">API</a>
-        </nav>
+        <div className="wrap">
+          <Link to="/" className="brand">
+            <span className="brand-dot" aria-hidden="true" />
+            {SITE_NAME}
+          </Link>
+          <nav className="site-nav" aria-label="Main">
+            <NavLink to="/" end>
+              Home
+            </NavLink>
+            <NavLink to="/gameweeks">Predictions</NavLink>
+            <NavLink to="/optimise">My team</NavLink>
+          </nav>
+        </div>
       </header>
       <main>
         <Routes>
-          <Route path="/" element={<Scorecard />} />
+          <Route path="/" element={<Home />} />
           <Route path="/gameweeks" element={<LatestGameweek />} />
           <Route path="/gameweeks/:gameweek" element={<Gameweek />} />
           <Route path="/players/:playerId" element={<Player />} />
@@ -32,8 +43,17 @@ export function App() {
         </Routes>
       </main>
       <footer className="site-footer">
-        Every prediction is committed before its deadline and never edited.{" "}
-        <a href="https://github.com/amanwaseem/fpl-predictor">The log is on GitHub.</a>
+        <div className="wrap">
+          <p>
+            Every prediction is published before its deadline and never edited afterwards, so the
+            track record is the real one. An independent fan project, not affiliated with the
+            Premier League or Fantasy Premier League.
+          </p>
+          <nav className="footer-links" aria-label="More">
+            <a href={REPOSITORY}>Prediction log on GitHub</a>
+            <a href="/docs">API for developers</a>
+          </nav>
+        </div>
       </footer>
     </>
   );

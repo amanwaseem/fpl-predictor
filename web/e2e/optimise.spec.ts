@@ -3,9 +3,10 @@ import { expect, test } from "@playwright/test";
 test("the best squad from scratch is fifteen players, solved from the log", async ({ page }) => {
   await page.goto("/optimise");
   await page.getByRole("button", { name: /Pick the best squad/ }).click();
-  const squad = page.getByRole("table", { name: "Best squad" });
-  await expect(squad.locator("tbody th[scope=row]")).toHaveCount(15);
-  await expect(squad).toContainText("(C)");
+  const squad = page.getByRole("group", { name: "Best squad" });
+  await expect(squad.locator(".shirt")).toHaveCount(15);
+  await expect(squad.locator("[data-captain]")).toHaveCount(1);
+  await expect(squad.locator("[data-vice]")).toHaveCount(1);
 });
 
 // The advice route reads the manager's team from the live FPL API, which CI
@@ -48,8 +49,8 @@ test("advice for a team shows its transfers and XI", async ({ page, request }) =
   await page.getByLabel("FPL team ID").fill("123");
   await page.getByRole("button", { name: "Get advice" }).click();
   await expect(page).toHaveURL(/team=123/);
-  await expect(page.getByRole("table", { name: "Transfers" })).toContainText(into.web_name);
-  await expect(page.getByRole("table", { name: "Advised squad" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Transfers" })).toContainText(into.web_name);
+  await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
   await expect(page.getByText("Estimated from purchase prices.")).toBeVisible();
 });
 

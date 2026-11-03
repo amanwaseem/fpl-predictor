@@ -1,33 +1,28 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, unwrap, type Schemas } from "../api/client";
-import { POSITIONS, useModels } from "../api/queries";
+import { type Schemas } from "../api/client";
+import { ENTRY_LIMIT, POSITION_NAMES, POSITIONS, useEntry, useModels } from "../api/queries";
+import { ClubBadge, Loading, PlayerPhoto, StatusPill, useTitle } from "../components/bits";
 import { Problem } from "../components/Problem";
-import { fixed, formatUtc, positiveInt, signed } from "../format";
+import { clubName } from "../clubs";
+import { formatDeadline, formatUtc, positiveInt, signed } from "../format";
 import { entryHistoryUrl } from "../log";
+import { modelAbout, modelName } from "../models";
 import { NotFound } from "./NotFound";
 
 type Row = Schemas["Prediction"];
 type SortKey = "predicted_points" | "actual_points" | "error" | "price" | "expected_minutes" | "web_name";
 
-// FPL's availability codes; "a", available, is shown as nothing.
-const STATUS: Record<string, string> = {
-  d: "doubtful",
-  i: "injured",
-  s: "suspended",
-  u: "unavailable",
-  n: "not in the squad",
-};
-// An entry covers every player in the game, about 700; one page holds them all.
-const ENTRY_LIMIT = 1000;
+// Rows shown at first, and added by each "show more".
+const PAGE = 50;
 
-const COLUMNS: { key: SortKey; label: string; numeric: boolean }[] = [
+const COLUMNS: { key: SortKey; label: string; numeric: boolean; className?: string }[] = [
   { key: "web_name", label: "Player", numeric: false },
   { key: "price", label: "Price", numeric: true },
-  { key: "expected_minutes", label: "Expected minutes", numeric: true },
+  { key: "expected_minutes", label: "Minutes", numeric: true, className: "hide-sm" },
   { key: "predicted_points", label: "Predicted", numeric: true },
   { key: "actual_points", label: "Actual", numeric: true },
-  { key: "error", label: "Error", numeric: true },
+  { key: "error", label: "Error", numeric: true, className: "hide-sm" },
 ];
 
 const error = (r: Row) => (r.actual_points === null ? null : r.predicted_points - r.actual_points);
@@ -38,11 +33,12 @@ function sortValue(r: Row, key: SortKey): number | string | null {
 
 // /gameweeks: the newest gameweek with an entry.
 export function LatestGameweek() {
+  useTitle("Predictions");
   const models = useModels();
-  if (models.isError) return <Problem error={models.error} />;
-  if (!models.data) return <p aria-busy="true">Loading…</p>;
+  if (models.isError) return <div className="wrap page"><Problem error={models.error} /></div>;
+  if (!models.data) return <div className="wrap page"><Loading /></div>;
   const latest = Math.max(0, ...models.data.models.flatMap((m) => m.gameweeks_logged));
-  if (!latest) return <p>No entries yet.</p>;
+  if (!latest) return <div className="wrap page"><p>No predictions yet.</p></div>;
   return <Navigate to={`/gameweeks/${latest}`} replace />;
 }
 
@@ -52,6 +48,7 @@ export function Gameweek() {
 }
 
 function Entry({ gameweek }: { gameweek: number }) {
+  useTitle(`Gameweek ${gameweek} predictions`);
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const models = useModels();
@@ -64,18 +61,9 @@ function Entry({ gameweek }: { gameweek: number }) {
   const model = (asked ?? preferred)?.model_version;
   const allGameweeks = [
     ...new Set((models.data?.models ?? []).flatMap((m) => m.gameweeks_logged)),
-  ].sort((a, b) => a - b);
+  ].sort((a, b) => b - a);
 
-  const entry = useQuery({
-    queryKey: ["predictions", gameweek, model],
-    enabled: !!model,
-    queryFn: () =>
-      unwrap(
-        api.GET("/v1/gameweeks/{gameweek}/predictions", {
-          params: { path: { gameweek }, query: { model: model!, limit: ENTRY_LIMIT } },
-        }),
-      ),
-  });
+  const entry = useEntry(gameweek, model);
 
   const update = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
@@ -90,7 +78,14 @@ function Entry({ gameweek }: { gameweek: number }) {
   const sort = (params.get("sort") as SortKey | null) ?? "predicted_points";
   const ascending = params.get("dir") === "asc";
 
-  const rows = (entry.data?.items ?? [])
+  // A new filter or sort starts from the top of the list again.
+  const [shown, setShown] = useState(PAGE);
+  useEffect(() => {
+    setShown(PAGE);
+  }, [gameweek, model, position, team, query, sort, ascending]);
+
+  const items = entry.data?.items ?? [];
+  const rows = items
     .filter((r) => !position || r.position === position)
     .filter((r) => !team || r.team === team)
     .filter((r) => !query || r.web_name.toLowerCase().includes(query))
@@ -108,8 +103,9 @@ function Entry({ gameweek }: { gameweek: number }) {
       // Ties by player id, as the log orders them, whichever way round.
       return a.player_id - b.player_id;
     });
-  const teams = [...new Set((entry.data?.items ?? []).map((r) => r.team))].sort();
-  const scored = entry.data?.items.some((r) => r.actual_points !== null);
+  const teams = [...new Set(items.map((r) => r.team))].sort();
+  const scored = items.some((r) => r.actual_points !== null);
+  const top = Math.max(1, ...items.map((r) => r.predicted_points));
 
   const sortBy = (key: SortKey) => {
     const next = new URLSearchParams(params);
@@ -122,131 +118,182 @@ function Entry({ gameweek }: { gameweek: number }) {
   };
 
   return (
-    <section>
-      <h1>Gameweek {gameweek} predictions</h1>
-      {models.isPending && <p aria-busy="true">Loading…</p>}
+    <div className="wrap page">
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">Predictions</p>
+          <h1>Gameweek {gameweek}</h1>
+          {model && <p className="muted">{modelAbout(model) ?? model}</p>}
+        </div>
+        {logged.length > 0 && (
+          <div className="controls">
+            <label className="field">
+              Gameweek
+              <select
+                value={gameweek}
+                // Filters carry over; the model is chosen afresh for that gameweek.
+                onChange={(e) => {
+                  const next = new URLSearchParams(params);
+                  next.delete("model");
+                  navigate(`/gameweeks/${e.target.value}?${next}`);
+                }}
+              >
+                {allGameweeks.map((gw) => (
+                  <option key={gw} value={gw}>
+                    Gameweek {gw}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Model
+              <select value={model} onChange={(e) => update("model", e.target.value)}>
+                {logged.map((m) => (
+                  <option key={m.model_version} value={m.model_version}>
+                    {modelName(m.model_version)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+      </div>
+
+      {models.isPending && <Loading />}
       {models.isError && <Problem error={models.error} />}
-      {models.data && !logged.length && <p>No model has an entry for gameweek {gameweek}.</p>}
+      {models.data && !logged.length && <p>Nothing was predicted for gameweek {gameweek}.</p>}
 
       {logged.length > 0 && (
-        <div className="controls">
-          <label>
-            Gameweek
-            <select
-              value={gameweek}
-              // Filters carry over; the model is chosen afresh for that gameweek.
-              onChange={(e) => {
-                const next = new URLSearchParams(params);
-                next.delete("model");
-                navigate(`/gameweeks/${e.target.value}?${next}`);
-              }}
-            >
-              {allGameweeks.map((gw) => (
-                <option key={gw} value={gw}>
-                  GW{gw}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Model
-            <select value={model} onChange={(e) => update("model", e.target.value)}>
-              {logged.map((m) => (
-                <option key={m.model_version} value={m.model_version}>
-                  {m.model_version}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Position
-            <select value={position ?? ""} onChange={(e) => update("position", e.target.value)}>
-              <option value="">All</option>
-              {POSITIONS.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Club
-            <select value={team ?? ""} onChange={(e) => update("team", e.target.value)}>
-              <option value="">All</option>
-              {teams.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Name
-            <input
-              type="search"
-              value={params.get("q") ?? ""}
-              onChange={(e) => update("q", e.target.value)}
-            />
-          </label>
+        <div className="toolbar">
+          <div className="segmented" role="group" aria-label="Position">
+            <button type="button" aria-pressed={!position} onClick={() => update("position", null)}>
+              All
+            </button>
+            {POSITIONS.map((p) => (
+              <button key={p} type="button" aria-pressed={position === p} onClick={() => update("position", p)}>
+                {POSITION_NAMES[p]}
+              </button>
+            ))}
+          </div>
+          <div className="controls">
+            <label className="field">
+              Club
+              <select value={team ?? ""} onChange={(e) => update("team", e.target.value)}>
+                <option value="">All clubs</option>
+                {teams.map((t) => (
+                  <option key={t} value={t}>
+                    {clubName(t)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Search
+              <input
+                type="search"
+                placeholder="Player name"
+                value={params.get("q") ?? ""}
+                onChange={(e) => update("q", e.target.value)}
+              />
+            </label>
+          </div>
         </div>
       )}
 
-      {entry.isPending && model && <p aria-busy="true">Loading…</p>}
+      {entry.isPending && model && <Loading what="Loading predictions" />}
       {entry.isError && <Problem error={entry.error} />}
       {entry.data && (
         <>
-          <p className="note">
-            <code>{entry.data.model_version}</code>, made {formatUtc(entry.data.generated_at_utc)}{" "}
-            from snapshot <code>{entry.data.snapshot_id}</code>, for the deadline{" "}
-            {formatUtc(entry.data.deadline_utc)}.{" "}
+          <div className="entry-meta">
+            <span>
+              {modelName(entry.data.model_version)} <code>{entry.data.model_version}</code>
+            </span>
+            <span>Made {formatUtc(entry.data.generated_at_utc)}</span>
+            <span>Deadline {formatDeadline(entry.data.deadline_utc)}</span>
+            <span>{scored ? "Scored: error is predicted minus actual" : "Not scored yet"}</span>
             {(() => {
               const href = entryHistoryUrl(entry.data.season, gameweek, entry.data.model_version);
-              return href ? <a href={href}>Its history in the log.</a> : null;
-            })()}{" "}
-            {scored ? "Error is predicted minus actual." : "Not scored yet."} {rows.length} of{" "}
-            {entry.data.items.length} players.
-          </p>
+              return href ? <a href={href}>Proof it was published in time</a> : null;
+            })()}
+          </div>
           {entry.data.next_cursor && (
-            <p role="alert" className="problem">
+            <p role="alert" className="problem problem-warn">
               This entry has more than {ENTRY_LIMIT} players, and only the first {ENTRY_LIMIT} by
               predicted points are shown.
             </p>
           )}
-          <div className="table-scroll">
+          <div className="card card-flush table-scroll">
             <table aria-label="Predictions">
               <thead>
                 <tr>
-                  {COLUMNS.slice(0, 1).map((c) => (
-                    <SortHeader key={c.key} column={c} sort={sort} ascending={ascending} onSort={sortBy} />
-                  ))}
-                  <th scope="col">Club</th>
-                  <th scope="col">Pos</th>
-                  {COLUMNS.slice(1).map((c) => (
-                    <SortHeader key={c.key} column={c} sort={sort} ascending={ascending} onSort={sortBy} />
+                  {/* Before scoring, Actual and Error are dashes: a phone does without them. */}
+                  {COLUMNS.map((c) => (
+                    <SortHeader
+                      key={c.key}
+                      column={!scored && c.key === "actual_points" ? { ...c, className: "hide-sm" } : c}
+                      sort={sort}
+                      ascending={ascending}
+                      onSort={sortBy}
+                    />
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {rows.slice(0, shown).map((r) => {
                   const e = error(r);
                   return (
-                    <tr key={r.player_id}>
+                    <tr key={r.player_id} data-position={r.position}>
                       <th scope="row">
-                        <Link to={`/players/${r.player_id}`}>{r.web_name}</Link>
-                        {STATUS[r.status] && <span className="flag"> {STATUS[r.status]}</span>}
+                        <span className="player">
+                          <PlayerPhoto code={r.player_code} name={r.web_name} team={r.team} size={36} />
+                          <span className="player-text">
+                            <Link className="player-name" to={`/players/${r.player_id}`}>
+                              {r.web_name}
+                            </Link>
+                            <span className="player-meta">
+                              <ClubBadge team={r.team} />
+                              <span className="pos">{r.position}</span>
+                              <StatusPill status={r.status} />
+                            </span>
+                          </span>
+                        </span>
                       </th>
-                      <td>{r.team}</td>
-                      <td>{r.position}</td>
-                      <td className="num">£{r.price.toFixed(1)}m</td>
-                      <td className="num">{r.expected_minutes.toFixed(0)}</td>
-                      <td className="num">{fixed(r.predicted_points, 2)}</td>
-                      <td className="num">{r.actual_points ?? "–"}</td>
-                      <td className="num">{e === null ? "–" : signed(e, 2)}</td>
+                      <td className="num price">£{r.price.toFixed(1)}m</td>
+                      <td className="num hide-sm">{r.expected_minutes.toFixed(0)}′</td>
+                      <td className="num">
+                        <span className="points">
+                          <span className="bar" aria-hidden="true">
+                            <span style={{ width: `${(Math.max(0, r.predicted_points) / top) * 100}%` }} />
+                          </span>
+                          <strong>{r.predicted_points.toFixed(2)}</strong>
+                        </span>
+                      </td>
+                      <td className={scored ? "num" : "num hide-sm"}>{r.actual_points ?? "–"}</td>
+                      <td className={`num hide-sm ${e === null ? "" : e > 0 ? "worse" : e < 0 ? "better" : ""}`}>
+                        {e === null ? "–" : signed(e, 2)}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            {rows.length === 0 && <p className="muted" style={{ padding: "1rem" }}>No players match.</p>}
+            {rows.length > shown && (
+              <div className="show-more">
+                <button type="button" className="button button-ghost" onClick={() => setShown(shown + PAGE)}>
+                  Show more ({rows.length - shown} left)
+                </button>
+              </div>
+            )}
           </div>
+          <p className="note small" style={{ marginTop: "0.75rem" }}>
+            Showing {Math.min(shown, rows.length)} of {rows.length} players
+            {rows.length !== items.length ? ` (${items.length} in all)` : ""}. Minutes and points
+            are what the model expected for the whole gameweek.
+          </p>
         </>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -265,7 +312,7 @@ function SortHeader({
   return (
     <th
       scope="col"
-      className={column.numeric ? "num" : undefined}
+      className={[column.numeric ? "num" : "", column.className ?? ""].join(" ").trim() || undefined}
       aria-sort={active ? (ascending ? "ascending" : "descending") : "none"}
     >
       <button type="button" className="sort" onClick={() => onSort(column.key)}>

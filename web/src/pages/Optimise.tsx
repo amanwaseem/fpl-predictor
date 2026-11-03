@@ -1,15 +1,18 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
-import { useModels } from "../api/queries";
+import { useModels, usePhotoCodes } from "../api/queries";
+import { ClubBadge, Loading, PlayerPhoto, useTitle } from "../components/bits";
 import { Problem } from "../components/Problem";
 import { SquadView } from "../components/SquadView";
-import { fixed, formatUtc, positiveInt, signed } from "../format";
+import { fixed, formatDeadline, positiveInt, signed } from "../format";
+import { modelName } from "../models";
 
 type Plan = Schemas["Plan"];
 
 export function Optimise() {
+  useTitle("My team");
   const [params, setParams] = useSearchParams();
   const models = useModels();
   const live = (models.data?.models ?? []).filter((m) => m.role && m.role !== "retired");
@@ -31,7 +34,9 @@ export function Optimise() {
     free: params.get("free") ?? "",
   });
   const [form, setForm] = useState(fromUrl);
-  useEffect(() => setForm(fromUrl()), [params]);
+  useEffect(() => {
+    setForm(fromUrl());
+  }, [params]);
   const chosen = form.model || model || "";
   // A model from a link that is not offered is still shown as chosen.
   const offered = live.map((m) => m.model_version);
@@ -54,6 +59,10 @@ export function Optimise() {
     mutationFn: () => unwrap(api.POST("/v1/optimise", { body: { model } })),
   });
 
+  // Photos for the picks, from the same entry's predictions.
+  const adviceCodes = usePhotoCodes(advice.data?.gameweek, advice.data?.model_version);
+  const freshCodes = usePhotoCodes(fresh.data?.gameweek, fresh.data?.model_version);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const next = new URLSearchParams();
@@ -64,163 +73,203 @@ export function Optimise() {
   };
 
   return (
-    <section>
-      <h1>Optimise my team</h1>
-      <p className="lede">
-        The best transfers, starting XI and captain for your FPL team, from a model's latest
-        committed predictions. Your team ID is the number in the address of your points page on
-        the FPL site.
-      </p>
+    <div className="wrap page">
+      <div className="page-head">
+        <div>
+          <p className="eyebrow">My team</p>
+          <h1>Get advice for your team</h1>
+          <p className="lede">
+            Enter your FPL team ID for the best transfers, starting XI and captain this gameweek,
+            worked out from our latest predictions.
+          </p>
+        </div>
+      </div>
 
-      <form className="controls" onSubmit={submit}>
-        <label>
-          FPL team ID
-          <input
-            inputMode="numeric"
-            pattern="[0-9]*"
-            required
-            value={form.team}
-            onChange={(e) => setForm({ ...form, team: e.target.value })}
-          />
-        </label>
-        <label>
-          Model
-          <select value={chosen} onChange={(e) => setForm({ ...form, model: e.target.value })}>
-            {offered.map((name) => {
-              const role = live.find((m) => m.model_version === name)?.role;
-              return (
+      <form className="card" onSubmit={submit}>
+        <div className="controls">
+          <label className="field">
+            FPL team ID
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="e.g. 1234567"
+              required
+              value={form.team}
+              onChange={(e) => setForm({ ...form, team: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Model
+            <select value={chosen} onChange={(e) => setForm({ ...form, model: e.target.value })}>
+              {offered.map((name) => (
                 <option key={name} value={name}>
-                  {name}
-                  {role ? ` (${role})` : ""}
+                  {modelName(name)}
+                  {live.find((m) => m.model_version === name)?.role === "main" ? " (recommended)" : ""}
                 </option>
-              );
-            })}
-          </select>
-        </label>
-        <label>
-          Free transfers
-          <select value={form.free} onChange={(e) => setForm({ ...form, free: e.target.value })}>
-            <option value="">Estimate</option>
-            {[0, 1, 2, 3, 4, 5].map((n) => (
-              <option key={n}>{n}</option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" className="button">
-          Get advice
-        </button>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Free transfers
+            <select value={form.free} onChange={(e) => setForm({ ...form, free: e.target.value })}>
+              <option value="">Work it out</option>
+              {[0, 1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="button">
+            Get advice
+          </button>
+        </div>
+        <details className="help">
+          <summary>Where do I find my team ID?</summary>
+          <ol>
+            <li>Sign in at fantasy.premierleague.com and open the Points tab.</li>
+            <li>
+              The address ends like <code>/entry/1234567/event/9</code>: the number after{" "}
+              <code>entry</code> is your team ID.
+            </li>
+            <li>Nothing is saved, and no sign-in is needed here: your squad is public on FPL.</li>
+          </ol>
+        </details>
       </form>
 
       {models.isError && <Problem error={models.error} />}
-      {advice.isFetching && <p aria-busy="true">Reading your team and solving…</p>}
+      {advice.isFetching && <Loading what="Reading your team and working out the best moves" />}
       {advice.isError && <Problem error={advice.error} />}
       {advice.data && (
-        <section aria-labelledby="advice">
-          <h2 id="advice">
-            Gameweek {advice.data.gameweek}, from <code>{advice.data.model_version}</code>
-          </h2>
+        <section className="section" aria-labelledby="advice">
+          <div className="section-head">
+            <h2 id="advice">Your advice for gameweek {advice.data.gameweek}</h2>
+            <span className="muted small">
+              From {modelName(advice.data.model_version)} · deadline{" "}
+              {formatDeadline(advice.data.deadline_utc)}
+            </span>
+          </div>
           {advice.data.deadline_passed && (
-            <p role="alert" className="problem">
-              The deadline for gameweek {advice.data.gameweek} has passed (
-              {formatUtc(advice.data.deadline_utc)}). This is what the model would have advised.
+            <p role="alert" className="problem problem-warn">
+              The gameweek {advice.data.gameweek} deadline has passed. This is what the model
+              would have advised.
             </p>
           )}
-          <p className="note">
-            Your squad as of gameweek {advice.data.picks_gameweek}. FPL keeps selling prices and
-            free transfers private, so where they were not given:
+          {advice.data.plan && <PlanView plan={advice.data.plan} codes={adviceCodes} />}
+          <h3 className="section">Your best XI</h3>
+          <SquadView squad={advice.data.squad} label="Advised squad" codes={adviceCodes} />
+          <p className="note small" style={{ marginTop: "0.75rem" }}>
+            Based on your squad as of gameweek {advice.data.picks_gameweek}. FPL keeps selling
+            prices and free transfers private, so unless you gave them they were estimated.
+            Selling prices: {advice.data.estimates.selling_prices} Free transfers:{" "}
+            {advice.data.estimates.free_transfers}
           </p>
-          <ul className="note">
-            <li>Selling prices: {advice.data.estimates.selling_prices}</li>
-            <li>Free transfers: {advice.data.estimates.free_transfers}</li>
-          </ul>
-          {advice.data.plan && <PlanView plan={advice.data.plan} />}
-          <h3>Your XI</h3>
-          <SquadView squad={advice.data.squad} label="Advised squad" />
         </section>
       )}
 
-      <section aria-labelledby="fresh">
-        <h2 id="fresh">Best squad from scratch</h2>
-        <p className="note">
-          The best fifteen within £100m under every FPL rule, for wildcards and free hits.
-        </p>
-        <button
-          type="button"
-          className="button"
-          disabled={fresh.isPending}
-          onClick={() => fresh.mutate()}
-        >
-          {fresh.isPending ? "Solving…" : `Pick the best squad${model ? ` from ${model}` : ""}`}
-        </button>
+      <section className="section card" aria-labelledby="fresh">
+        <div className="section-head">
+          <div>
+            <h2 id="fresh">Best squad from scratch</h2>
+            <p className="muted small" style={{ margin: 0 }}>
+              The best fifteen within £100m under every FPL rule. Handy for a wildcard or free hit.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="button"
+            disabled={fresh.isPending}
+            onClick={() => fresh.mutate()}
+          >
+            {fresh.isPending ? "Picking…" : "Pick the best squad"}
+          </button>
+        </div>
         {fresh.isError && <Problem error={fresh.error} />}
         {fresh.data && (
           <>
-            <p className="note">
-              Gameweek {fresh.data.gameweek}, from <code>{fresh.data.model_version}</code>.
+            <p className="muted small">
+              Gameweek {fresh.data.gameweek}, from {modelName(fresh.data.model_version)}.{" "}
+              <Link to={`/gameweeks/${fresh.data.gameweek}?model=${fresh.data.model_version}`}>
+                See every prediction
+              </Link>
             </p>
-            <SquadView squad={fresh.data.squad} label="Best squad" />
+            <SquadView squad={fresh.data.squad} label="Best squad" codes={freshCodes} />
           </>
         )}
       </section>
-    </section>
+    </div>
   );
 }
 
-function PlanView({ plan }: { plan: Plan }) {
+function PlanView({ plan, codes }: { plan: Plan; codes: Map<number, number | null> }) {
   const overCap = Object.entries(plan.over_cap);
+  const n = plan.transfers.length;
   return (
     <>
-      <h3>Transfers</h3>
+      <div className="card" style={{ marginBottom: "1rem" }}>
+        <p className="eyebrow">The verdict</p>
+        <p className="big" style={{ margin: "0.1rem 0 0.4rem" }}>
+          {n === 0 ? "Hold" : `Make ${n} transfer${n === 1 ? "" : "s"}`}
+        </p>
+        <p className="muted" style={{ margin: 0 }}>
+          {n === 0 ? (
+            "No transfer gains enough this gameweek to be worth making."
+          ) : (
+            <>
+              Expected gain this gameweek: <strong className="better">{signed(plan.xi_gain, 2)} points</strong>
+              {plan.hits ? `, after ${plan.hits} hit${plan.hits === 1 ? "" : "s"} (−${plan.hit_points})` : ""}.
+            </>
+          )}{" "}
+          {plan.free_transfers} free transfer{plan.free_transfers === 1 ? "" : "s"} · bank £
+          {fixed(plan.bank, 1)}m{n ? `, then £${fixed(plan.bank_after, 1)}m` : ""}.
+        </p>
+      </div>
       {overCap.length > 0 && (
-        <p role="alert" className="problem">
+        <p role="alert" className="problem problem-warn">
           Your squad has {overCap.map(([club, count]) => `${count} from ${club}`).join(", ")}, over
-          the three-per-club cap. FPL lets you keep it as it is, but a transfer must fix it, so this
-          plan does.
+          the three-per-club limit. FPL lets you keep it, but any transfer must fix it, so this plan
+          does.
         </p>
       )}
-      {plan.transfers.length === 0 ? (
-        <p>Keep your squad: no transfer gains enough to be worth making.</p>
-      ) : (
-        <div className="table-scroll">
-          <table aria-label="Transfers">
-            <thead>
-              <tr>
-                <th scope="col">Out</th>
-                <th scope="col" className="num">Sells for</th>
-                <th scope="col" className="num">Predicted</th>
-                <th scope="col">In</th>
-                <th scope="col" className="num">Costs</th>
-                <th scope="col" className="num">Predicted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plan.transfers.map((t) => (
-                <tr key={t.out.player_id}>
-                  <td>
-                    {t.out.web_name} <span className="muted">{t.out.team}</span>
-                  </td>
-                  <td className="num">£{t.selling_price.toFixed(1)}m</td>
-                  <td className="num">{fixed(t.out.predicted_points, 2)}</td>
-                  <th scope="row">
-                    {t.into.web_name} <span className="muted">{t.into.team}</span>
-                  </th>
-                  <td className="num">£{t.into.price.toFixed(1)}m</td>
-                  <td className="num">{fixed(t.into.predicted_points, 2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {n > 0 && (
+        <ol className="transfers" aria-label="Transfers">
+          {plan.transfers.map((t) => (
+            <li className="transfer" key={t.out.player_id}>
+              <span className="player out">
+                <PlayerPhoto code={codes.get(t.out.player_id)} name={t.out.web_name} team={t.out.team} size={40} />
+                <span className="player-text">
+                  <span className="transfer-label">Out</span>
+                  <Link className="player-name" to={`/players/${t.out.player_id}`}>
+                    {t.out.web_name}
+                  </Link>
+                  <span className="player-meta">
+                    <ClubBadge team={t.out.team} />
+                    <span className="pos">
+                      sells £{t.selling_price.toFixed(1)}m · {fixed(t.out.predicted_points, 1)} pts
+                    </span>
+                  </span>
+                </span>
+              </span>
+              <span className="transfer-arrow" aria-hidden="true">→</span>
+              <span className="player in">
+                <PlayerPhoto code={codes.get(t.into.player_id)} name={t.into.web_name} team={t.into.team} size={40} />
+                <span className="player-text">
+                  <span className="transfer-label">In</span>
+                  <Link className="player-name" to={`/players/${t.into.player_id}`}>
+                    {t.into.web_name}
+                  </Link>
+                  <span className="player-meta">
+                    <ClubBadge team={t.into.team} />
+                    <span className="pos">
+                      costs £{t.into.price.toFixed(1)}m · {fixed(t.into.predicted_points, 1)} pts
+                    </span>
+                  </span>
+                </span>
+              </span>
+            </li>
+          ))}
+        </ol>
       )}
-      <p className="note">
-        {plan.free_transfers} free transfer{plan.free_transfers === 1 ? "" : "s"}
-        {plan.hits
-          ? `, and ${plan.hits} hit${plan.hits === 1 ? "" : "s"} for −${plan.hit_points} points`
-          : ""}
-        . Expected gain this gameweek over keeping your squad, net of hits:{" "}
-        <strong>{signed(plan.xi_gain, 2)} points</strong>. Bank £{fixed(plan.bank, 1)}m, then £
-        {fixed(plan.bank_after, 1)}m.
-      </p>
     </>
   );
 }

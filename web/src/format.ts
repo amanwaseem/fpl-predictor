@@ -5,6 +5,16 @@ export function formatUtc(iso: string | null | undefined): string {
   return `${d.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 }
 
+// A deadline as a manager reads it: "Fri 6 Nov, 18:30 GMT", in the reader's
+// own time zone. The log and the API stay in UTC.
+export function formatDeadline(iso: string | null | undefined): string {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return "unknown";
+  const day = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
+  return `${day}, ${time}`;
+}
+
 // A number to `digits` places, or a dash for none.
 export function fixed(x: number | null | undefined, digits = 3): string {
   return x === null || x === undefined ? "–" : x.toFixed(digits);

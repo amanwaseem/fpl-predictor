@@ -369,9 +369,17 @@ needs Node 24:
 make web                         # npm ci and build into web/dist
 make serve                       # the API, and the site at / once built
 cd web && npm run dev            # or Vite's dev server, proxying /v1 to `make serve`
+cd web && API_TARGET=https://fpl-predictor-aman.fly.dev npm run dev   # the same, against live data
 cd web && npm run gen:api        # after `make openapi`: regenerate the typed client
 cd web && npm run e2e            # Playwright against BASE_URL (default 127.0.0.1:8000)
 ```
+
+The pages: Home (`/`: the next deadline, this gameweek's top picks, the track record and the
+full scorecard), Predictions (`/gameweeks/N`), player pages (`/players/ID`) and My team
+(`/optimise`). The styles are one stylesheet of tokens and components, `web/src/styles.css`.
+Club colours are in `web/src/clubs.ts`, and the models' display names in `web/src/models.ts`.
+The site's name is `SITE_NAME` in `web/src/brand.ts`. Player photos come from FPL's CDN by the
+player's code; `PHOTOS` in `web/src/components/bits.tsx` turns them off.
 
 ### Migrations
 
