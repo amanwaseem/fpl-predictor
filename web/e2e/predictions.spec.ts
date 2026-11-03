@@ -57,6 +57,7 @@ test("a player's page shows each model's prediction beside what happened", async
       json: {
         season: "2026/27",
         player_id: 42,
+        player_code: 1042,
         web_name: "Tester",
         first_name: "Ada",
         second_name: "Tester",
