@@ -266,6 +266,14 @@ class TestRoutes(APICase):
             body = self.get("/v1/gameweeks/8/predictions", model="baseline-v1")
             return {p["player_id"]: p["player_code"] for p in body["items"]}
 
+        # FPL reuses element ids each season: last season's element 2 is someone else.
+        with self.engine.begin() as c:
+            c.execute(insert(Season).values(season="2025/26"))
+            c.execute(
+                insert(SeasonPlayer).values(
+                    season="2025/26", element_id=2, player_code=1001, web_name="p1", position="MID"
+                )
+            )
         self.assertEqual(codes(), {1: 1001, 2: 1002, 3: 1003})
         # The log without the football data, as CI's projection-only database has it.
         with self.engine.begin() as c:
