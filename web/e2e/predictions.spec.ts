@@ -40,14 +40,25 @@ test("/gameweeks opens the newest gameweek's entry", async ({ page }) => {
 test("filters narrow the entry and sorting reorders it", async ({ page }) => {
   await page.goto("/gameweeks/8?model=baseline-v1");
   const table = page.getByRole("table", { name: "Predictions" });
-  await page.getByLabel("Position").selectOption("GKP");
-  await expect(table.locator("tbody td:nth-child(3)").first()).toHaveText("GKP");
-  await expect(table.locator("tbody td:nth-child(3)").filter({ hasNotText: "GKP" })).toHaveCount(0);
+  await page.getByRole("group", { name: "Position" }).getByRole("button", { name: "Goalkeepers" }).click();
+  await expect(page).toHaveURL(/position=GKP/);
+  await expect(table.locator("tbody tr").first()).toHaveAttribute("data-position", "GKP");
+  await expect(table.locator('tbody tr:not([data-position="GKP"])')).toHaveCount(0);
 
   await table.getByRole("button", { name: "Price" }).click();
-  const prices = await table.locator("tbody td:nth-child(4)").allTextContents();
+  const prices = await table.locator("tbody td.price").allTextContents();
   const values = prices.map((p) => Number(p.replace(/[£m]/g, "")));
+  expect(values.length).toBeGreaterThan(0);
   expect(values).toEqual([...values].sort((a, b) => b - a));
+});
+
+test("an entry shows its top fifty first, and more on asking", async ({ page }) => {
+  await page.goto("/gameweeks/8?model=baseline-v1");
+  const rows = page.getByRole("table", { name: "Predictions" }).locator("tbody tr");
+  await expect(rows).toHaveCount(50);
+  await page.getByRole("button", { name: /Show more/ }).click();
+  await expect(rows).toHaveCount(100);
+  await expect(page).toHaveTitle(/^Gameweek 8 predictions · /);
 });
 
 test("a player's page shows each model's prediction beside what happened", async ({ page }) => {
