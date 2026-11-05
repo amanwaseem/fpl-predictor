@@ -28,7 +28,7 @@ from fpl.log.contract import (
     write_entry,
 )
 
-SPEC = Path(__file__).resolve().parents[2] / "SPEC.md"
+SPEC = Path(__file__).resolve().parents[2] / "docs" / "spec.md"
 
 
 def rows(n=3):

@@ -350,7 +350,7 @@ The first slice is built (#53, `fpl-optimise`): the best squad, XI and captain
 for one gameweek from one entry's predictions, with each bench player counted
 at a tenth of their points. Squad, XI and captain are solved as one model by
 HiGHS, exactly and with ties broken toward lower player ids
-([ADR 0010](docs/adr/0010-squad-selection-by-integer-programming.md)).
+([ADR 0010](adr/0010-squad-selection-by-integer-programming.md)).
 Transfers from an owned squad are built too (#54, `fpl-optimise --squad`), in
 the same model: a kept player costs his selling price, which is given rather
 than guessed because reading it needs the manager's login; each transfer beyond
@@ -363,7 +363,7 @@ horizon follows (#55).
   Neon (#82). The database's copy of the log is rebuilt from `predictions/` and
   `scores/` on every deploy and reconciled against them, so it is a projection
   of the record and never a second one
-  ([ADR 0015](docs/adr/0015-a-hosted-service-over-a-rebuildable-projection.md),
+  ([ADR 0015](adr/0015-a-hosted-service-over-a-rebuildable-projection.md),
   superseding 0014). The contract is `docs/openapi.json`.
 - **Frontend**: squad suggestions plus the public scorecard (#10)
 - **CI**: lint, tests, the database and API against a real Postgres, the API
@@ -377,8 +377,8 @@ horizon follows (#55).
 | Rolling-form baseline | Before GW4 |
 | Prediction log schema fixed | Before GW4 |
 | GW4 predictions committed | Done, 2026-09-12 |
-| GW5 predictions committed | **Missed** — deadline 2026-09-18 passed with no entry ([ADR 0004](docs/adr/0004-a-missed-deadline-stays-missed.md)) |
-| GW9 predictions committed | Done, 2026-10-31: pushed in PR #117 ten hours before the deadline, merged after it, and accepted as on time ([ADR 0026](docs/adr/0026-an-entry-pushed-before-its-deadline-counts.md)). Entry PRs now merge themselves ([ADR 0024](docs/adr/0024-entry-prs-merge-themselves.md)) |
+| GW5 predictions committed | **Missed** — deadline 2026-09-18 passed with no entry ([ADR 0004](adr/0004-a-missed-deadline-stays-missed.md)) |
+| GW9 predictions committed | Done, 2026-10-31: pushed in PR #117 ten hours before the deadline, merged after it, and accepted as on time ([ADR 0026](adr/0026-an-entry-pushed-before-its-deadline-counts.md)). Entry PRs now merge themselves ([ADR 0024](adr/0024-entry-prs-merge-themselves.md)) |
 | Scoring harness | Done |
 | Package structure, CI, ADRs | Done |
 | Optimiser | International break |
@@ -387,7 +387,7 @@ horizon follows (#55).
 
 ## 10. Open questions
 
-Decisions and their reasons are recorded in [`docs/adr/`](docs/adr/README.md).
+Decisions and their reasons are recorded in [`docs/adr/`](adr/README.md).
 
 Settled:
 
@@ -398,10 +398,10 @@ Settled:
   components have nothing to condition on without them. The accuracy case is
   weak: held out (#39), the ratings beat FPL's own difficulty by 0.002 MAE,
   within what four gameweeks can resolve. The decision rests on other grounds
-  — see [ADR 0009](docs/adr/0009-model-fixture-difficulty-explicitly.md).
+  — see [ADR 0009](adr/0009-model-fixture-difficulty-explicitly.md).
 
 Open:
 
 - How to handle players transferred between clubs mid-season — `player_id` is
   stable but team affiliation is not. What each part does today, and the
-  questions to settle: [ADR 0013](docs/adr/0013-players-who-change-club-mid-season.md).
+  questions to settle: [ADR 0013](adr/0013-players-who-change-club-mid-season.md).

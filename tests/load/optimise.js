@@ -1,7 +1,7 @@
-// A k6 load test of POST /v1/optimise (#83). The README has the numbers.
+// A k6 load test of POST /v1/optimise (#83). docs/development.md has the numbers.
 //
 //   FPL_SOLVER_RATE=off fpl-serve --port 8000     # the rate limit would 429 it
-//   k6 run loadtest/optimise.js                   # BASE_URL=... for elsewhere
+//   k6 run tests/load/optimise.js                  # BASE_URL=... for elsewhere
 //
 // Two scenarios, one after the other, on a real GW8 squad (squad.json, a legal
 // squad within £97.0m from the committed baseline entry):

@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Context for agentic work in this repository. `SPEC.md` has the requirements,
-open issues have the plan, `RUNBOOK.md` has the steps for a prediction entry,
+Context for agentic work in this repository. `docs/spec.md` has the requirements,
+open issues have the plan, `docs/runbook.md` has the steps for a prediction entry,
 and `docs/adr/` has the reasoning behind past decisions.
 
 Everything here is a default, not a rule. If something in this file, the spec

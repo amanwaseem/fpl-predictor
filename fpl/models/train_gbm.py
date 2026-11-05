@@ -20,7 +20,7 @@ together), and beside a naive comparator on the same rows: recent points per
 
 - reports/gbm-v1.md: the held-out report.
 - dist/gbm-v1.json: the four trained models, for the release asset.
-- models/registry.json: its SHA-256, URL, training range and git SHA.
+- fpl/models/registry.json: its SHA-256, URL, training range and git SHA.
 
 Needs the `ml` group (LightGBM) and DATABASE_URL. Run from the repository root.
 """

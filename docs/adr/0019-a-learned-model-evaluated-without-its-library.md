@@ -44,7 +44,7 @@ Three constraints shape it:
   minutes.
 - **The artifact is a release asset with a committed registry.** The four
   models are one JSON file, published as the `model-gbm-v1` release asset;
-  `models/registry.json` records its SHA-256, URL, training seasons, feature
+  `fpl/models/registry.json` records its SHA-256, URL, training seasons, feature
   version, LightGBM version and the git SHA it was trained at. A prediction
   fetches it once into `data/models/` and refuses a file whose hash differs.
 - **Judged held out, twice.** Rolling-origin cross-validation by season,
