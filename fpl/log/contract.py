@@ -491,7 +491,7 @@ REPORTS = "reports"
 
 SEASON = re.compile(r"^(\d{4})/(\d{2})$")
 # tools/check_log_immutable.py has its own, looser pattern, as it runs
-# without the package installed; tests/test_log_immutability.py checks it
+# without the package installed; tests/tools/test_log_immutability.py checks it
 # covers every directory named here (it may protect more, never less).
 SUFFIX = re.compile(r"^-(\d{4})-(\d{2})$")
 

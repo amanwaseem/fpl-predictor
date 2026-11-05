@@ -11,7 +11,7 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", "404", "422", "429",
 
 # Reads a manager's squad from the FPL API: not fuzzed from CI, which would
 # send the real API a request for every random team id. Tested against canned
-# responses in tests/test_db_optimise.py.
+# responses in tests/db/test_db_optimise.py.
 [[operations]]
 include-path = "/v1/entries/{fpl_team_id}/advice"
 enabled = false

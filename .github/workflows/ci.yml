@@ -118,7 +118,7 @@ jobs:
   # The schema against a real Postgres: migrations up and down, models matching
   # them, and the constraints (#77). A job of its own because service
   # containers run only on Linux, and the test matrix includes macOS, where
-  # tests/test_db.py skips.
+  # tests/db/test_db.py skips.
   db:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -154,7 +154,7 @@ jobs:
           path: data/raw/history/${{ steps.archive.outputs.commit }}
           key: history-${{ steps.archive.outputs.commit }}
       - run: fpl-backfill --download-only
-      - run: pytest -v tests/test_db*.py
+      - run: pytest -v tests/db/test_db*.py
       # The committed log, projected into an empty schema and checked row by
       # row against git (#80). Proves the projection can always be rebuilt
       # from the log alone, including on the commit that adds an entry.

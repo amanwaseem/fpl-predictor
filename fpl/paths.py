@@ -19,7 +19,7 @@ a default resolved against the root would be two anchors in one command.
 import tomllib
 from pathlib import Path
 
-# Must match [project] name in pyproject.toml; tests/test_paths.py checks it.
+# Must match [project] name in pyproject.toml; tests/project/test_paths.py checks it.
 PROJECT_NAME = "fpl-predictor"
 
 

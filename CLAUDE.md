@@ -36,7 +36,7 @@ works if the following hold:
 
 Postgres runs locally in Docker: `make up migrate seed` starts it, applies the
 migrations and loads `data/raw/LATEST`. Commands read `DATABASE_URL`. The
-database tests (`tests/test_db*.py`) need `TEST_DATABASE_URL` and skip without
+database tests (`tests/db/test_db*.py`) need `TEST_DATABASE_URL` and skip without
 it. `make test-db` sets it. After changing `fpl/db/models.py`, generate a
 migration with `alembic revision --autogenerate` and read it before
 committing.

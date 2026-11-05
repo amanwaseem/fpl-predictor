@@ -385,7 +385,7 @@ player's code; `PHOTOS` in `web/src/components/bits.tsx` turns them off.
 
 After changing a model, generate the migration with
 `alembic revision --autogenerate -m "what changed"` and read it before committing.
-`tests/test_db.py` fails if the models and migrations ever disagree.
+`tests/db/test_db.py` fails if the models and migrations ever disagree.
 
 ## Decisions
 

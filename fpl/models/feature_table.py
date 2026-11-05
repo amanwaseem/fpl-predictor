@@ -5,7 +5,7 @@ current one, and predicts from them. fpl.db.features reads a season from the
 database into a SeasonData, calls build_gameweek for each gameweek, and
 writes the rows to `player_gameweek_features`. This module is pure: it reads
 nothing and imports no database, so the prediction runtime can use it too,
-and the leak test (tests/test_feature_table.py) can poison its input freely.
+and the leak test (tests/models/test_feature_table.py) can poison its input freely.
 
 ## What a row may know
 

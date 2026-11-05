@@ -45,7 +45,7 @@ from pathlib import Path
 LOG_DIR = "predictions"
 # Every season's log directory: predictions/, then predictions-2027-28/ and
 # on. A copy of fpl.log.contract's naming, since this runs without the
-# package installed; tests/test_log_immutability.py checks the two agree.
+# package installed; tests/tools/test_log_immutability.py checks the two agree.
 LOG_DIRS = re.compile(r"^predictions(-\d{4}-\d{2})?$")
 DEFAULT_REF = "origin/main"
 TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
