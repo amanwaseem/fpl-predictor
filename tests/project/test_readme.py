@@ -90,7 +90,7 @@ class TestRecordSoFar(unittest.TestCase):
 
 class TestResultsPerGameweek(unittest.TestCase):
     def test_each_row_matches_its_entry(self):
-        rows = table_after(README.read_text(), "**Results so far**")
+        rows = table_after(README.read_text(), "<b>Results so far</b>")
         by_key = {(f"GW{e['gameweek']}", e["model_version"]): e for e in entries().values()}
         self.assertEqual({(r[0], r[1]) for r in rows}, set(by_key))
         for gw, model, mae, rho, form_mae, xi, form_xi in rows:
