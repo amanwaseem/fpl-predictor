@@ -28,6 +28,16 @@
     "web/package-lock.json": true,
     "docs/openapi.json": true
   },
+  // Companion files fold under the file they belong to, so the root reads as
+  // a handful of entries. Click the arrow beside a file to see what it holds.
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "pyproject.toml": "uv.lock, .pre-commit-config.yaml, Makefile",
+    "README.md": "LICENSE",
+    "Dockerfile": ".dockerignore, docker-compose.yml, fly.toml",
+    ".gitignore": ".gitattributes"
+  },
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,

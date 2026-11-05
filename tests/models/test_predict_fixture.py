@@ -3,7 +3,7 @@
 One class per component the model sums (#32): minutes, attacking returns,
 clean sheet, the rest, and the prior they are all shrunk toward. Then a full
 run through main() against the verifier, as test_end_to_end does for
-baseline-v1, and the import boundary CLAUDE.md sets for new models.
+baseline-v1, and the import boundary .claude/CLAUDE.md sets for new models.
 """
 
 import ast
@@ -227,7 +227,7 @@ class TestPrior(unittest.TestCase):
 
 
 class TestImportBoundary(unittest.TestCase):
-    """CLAUDE.md: new models import from snapshot, features and log, not the baseline."""
+    """.claude/CLAUDE.md: new models import from snapshot, features and log, not the baseline."""
 
     def test_imports(self):
         tree = ast.parse(Path(predict_fixture.__file__).read_text())

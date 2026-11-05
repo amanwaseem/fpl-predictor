@@ -47,7 +47,7 @@ openapi:
 	$(RUN) python tools/export_openapi.py
 
 fuzz:
-	$(RUN) schemathesis run http://127.0.0.1:8000/openapi.json --checks all
+	$(RUN) schemathesis --config-file tests/api/schemathesis.toml run http://127.0.0.1:8000/openapi.json --checks all
 
 lint:
 	$(RUN) ruff check .

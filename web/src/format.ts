@@ -6,7 +6,7 @@ export function formatUtc(iso: string | null | undefined): string {
 }
 
 // A time as a manager reads it: "Fri 6 Nov, 18:30 GMT", in the reader's own
-// time zone, named. The log and the API stay in UTC (CLAUDE.md).
+// time zone, named. The log and the API stay in UTC (.claude/CLAUDE.md).
 export function formatLocal(iso: string | null | undefined): string {
   const d = iso ? new Date(iso) : null;
   if (!d || Number.isNaN(d.getTime())) return "unknown";

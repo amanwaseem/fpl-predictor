@@ -1,4 +1,4 @@
-"""Tests for fpl-migrate: the schema brought to head with no alembic.ini in reach.
+"""Tests for fpl-migrate: the schema brought to head with no Alembic config in reach.
 
 Needs a database; see tests/database.py. Locally: make test-db
 """
@@ -23,7 +23,7 @@ def setUpModule():
 
 
 class TestMigrate(TempCwd):
-    """Run from an empty directory, as in the deployed image: no checkout, no alembic.ini."""
+    """Run from an empty directory, as in the deployed image: no checkout, no Alembic config."""
 
     def setUp(self):
         super().setUp()
@@ -42,7 +42,7 @@ class TestMigrate(TempCwd):
         return out.getvalue()
 
     def test_an_empty_database_is_brought_to_head(self):
-        self.assertFalse((self.tmp / "alembic.ini").exists())
+        self.assertNotIn("tool.alembic", (self.tmp / "pyproject.toml").read_text())
         output = self.run_migrate()
         self.assertIn(f"from empty to {migrate.head()}", output)
         tables = set(inspect(self.engine).get_table_names())

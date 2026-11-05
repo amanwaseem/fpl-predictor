@@ -2,8 +2,8 @@
 
     fpl-migrate                 # against DATABASE_URL
 
-`alembic upgrade head` without alembic.ini, which lives at the repository
-root and is not installed: the migrations are found inside the package, so
+`alembic upgrade head` without pyproject.toml's [tool.alembic], which is
+not installed: the migrations are found inside the package, so
 this runs from the deployed image, which has no checkout. The deploy runs it
 as Fly's release command, before any new machine takes traffic. If it fails,
 the deploy stops and the running version keeps serving.
@@ -38,7 +38,7 @@ def current(connection):
 
 
 def config(url):
-    """An Alembic config pointing at the installed migrations, not alembic.ini."""
+    """An Alembic config pointing at the installed migrations, not pyproject.toml."""
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS))
     config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))

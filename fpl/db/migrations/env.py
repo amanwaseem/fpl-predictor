@@ -4,7 +4,7 @@ The URL comes from `sqlalchemy.url` when a caller sets it (the tests do), and
 from DATABASE_URL otherwise.
 """
 
-from logging.config import fileConfig
+import logging
 
 from alembic import context
 
@@ -13,15 +13,19 @@ from fpl.db.session import database_url, make_engine
 from fpl.db.url import DatabaseURLError
 
 config = context.config
-if config.config_file_name is not None and config.attributes.get("configure_logger", True):
-    fileConfig(config.config_file_name)
+# On the `alembic` command line, its progress on stderr. Callers in code (the
+# tests, fpl-migrate) build their own Config, which has no cmd_opts, and leave
+# logging alone.
+if config.cmd_opts is not None:
+    logging.basicConfig(format="%(levelname)-5.5s [%(name)s] %(message)s", level=logging.WARNING)
+    logging.getLogger("alembic").setLevel(logging.INFO)
 
 target_metadata = Base.metadata
 
 
 def url():
     try:
-        return config.get_main_option("sqlalchemy.url") or database_url()
+        return config.get_alembic_option("sqlalchemy.url") or database_url()
     except DatabaseURLError as e:
         # `alembic` on the command line: its message, not a traceback.
         raise SystemExit(str(e)) from None
@@ -32,7 +36,7 @@ def run_migrations_offline():
 
     Needs no database, only the dialect, so it runs without DATABASE_URL too.
     """
-    offline_url = config.get_main_option("sqlalchemy.url") or "postgresql+psycopg://"
+    offline_url = config.get_alembic_option("sqlalchemy.url") or "postgresql+psycopg://"
     context.configure(
         url=offline_url, target_metadata=target_metadata, literal_binds=True, compare_type=True
     )

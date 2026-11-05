@@ -5,7 +5,8 @@ written to be followed by someone who has not seen the project before, and it
 is the same procedure every gameweek — substitute the real number for N
 throughout, and zero-pad it in filenames (`gw04`, never `gw4`).
 
-Read `CLAUDE.md` for the hard rules this procedure exists to satisfy. The two
+The rules this procedure exists to satisfy are in the README's
+[How it works](../README.md#how-it-works). The two
 that shape every step below:
 
 - **Rule 1** — a committed prediction is never rewritten. Everything that can

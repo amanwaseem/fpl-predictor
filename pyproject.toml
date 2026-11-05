@@ -151,3 +151,26 @@ warn_redundant_casts = true
 [[tool.mypy.overrides]]
 module = ["highspy"]
 ignore_missing_imports = true
+
+# Alembic: schema migrations (#77). `make migrate` runs `alembic upgrade head`
+# against DATABASE_URL; `alembic revision --autogenerate -m "..."` makes one.
+# The URL is never set here: fpl/db/migrations/env.py reads DATABASE_URL.
+# The migrations live inside the package so the deployed image can run them
+# without a checkout (fpl-migrate), and are numbered in order, not by hash.
+# Generated revisions are formatted and linted as they are written.
+[tool.alembic]
+script_location = "%(here)s/fpl/db/migrations"
+prepend_sys_path = ["."]
+file_template = "%%(rev)s_%%(slug)s"
+
+[[tool.alembic.post_write_hooks]]
+name = "format"
+type = "exec"
+executable = "ruff"
+options = "format REVISION_SCRIPT_FILENAME"
+
+[[tool.alembic.post_write_hooks]]
+name = "lint"
+type = "exec"
+executable = "ruff"
+options = "check --fix REVISION_SCRIPT_FILENAME"

@@ -20,7 +20,7 @@ hindsight.
 
 - Entries in `predictions/` are never modified or deleted once committed — not
   for bugs, not for embarrassment. A wrong prediction stays and is scored as
-  wrong. This is hard rule 1 in CLAUDE.md.
+  wrong. This is hard rule 1 in .claude/CLAUDE.md.
 - `tools/check_log_immutable.py` enforces it mechanically against the
   reference commit, in CI on every PR and every push to main.
 - Because nothing can be fixed after the commit, everything that can be checked

@@ -90,7 +90,8 @@ uv run coverage combine && uv run coverage report
 ## Database
 
 The schema lives in `fpl/db/models.py`, with Alembic migrations in
-`fpl/db/migrations/`. Locally, Postgres runs in Docker:
+`fpl/db/migrations/`; Alembic's settings are `[tool.alembic]` in
+`pyproject.toml`. Locally, Postgres runs in Docker:
 
 ```bash
 make up migrate    # start Postgres, bring the schema up to date
@@ -147,7 +148,8 @@ make serve               # or the API from the checkout, reloading on changes
 The contract is [`openapi.json`](openapi.json), committed and checked against
 the code by the tests: regenerate it with `make openapi` after changing a
 route. CI serves the API over the projected log and fuzzes it from that
-document with [schemathesis](https://schemathesis.io) (`make fuzz` locally).
+document with [schemathesis](https://schemathesis.io) (`make fuzz` locally; its settings are in
+`tests/api/schemathesis.toml`).
 
 **Load test.** [`tests/load/optimise.js`](../tests/load/optimise.js), with k6,
 on 25 October 2026: one `fpl-serve` process on an Apple Silicon laptop over
