@@ -277,7 +277,7 @@ def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS, log_dir=None
     return FAIL, (
         f"{when}, main has no gw{gameweek:02d}_*.csv, and no open PR adds one: "
         "the entry workflow has not made it. Make the entry by hand now: see "
-        f"RUNBOOK.md. A missed deadline stays missed.{notes}"
+        f"docs/runbook.md. A missed deadline stays missed.{notes}"
     )
 
 

@@ -483,7 +483,7 @@ def pr_body(gameweek, deadline, snapshot_id, tag, sha, release_url, run_url, dig
         )
     lines += [
         "",
-        'To read, if you are here (RUNBOOK.md, "The automated entry"):',
+        'To read, if you are here (docs/runbook.md, "The automated entry"):',
         "",
         "- [ ] `included:` and `excluded:` below are what you expect: no unsettled round included",
         "- [ ] the deadline is right and `generated` is before it",
@@ -551,7 +551,7 @@ def cmd_token_expiry(args, now=None):
         status = text.splitlines()[0] if text else "no response"
         print(
             f"REFUSED: ENTRY_BOT_TOKEN was rejected ({status}). Create a new one: "
-            'RUNBOOK.md, "The automated entry".'
+            'docs/runbook.md, "The automated entry".'
         )
         return 1
     try:
@@ -565,7 +565,7 @@ def cmd_token_expiry(args, now=None):
     if days <= args.fail_days:
         print(
             f"REFUSED: ENTRY_BOT_TOKEN expires in {days:.1f} days. Replace it now: "
-            'RUNBOOK.md, "The automated entry".'
+            'docs/runbook.md, "The automated entry".'
         )
         return 1
     print(f"OK: ENTRY_BOT_TOKEN expires in {days:.0f} days.")

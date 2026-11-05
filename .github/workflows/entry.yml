@@ -137,7 +137,7 @@ jobs:
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "ENTRY_BOT_TOKEN is not set: the PR would be opened without ci running on it."
-            echo 'Add it under Settings > Secrets and variables > Actions. RUNBOOK.md, "The automated entry".'
+            echo 'Add it under Settings > Secrets and variables > Actions. docs/runbook.md, "The automated entry".'
             exit 1
           fi
           { gh api -i "repos/$GITHUB_REPOSITORY" 2>/dev/null || true; } | python tools/entry_bot.py token-expiry --fail-days 0.5
@@ -203,7 +203,7 @@ jobs:
           gh release create "$tag" "$tarball" "$RUNNER_TEMP/digest-gw$PLANNED.md" \
             --target main --latest=false \
             --title "Snapshot $SNAPSHOT (GW$PLANNED entry)" \
-            --notes "Raw FPL API snapshot that produced the GW$PLANNED entry, and its digest. SHA-256 of the tarball: \`$sha\`. To re-verify: RUNBOOK.md, \"Re-verifying an automated entry\"."
+            --notes "Raw FPL API snapshot that produced the GW$PLANNED entry, and its digest. SHA-256 of the tarball: \`$sha\`. To re-verify: docs/runbook.md, \"Re-verifying an automated entry\"."
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
 

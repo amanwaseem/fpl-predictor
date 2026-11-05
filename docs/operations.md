@@ -2,7 +2,7 @@
 
 How the hosted service (ADR 0015) is watched, what it promises, and what to do
 when something breaks. Deploying it is [`deploy.md`](deploy.md); making an
-entry by hand is [`RUNBOOK.md`](../RUNBOOK.md).
+entry by hand is [`runbook.md`](runbook.md).
 
 Everything here uses what the project already has, GitHub Actions and Fly's
 own logs, with no third-party monitoring service to sign up for or keep.
@@ -79,7 +79,7 @@ Start with the failing workflow's summary, which says what failed. Then:
 ### The deadline watchdog fires
 
 Follow its message: merge the open entry PR it names, or make the entry by
-hand (RUNBOOK.md). A deadline that passes stays missed (ADR 0004).
+hand ([runbook.md](runbook.md)). A deadline that passes stays missed (ADR 0004).
 
 ### A 500 in the logs
 

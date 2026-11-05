@@ -22,7 +22,7 @@ minutes, as it does for every logged model and as fpl-verify checks. A player
 flagged available is unchanged, and one who cannot play is zeroed.
 
 The trained models are one JSON file, a GitHub release asset named in
-models/registry.json with its SHA-256; it is fetched once into data/models/
+fpl/models/registry.json with its SHA-256; it is fetched once into data/models/
 and refused if its hash differs. A model is fixed from its first entry
 (ADR 0005): retraining is a new version.
 """
@@ -50,7 +50,7 @@ from fpl.models.trees import Model
 from fpl.paths import require_project_root
 
 MODEL_VERSION = "gbm-v1"
-REGISTRY = Path("models/registry.json")
+REGISTRY = Path("fpl/models/registry.json")
 CACHE = Path("data/models")
 TIMEOUT = 60
 POSITIONS = ("GKP", "DEF", "MID", "FWD")
