@@ -39,8 +39,7 @@ class TestUrl(unittest.TestCase):
 class TestOfflineMigrations(unittest.TestCase):
     def test_the_sql_prints_without_a_database(self):
         """`alembic upgrade head --sql` is for reading the DDL; it needs no DATABASE_URL."""
-        config = Config(str(ROOT / "alembic.ini"))
-        config.attributes["configure_logger"] = False
+        config = Config(toml_file=str(ROOT / "pyproject.toml"))
         out = io.StringIO()
         config.stdout = out
         environ = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}

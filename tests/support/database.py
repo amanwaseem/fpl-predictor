@@ -37,9 +37,8 @@ def require_test_database():
 
 
 def alembic_config():
-    config = Config(str(ROOT / "alembic.ini"))
+    config = Config(toml_file=str(ROOT / "pyproject.toml"))
     config.set_main_option("sqlalchemy.url", normalise_url(URL).replace("%", "%%"))
-    config.attributes["configure_logger"] = False
     return config
 
 
