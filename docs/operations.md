@@ -45,7 +45,7 @@ reason to look, not a page at 3am.
 | **Availability** | 99% of hourly `/healthz` checks answer 200 within 60 s, a cold start included | Uptime workflow history |
 | **Data freshness** | The ingest checks FPL within every 30 hours (it is scheduled daily, with room for one late run), so a settled gameweek's results reach production the day FPL settles them | Uptime workflow history: a run fails when the last check is over 30 hours old |
 | **Entries** | Every logged model's entry merged at least 2 hours before each deadline | The deadline watchdog |
-| **Latency** | Reads under a second on a warm machine; the optimiser stops at its 10-second limit by construction | Spot checks, not a monthly figure: `duration_ms` in the logs, and the load test in the README |
+| **Latency** | Reads under a second on a warm machine; the optimiser stops at its 10-second limit by construction | Spot checks, not a monthly figure: `duration_ms` in the logs, and the load test in [development.md](development.md) |
 
 ## Incidents
 
