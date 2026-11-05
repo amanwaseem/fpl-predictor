@@ -10,32 +10,44 @@ dist/
 venv/
 env/
 .env
+.env.*
 .envrc
 
-# Tooling: coverage, lint, test caches
+# Tooling: coverage, lint and test caches
 .coverage
 .coverage.*
+coverage.xml
 htmlcov/
 .ruff_cache/
 .pytest_cache/
 .hypothesis/
 .mypy_cache/
+.schemathesis/
 *.log
 
-# Raw API snapshots — large, regenerable via fpl/ingest/fetch.py (hard rule 3)
+# Node (the web frontend has its own web/.gitignore)
+node_modules/
+
+# Editors and operating systems. The shared VS Code settings are committed;
+# anything personal in .vscode/ is not.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Raw API snapshots: large, and regenerable with fpl-fetch
 data/raw/
 
-# Trained models fetched from their release, by SHA-256 (#85); the registry is
-# committed, the artifacts are not
+# Trained models, fetched from their GitHub release by SHA-256 (#85). The
+# registry that names them, fpl/models/registry.json, is committed.
 data/models/
 
-# Exploratory runs — throwaway, never a real prediction
+# Exploratory runs: throwaway, never a real prediction
 scratch/
 
-# Partial log entries — write_entry cleans these up, but a hard kill
-# could leave one, and a truncated entry must never be committed.
+# Partial log entries. write_entry cleans these up, but a hard kill could
+# leave one, and a truncated entry must never be committed.
 predictions/*.tmp
 predictions-*/*.tmp
-
-# schemathesis's run cache, from make fuzz
-.schemathesis/
