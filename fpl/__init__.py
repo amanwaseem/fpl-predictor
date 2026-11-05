@@ -11,7 +11,7 @@ Each stage imports from the stages before it, with one exception: each
 model's command writes its entry through fpl/log/contract.py, the log's
 schema. That module imports nothing from fpl, and the subpackages' __init__
 files import nothing, so the two directions cannot make an import cycle.
-tests/test_layout.py holds the layout to that.
+tests/project/test_layout.py holds the layout to that.
 
 Beside the stages, and outside the order:
 

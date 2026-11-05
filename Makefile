@@ -58,7 +58,7 @@ test:
 	$(RUN) pytest
 
 test-db: up
-	TEST_DATABASE_URL=$(TEST_DATABASE_URL) FPL_REQUIRE_DB=1 $(RUN) pytest tests/test_db*.py
+	TEST_DATABASE_URL=$(TEST_DATABASE_URL) FPL_REQUIRE_DB=1 $(RUN) pytest tests/db/test_db*.py
 
 psql:
 	docker compose exec db psql -U fpl fpl

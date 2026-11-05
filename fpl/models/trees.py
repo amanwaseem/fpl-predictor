@@ -5,7 +5,7 @@ makes gbm-v1's entries cannot need LightGBM, numpy or a compiler: training
 does, in the `ml` group, and saves each model with `model_to_string()`. This
 reads that text and walks its trees, following LightGBM's own rules for a
 missing value and for which side of a split it goes, so the two agree to the
-last bit (tests/test_trees.py checks it against LightGBM itself).
+last bit (tests/models/test_trees.py checks it against LightGBM itself).
 
 Only what gbm-v1 uses is supported: numerical splits, one output, and the
 regression, binary and Tweedie objectives. Anything else is refused when the

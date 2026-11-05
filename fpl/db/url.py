@@ -22,7 +22,7 @@ suits the API, but migrations need the direct connection.
 
 Every problem is named by what is wrong, never by what is there: no message
 quotes any part of the URL, since any part of it may be the password.
-tests/test_db_url.py checks that with a URL made of sentinel values.
+tests/db/test_db_url.py checks that with a URL made of sentinel values.
 
 Standard library only: the deploy workflow runs this through
 tools/check_database_url.py before any dependency is installed.

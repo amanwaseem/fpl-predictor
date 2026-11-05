@@ -1,14 +1,11 @@
-"""Test package.
+"""The test suite, laid out like the package it tests.
 
-Exists so the suite has more than one working invocation. Without it,
-`python -m unittest discover -s tests -t .` fails with "Start directory is not
-importable" and a bare `python -m unittest` finds nothing — leaving exactly one
-undocumented-by-default spelling that works, which is how a suite silently
-stops running in CI.
+Each folder mirrors part of fpl/ (api, db, ingest, models, log, evaluation,
+optimise), plus tools/ for the scripts in tools/ and project/ for checks on
+the repository itself: the README, the ADRs, packaging and layout. Shared
+helpers live in support/.
 
-Shared fixtures are imported as `from tests import fixtures` rather than
-`import fixtures`, because once this file exists the tests directory is a
-package and is no longer placed on sys.path in its own right. That form also
-resolves without this file, through a namespace package, so a test module
-written against either layout works under both.
+Every folder is a package, so a test imports another's helpers by its full
+name (`from tests.support import fixtures`) and `pytest` from the repository
+root finds them all.
 """

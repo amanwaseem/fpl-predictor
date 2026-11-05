@@ -39,7 +39,7 @@ undo the choice without knowing the reason for it.
 
 - The reasoning lives next to the code and moves with it; issue comments stay
   as the discussion that led there.
-- `tests/test_adr.py` keeps the numbering contiguous, every status valid, and
+- `tests/project/test_adr.py` keeps the numbering contiguous, every status valid, and
   the index complete, so the set cannot quietly rot.
 - SPEC still describes *what* the system does. Where it gave reasons, it now
   points here.

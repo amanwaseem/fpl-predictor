@@ -101,7 +101,7 @@ UNAVAILABLE = frozenset("isn")
 # Starters per position, from fpl.evaluation.xi's formations rather than a second copy:
 # 1 GKP, and each outfield position between its fewest and most in any
 # formation. With eleven starters in all, these bounds admit exactly the
-# formations fpl.evaluation.xi lists; tests/test_optimise.py checks that.
+# formations fpl.evaluation.xi lists; tests/optimise/test_optimise.py checks that.
 XI_BOUNDS = {"GKP": (1, 1)} | {
     position: (min(f[i] for f in FORMATIONS), max(f[i] for f in FORMATIONS))
     for i, position in enumerate(("DEF", "MID", "FWD"))
