@@ -2,7 +2,7 @@
 
 The entry is a copy of the committed GW8 baseline: six hundred-odd real
 players, so the solver has real squads to find. The FPL API is replaced by a
-dict of canned responses. Needs a database; see tests/database.py.
+dict of canned responses. Needs a database; see tests/support/database.py.
 """
 
 import shutil

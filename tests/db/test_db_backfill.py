@@ -1,8 +1,8 @@
 """fpl-backfill against Postgres (#79).
 
-The synthetic archive (tests/history_files.py) always; the real one, all ten
+The synthetic archive (tests/support/history_files.py) always; the real one, all ten
 seasons, when its pinned files are under data/raw/history/ (CI's db job
-downloads them first). Needs a database; see tests/database.py.
+downloads them first). Needs a database; see tests/support/database.py.
 """
 
 import os

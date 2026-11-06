@@ -1,6 +1,6 @@
 """Tests for fpl-load: a synthetic snapshot into Postgres, and what loading again does.
 
-Needs a database; see tests/database.py. Locally: make test-db
+Needs a database; see tests/support/database.py. Locally: make test-db
 """
 
 import os

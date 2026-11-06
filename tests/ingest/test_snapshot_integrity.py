@@ -17,7 +17,7 @@ from tests.support import fixtures
 class TempCwd(fixtures.TempCwd):
     """A snapshot in the minimal shape these tests were written against.
 
-    The builder itself now lives in tests/fixtures.py, shared with the
+    The builder itself now lives in tests/support/fixtures.py, shared with the
     verifier and end-to-end suites. This wrapper keeps the argument shape
     these tests use: `players` is how many per-player history files exist,
     which is separate from how many elements the bootstrap claims — that gap

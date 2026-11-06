@@ -3,7 +3,7 @@
 tests/models/test_feature_table.py poisons the builder's input; this poisons the
 database itself, after the cut, and requires the rebuilt rows for the
 gameweek to be the same. With the real archive under data/raw/history/ it
-also builds all ten past seasons. Needs a database; see tests/database.py.
+also builds all ten past seasons. Needs a database; see tests/support/database.py.
 """
 
 import os

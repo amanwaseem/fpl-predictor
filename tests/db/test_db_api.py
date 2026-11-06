@@ -1,6 +1,6 @@
 """Contract tests for every /v1 route, against Postgres with a small season in it.
 
-Needs a database; see tests/database.py. Locally: make test-db
+Needs a database; see tests/support/database.py. Locally: make test-db
 """
 
 import json

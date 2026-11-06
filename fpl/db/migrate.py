@@ -2,9 +2,10 @@
 
     fpl-migrate                 # against DATABASE_URL
 
-`alembic upgrade head` without pyproject.toml's [tool.alembic], which is
-not installed: the migrations are found inside the package, so
-this runs from the deployed image, which has no checkout. The deploy runs it
+`alembic upgrade head` without the [tool.alembic] settings, which live in
+the checkout's pyproject.toml and are not in the image: the migrations are
+found inside the package, so this runs from the deployed image, which has no
+checkout. The deploy runs it
 as Fly's release command, before any new machine takes traffic. If it fails,
 the deploy stops and the running version keeps serving.
 

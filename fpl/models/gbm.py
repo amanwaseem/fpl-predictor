@@ -50,7 +50,10 @@ from fpl.models.trees import Model
 from fpl.paths import require_project_root
 
 MODEL_VERSION = "gbm-v1"
-REGISTRY = Path("fpl/models/registry.json")
+# Part of the model's definition, so it lives beside this module and ships
+# with the package, as the migrations do; the artifacts it names are data,
+# fetched into the working directory's data/models/.
+REGISTRY = Path(__file__).with_name("registry.json")
 CACHE = Path("data/models")
 TIMEOUT = 60
 POSITIONS = ("GKP", "DEF", "MID", "FWD")
