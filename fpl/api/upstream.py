@@ -29,7 +29,7 @@ from datetime import UTC, datetime, timedelta
 import requests
 from fastapi import HTTPException
 from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 
 from fpl.db.models import Fixture, PlayerFixtureStats, UpstreamResponse
 from fpl.optimise import MAX_FREE_TRANSFERS
@@ -148,7 +148,7 @@ def first_prices(engine, season, elements, gameweek):
                 Fixture.gameweek >= gameweek,
             )
             .order_by(PlayerFixtureStats.element_id, Fixture.gameweek)
-            .distinct(PlayerFixtureStats.element_id)
+            .ext(distinct_on(PlayerFixtureStats.element_id))
         )
         return dict(rows.all())
 
