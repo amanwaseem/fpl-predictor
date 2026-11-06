@@ -37,7 +37,9 @@ the naive prediction a model has to beat.
 | `gbm-v1` | challenger | GW9 | | 0.951 | 1.075 | 69 | 62 |
 
 "XI points" is what each model's best predicted starting eleven actually scored, summed over
-its gameweeks. A missed gameweek had no entry before the deadline, and stays missed.
+its gameweeks. A missed gameweek had no entry before the deadline, and stays missed. Each row is
+pooled over that model's own gameweeks, so the rows are not a ranking: a model logged later is
+judged on fewer, and perhaps easier, weeks. To compare models, use the gameweeks they share, below.
 
 <details>
 <summary><b>Results so far</b>, gameweek by gameweek</summary>
