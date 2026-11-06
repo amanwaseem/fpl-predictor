@@ -34,7 +34,7 @@ dependencies = ["requests>=2.34,<3"]
 # one group to an environment, name every group it needs, or pass --inexact.
 [dependency-groups]
 # The database layer (#77).
-db = ["sqlalchemy>=2.0,<2.2", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
+db = ["sqlalchemy>=2.1,<2.2", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
 # The squad optimiser (#53).
 optimise = ["highspy>=1.15,<2"]
 # The API (#81), with the solver /v1/optimise runs (#83).
@@ -138,6 +138,8 @@ skip_empty = true
 [tool.pytest.ini_options]
 # Only the suite: not scratch/, data/raw/ or anything else that matches test_*.
 testpaths = ["tests"]
+# An API SQLAlchemy has deprecated fails here, before a release removes it.
+filterwarnings = ["error::sqlalchemy.exc.SADeprecationWarning"]
 
 # Types (#76): checked in CI and by pre-commit, over the package, the scripts
 # in tools/ and the tests. Not --strict, which would mean annotating every
