@@ -1,0 +1,374 @@
+{
+  "actuals_snapshot_id": "20261106T063726Z",
+  "by_position": {
+    "DEF": {
+      "actual_total": 323,
+      "bias": -0.1715,
+      "mae": 1.1187,
+      "n": 217,
+      "predicted_total": 285.79,
+      "rmse": 2.0673,
+      "spearman": 0.7546
+    },
+    "FWD": {
+      "actual_total": 102,
+      "bias": -0.2168,
+      "mae": 1.0282,
+      "n": 79,
+      "predicted_total": 84.87,
+      "rmse": 2.1386,
+      "spearman": 0.8311
+    },
+    "GKP": {
+      "actual_total": 72,
+      "bias": -0.0346,
+      "mae": 0.68,
+      "n": 74,
+      "predicted_total": 69.44,
+      "rmse": 1.4727,
+      "spearman": 0.8999
+    },
+    "MID": {
+      "actual_total": 381,
+      "bias": -0.0888,
+      "mae": 0.8701,
+      "n": 299,
+      "predicted_total": 354.45,
+      "rmse": 1.5882,
+      "spearman": 0.7568
+    }
+  },
+  "by_team": {
+    "ARS": {
+      "actual_total": 63,
+      "bias": -0.6938,
+      "mae": 1.3179,
+      "n": 29,
+      "predicted_total": 42.88,
+      "rmse": 2.3081,
+      "spearman": 0.7591
+    },
+    "AVL": {
+      "actual_total": 35,
+      "bias": 0.2025,
+      "mae": 0.7997,
+      "n": 36,
+      "predicted_total": 42.29,
+      "rmse": 1.3784,
+      "spearman": 0.747
+    },
+    "BHA": {
+      "actual_total": 70,
+      "bias": -0.4062,
+      "mae": 1.1224,
+      "n": 37,
+      "predicted_total": 54.97,
+      "rmse": 2.1616,
+      "spearman": 0.8542
+    },
+    "BOU": {
+      "actual_total": 74,
+      "bias": -1.0424,
+      "mae": 1.4962,
+      "n": 29,
+      "predicted_total": 43.77,
+      "rmse": 2.3544,
+      "spearman": 0.781
+    },
+    "BRE": {
+      "actual_total": 69,
+      "bias": -1.0603,
+      "mae": 1.3314,
+      "n": 29,
+      "predicted_total": 38.25,
+      "rmse": 2.4119,
+      "spearman": 0.8699
+    },
+    "CHE": {
+      "actual_total": 77,
+      "bias": -1.3186,
+      "mae": 1.6991,
+      "n": 35,
+      "predicted_total": 30.85,
+      "rmse": 3.1745,
+      "spearman": 0.8107
+    },
+    "COV": {
+      "actual_total": 51,
+      "bias": -0.3665,
+      "mae": 1.1573,
+      "n": 37,
+      "predicted_total": 37.44,
+      "rmse": 2.1094,
+      "spearman": 0.7083
+    },
+    "CRY": {
+      "actual_total": 27,
+      "bias": 0.2408,
+      "mae": 0.7208,
+      "n": 36,
+      "predicted_total": 35.67,
+      "rmse": 1.218,
+      "spearman": 0.6043
+    },
+    "EVE": {
+      "actual_total": 63,
+      "bias": -0.9336,
+      "mae": 1.4968,
+      "n": 25,
+      "predicted_total": 39.66,
+      "rmse": 2.4219,
+      "spearman": 0.7352
+    },
+    "FUL": {
+      "actual_total": 32,
+      "bias": 0.4764,
+      "mae": 0.7129,
+      "n": 28,
+      "predicted_total": 45.34,
+      "rmse": 1.2011,
+      "spearman": 0.8881
+    },
+    "HUL": {
+      "actual_total": 40,
+      "bias": -0.0858,
+      "mae": 0.7295,
+      "n": 43,
+      "predicted_total": 36.31,
+      "rmse": 1.7608,
+      "spearman": 0.7978
+    },
+    "IPS": {
+      "actual_total": 42,
+      "bias": -0.0969,
+      "mae": 0.7769,
+      "n": 36,
+      "predicted_total": 38.51,
+      "rmse": 1.5479,
+      "spearman": 0.8567
+    },
+    "LEE": {
+      "actual_total": 28,
+      "bias": 0.5252,
+      "mae": 0.851,
+      "n": 31,
+      "predicted_total": 44.28,
+      "rmse": 1.3555,
+      "spearman": 0.8111
+    },
+    "LIV": {
+      "actual_total": 24,
+      "bias": 0.5444,
+      "mae": 0.6589,
+      "n": 36,
+      "predicted_total": 43.6,
+      "rmse": 1.2449,
+      "spearman": 0.897
+    },
+    "MCI": {
+      "actual_total": 29,
+      "bias": 0.4606,
+      "mae": 0.7582,
+      "n": 33,
+      "predicted_total": 44.2,
+      "rmse": 1.2911,
+      "spearman": 0.8424
+    },
+    "MUN": {
+      "actual_total": 17,
+      "bias": 0.4638,
+      "mae": 0.5803,
+      "n": 34,
+      "predicted_total": 32.77,
+      "rmse": 1.1056,
+      "spearman": 0.6473
+    },
+    "NEW": {
+      "actual_total": 25,
+      "bias": 0.3688,
+      "mae": 0.6465,
+      "n": 34,
+      "predicted_total": 37.54,
+      "rmse": 1.0155,
+      "spearman": 0.7279
+    },
+    "NFO": {
+      "actual_total": 18,
+      "bias": 0.4927,
+      "mae": 0.7187,
+      "n": 30,
+      "predicted_total": 32.78,
+      "rmse": 1.1341,
+      "spearman": 0.6175
+    },
+    "SUN": {
+      "actual_total": 29,
+      "bias": 0.0948,
+      "mae": 0.7716,
+      "n": 31,
+      "predicted_total": 31.94,
+      "rmse": 1.2485,
+      "spearman": 0.7726
+    },
+    "TOT": {
+      "actual_total": 65,
+      "bias": -0.5875,
+      "mae": 0.9165,
+      "n": 40,
+      "predicted_total": 41.5,
+      "rmse": 2.0586,
+      "spearman": 0.881
+    }
+  },
+  "calibration": [
+    {
+      "band": "0-1",
+      "mean_actual": 0.9756,
+      "mean_predicted": 0.3746,
+      "n": 123
+    },
+    {
+      "band": "1-2",
+      "mean_actual": 1.6,
+      "mean_predicted": 1.5073,
+      "n": 85
+    },
+    {
+      "band": "2-3",
+      "mean_actual": 2.6528,
+      "mean_predicted": 2.5879,
+      "n": 72
+    },
+    {
+      "band": "3-4",
+      "mean_actual": 3.4923,
+      "mean_predicted": 3.4394,
+      "n": 65
+    },
+    {
+      "band": "4-5",
+      "mean_actual": 3.7812,
+      "mean_predicted": 4.4697,
+      "n": 32
+    },
+    {
+      "band": "5+",
+      "mean_actual": 6.1667,
+      "mean_predicted": 5.62,
+      "n": 12
+    }
+  ],
+  "comparators": {
+    "available": true,
+    "form": {
+      "bias": 0.0401,
+      "mae": 1.075,
+      "n": 669,
+      "rmse": 1.9779,
+      "spearman": 0.7232,
+      "xi_actual": 62
+    },
+    "points_per_game": {
+      "bias": 0.4583,
+      "mae": 1.3306,
+      "n": 669,
+      "rmse": 2.1607,
+      "spearman": 0.6551,
+      "xi_actual": 32
+    },
+    "zero": {
+      "bias": -1.3124,
+      "mae": 1.3363,
+      "n": 669,
+      "rmse": 2.6477,
+      "spearman": null
+    }
+  },
+  "deadline_utc": "2026-10-31T11:00:00Z",
+  "gameweek": 9,
+  "harness_version": "harness-v1",
+  "head_to_head": {
+    "applicable": false,
+    "reason": "this is the baseline"
+  },
+  "join": {
+    "matched": 669,
+    "missing_actual": {
+      "count": 0,
+      "player_ids": []
+    },
+    "missing_prediction": {
+      "count": 1,
+      "player_ids": [
+        670
+      ]
+    }
+  },
+  "metrics": {
+    "all": {
+      "bias": -0.1247,
+      "mae": 0.9484,
+      "n": 669,
+      "rmse": 1.8148,
+      "spearman": 0.781
+    },
+    "predicted_to_play": {
+      "bias": -0.1914,
+      "mae": 1.6079,
+      "n": 389,
+      "rmse": 2.3708,
+      "spearman": 0.5646
+    }
+  },
+  "minutes": {
+    "mae": 11.1767,
+    "predicted_60_plus_but_did_not_play": 5,
+    "predicted_zero_but_played": 7
+  },
+  "model_version": "baseline-v1",
+  "prediction_snapshot_id": "20261031T004635Z",
+  "totals": {
+    "actual": 878,
+    "predicted": 794.55
+  },
+  "xi": {
+    "available": true,
+    "captured": {
+      "actual": 62,
+      "expected": 61.83,
+      "formation": "5-2-3",
+      "player_ids": [
+        1,
+        115,
+        4,
+        504,
+        31,
+        257,
+        124,
+        68,
+        411,
+        79,
+        166
+      ]
+    },
+    "captured_share": 0.5391,
+    "optimum": {
+      "actual": 115,
+      "expected": 115,
+      "formation": "5-2-3",
+      "player_ids": [
+        109,
+        112,
+        145,
+        31,
+        85,
+        115,
+        129,
+        40,
+        295,
+        26,
+        79
+      ]
+    }
+  }
+}

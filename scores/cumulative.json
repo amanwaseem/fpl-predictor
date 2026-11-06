@@ -5,36 +5,40 @@
       "comparators": {
         "available": true,
         "form": {
-          "mae": 1.294,
-          "n": 1989,
-          "xi_actual": 100,
-          "xi_gameweeks": 3
+          "mae": 1.2389,
+          "n": 2658,
+          "xi_actual": 162,
+          "xi_gameweeks": 4
         },
         "gameweeks": [
           4,
           6,
-          8
+          8,
+          9
         ],
         "points_per_game": {
-          "mae": 1.4013,
-          "n": 1989,
-          "xi_actual": 106,
-          "xi_gameweeks": 3
+          "mae": 1.3835,
+          "n": 2658,
+          "xi_actual": 138,
+          "xi_gameweeks": 4
         },
         "zero": {
-          "mae": 1.3987,
-          "n": 1989
+          "mae": 1.383,
+          "n": 2658
         }
       },
       "gameweeks_missed": [
         5,
         7
       ],
-      "gameweeks_pending": [],
+      "gameweeks_pending": [
+        10
+      ],
       "gameweeks_scored": [
         4,
         6,
-        8
+        8,
+        9
       ],
       "per_gameweek": [
         {
@@ -60,65 +64,77 @@
           "n": 668,
           "rmse": 2.1443,
           "spearman": 0.7276
+        },
+        {
+          "bias": -0.1247,
+          "gameweek": 9,
+          "mae": 0.9484,
+          "n": 669,
+          "rmse": 1.8148,
+          "spearman": 0.781
         }
       ],
       "pooled": {
         "all": {
-          "bias": -0.1878,
-          "mae": 1.0991,
-          "n": 1989,
-          "rmse": 2.1311,
-          "spearman": 0.7279
+          "bias": -0.1719,
+          "mae": 1.0611,
+          "n": 2658,
+          "rmse": 2.0561,
+          "spearman": 0.741
         },
-        "minutes_mae": 11.5826,
+        "minutes_mae": 11.4804,
         "predicted_to_play": {
-          "bias": -0.2743,
-          "mae": 1.86,
-          "n": 1143,
-          "rmse": 2.7824,
-          "spearman": 0.4812
+          "bias": -0.2532,
+          "mae": 1.796,
+          "n": 1532,
+          "rmse": 2.6839,
+          "spearman": 0.5011
         }
       },
       "retired_after": null,
       "role": "baseline",
       "xi": {
-        "captured": 155,
-        "captured_share": 0.3818,
-        "gameweeks": 3,
-        "optimum": 406
+        "captured": 217,
+        "captured_share": 0.4165,
+        "gameweeks": 4,
+        "optimum": 521
       }
     },
     "form-fixture-v1": {
       "comparators": {
         "available": true,
         "form": {
-          "mae": 1.3026,
-          "n": 1335,
-          "xi_actual": 68,
-          "xi_gameweeks": 2
+          "mae": 1.2266,
+          "n": 2004,
+          "xi_actual": 130,
+          "xi_gameweeks": 3
         },
         "gameweeks": [
           6,
-          8
+          8,
+          9
         ],
         "points_per_game": {
-          "mae": 1.4193,
-          "n": 1335,
-          "xi_actual": 78,
-          "xi_gameweeks": 2
+          "mae": 1.3897,
+          "n": 2004,
+          "xi_actual": 110,
+          "xi_gameweeks": 3
         },
         "zero": {
-          "mae": 1.3805,
-          "n": 1335
+          "mae": 1.3658,
+          "n": 2004
         }
       },
       "gameweeks_missed": [
         7
       ],
-      "gameweeks_pending": [],
+      "gameweeks_pending": [
+        10
+      ],
       "gameweeks_scored": [
         6,
-        8
+        8,
+        9
       ],
       "per_gameweek": [
         {
@@ -136,32 +152,106 @@
           "n": 668,
           "rmse": 2.1109,
           "spearman": 0.7289
+        },
+        {
+          "bias": -0.1588,
+          "gameweek": 9,
+          "mae": 0.9577,
+          "n": 669,
+          "rmse": 1.8416,
+          "spearman": 0.7756
         }
       ],
       "pooled": {
         "all": {
-          "bias": -0.239,
-          "mae": 1.0654,
-          "n": 1335,
-          "rmse": 2.0947,
-          "spearman": 0.7358
+          "bias": -0.2122,
+          "mae": 1.0295,
+          "n": 2004,
+          "rmse": 2.0138,
+          "spearman": 0.7487
         },
-        "minutes_mae": 11.911,
+        "minutes_mae": 11.6659,
         "predicted_to_play": {
-          "bias": -0.3762,
-          "mae": 1.8072,
-          "n": 771,
-          "rmse": 2.7382,
-          "spearman": 0.4696
+          "bias": -0.3339,
+          "mae": 1.7457,
+          "n": 1160,
+          "rmse": 2.6315,
+          "spearman": 0.4938
         }
       },
       "retired_after": null,
       "role": "main",
       "xi": {
-        "captured": 79,
-        "captured_share": 0.3038,
-        "gameweeks": 2,
-        "optimum": 260
+        "captured": 134,
+        "captured_share": 0.3573,
+        "gameweeks": 3,
+        "optimum": 375
+      }
+    },
+    "gbm-v1": {
+      "comparators": {
+        "available": true,
+        "form": {
+          "mae": 1.075,
+          "n": 669,
+          "xi_actual": 62,
+          "xi_gameweeks": 1
+        },
+        "gameweeks": [
+          9
+        ],
+        "points_per_game": {
+          "mae": 1.3306,
+          "n": 669,
+          "xi_actual": 32,
+          "xi_gameweeks": 1
+        },
+        "zero": {
+          "mae": 1.3363,
+          "n": 669
+        }
+      },
+      "gameweeks_missed": [],
+      "gameweeks_pending": [
+        10
+      ],
+      "gameweeks_scored": [
+        9
+      ],
+      "per_gameweek": [
+        {
+          "bias": -0.0744,
+          "gameweek": 9,
+          "mae": 0.951,
+          "n": 669,
+          "rmse": 1.7923,
+          "spearman": 0.7744
+        }
+      ],
+      "pooled": {
+        "all": {
+          "bias": -0.0744,
+          "mae": 0.951,
+          "n": 669,
+          "rmse": 1.7923,
+          "spearman": 0.7744
+        },
+        "minutes_mae": 11.7209,
+        "predicted_to_play": {
+          "bias": -0.1003,
+          "mae": 1.2827,
+          "n": 496,
+          "rmse": 2.0816,
+          "spearman": 0.7105
+        }
+      },
+      "retired_after": null,
+      "role": "challenger",
+      "xi": {
+        "captured": 69,
+        "captured_share": 0.6,
+        "gameweeks": 1,
+        "optimum": 115
       }
     }
   }
