@@ -1,0 +1,29 @@
+# Whitespace for any editor: https://editorconfig.org. The formatters (ruff,
+# Prettier) have the final say; this keeps what an editor writes close to it.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{ts,tsx,js,json,css,html,yml,yaml}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+# A trailing double space is a line break in Markdown.
+[*.md]
+trim_trailing_whitespace = false
+
+# The log and its scores are written by code with CRLF line endings, and an
+# entry is never edited by hand. Left exactly as they are.
+[{predictions,scores}*/*.csv]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

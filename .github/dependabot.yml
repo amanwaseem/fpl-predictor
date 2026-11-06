@@ -1,0 +1,48 @@
+# Dependency updates, by GitHub's own Dependabot: once a month, one grouped PR
+# per ecosystem, merged by hand once CI passes, and never in the days before a
+# deadline. Security fixes arrive as they are published, through the
+# repository's Dependabot security updates, not on this schedule.
+version: 2
+updates:
+  # pyproject.toml and uv.lock: every group, the runtime included.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: monthly
+    groups:
+      web:
+        patterns: ["*"]
+
+  # The workflows and the composite action they share.
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/*"]
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The image's base images. Python stays on 3.13 (3.14 is a minor version to
+  # semver) and Node on 24, as pyproject.toml and web/.nvmrc pin them. uv is
+  # pinned here and in .github/actions/uv together, so it is bumped by hand.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "*astral-sh/uv"
+    groups:
+      docker:
+        patterns: ["*"]

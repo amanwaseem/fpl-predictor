@@ -1,0 +1,16 @@
+name: Idea or request
+description: A feature, a model idea, or something that would make the site more useful.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What would help, if you have something in mind.
