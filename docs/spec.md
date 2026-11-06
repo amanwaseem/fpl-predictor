@@ -374,17 +374,20 @@ horizon follows (#55).
 | Milestone | Target |
 |---|---|
 | Data ingestion working | Done |
-| Rolling-form baseline | Before GW4 |
-| Prediction log schema fixed | Before GW4 |
+| Rolling-form baseline | Done, before GW4 |
+| Prediction log schema fixed | Done, before GW4 |
 | GW4 predictions committed | Done, 2026-09-12 |
 | GW5 predictions committed | **Missed** — deadline 2026-09-18 passed with no entry ([ADR 0004](adr/0004-a-missed-deadline-stays-missed.md)) |
+| GW6 predictions committed | Done, 2026-10-10: form-fixture-v1's first entry, beside baseline-v1 |
+| GW7 predictions committed | **Missed** — deadline 2026-10-17 passed with no entry ([ADR 0004](adr/0004-a-missed-deadline-stays-missed.md)) |
+| GW8 predictions committed | Done, 2026-10-23 |
 | GW9 predictions committed | Done, 2026-10-31: pushed in PR #117 ten hours before the deadline, merged after it, and accepted as on time ([ADR 0026](adr/0026-an-entry-pushed-before-its-deadline-counts.md)). Entry PRs now merge themselves ([ADR 0024](adr/0024-entry-prs-merge-themselves.md)) |
 | GW10 predictions committed | Done, 2026-11-06: made, opened and merged by the entry workflow, unattended, nearly twelve hours before the deadline |
 | Scoring harness | Done |
 | Package structure, CI, ADRs | Done |
-| Optimiser | International break |
-| Component models | From GW6 |
-| API and frontend | From GW6 |
+| Optimiser | Done: `fpl-optimise`, `fpl-plan`, and `/v1/optimise` on the API |
+| Component models | Done: form-fixture-v1, logged from GW6; gbm-v1 from GW9 |
+| API and frontend | Done: live at [fpl-predictor-aman.fly.dev](https://fpl-predictor-aman.fly.dev) |
 
 ## 10. Open questions
 
