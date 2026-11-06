@@ -31,7 +31,8 @@ predicts is a new model version, not an edit to the old one
    cd web && npm run lint && npm run format:check
    ```
 
-   `uv run pre-commit install` runs most of these on every commit.
+   `uv run pre-commit install` runs the lint and format checks (not the
+   tests) on every commit.
 3. Open a pull request that says what changed, why, and how you checked it.
    CI's `ci` check must pass.
 4. PRs are rebased onto `main`, never merged with a merge commit, so the
