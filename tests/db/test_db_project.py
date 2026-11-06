@@ -1,6 +1,6 @@
 """Tests for fpl-project and fpl-reconcile: the log into Postgres, and checking it.
 
-Needs a database; see tests/database.py. Locally: make test-db
+Needs a database; see tests/support/database.py. Locally: make test-db
 """
 
 import os

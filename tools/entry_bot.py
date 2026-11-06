@@ -28,7 +28,7 @@ passed, and nothing for that gameweek exists yet:
   not this deadline's entry: the log has no season dimension yet, so that
   fails for a person to look rather than skipping silently;
 - no open PR adds one, whether this workflow opened it or a human did. One
-  entry per (gameweek, model), RUNBOOK section 0;
+  entry per (gameweek, model), docs/runbook.md section 0;
 - the workflow's own branch is not already there. If it is, with no PR, an
   earlier run pushed and then failed to open the PR: `resume` opens it from
   that branch rather than making a second entry. If a PR from it was closed
@@ -114,7 +114,7 @@ def bot_branch(season, gameweek):
 
 
 def hand_branch(gameweek, season=None):
-    """The branch an entry made by hand goes on (RUNBOOK section 7).
+    """The branch an entry made by hand goes on (docs/runbook.md section 7).
 
     predict/gwNN in 2026/27, as the runbook has always said; predict/<season>-gwNN
     after (#72), since branches are never deleted and last season's would clash.
@@ -266,7 +266,7 @@ def decide(
             FAIL,
             f"Branch {hand} exists with no PR: an entry is being made by "
             "hand. Not making a second. Open its PR, or make the entry "
-            "by hand (RUNBOOK section 7).",
+            "by hand (docs/runbook.md section 7).",
         )
 
     return result(ACT, "Making the entry." + (" (window ignored)" if ignore_window else ""))

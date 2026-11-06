@@ -1,6 +1,6 @@
 """Tests for the schema: its migrations, and the constraints that keep rows sound.
 
-Needs a database; see tests/database.py. Locally: make test-db
+Needs a database; see tests/support/database.py. Locally: make test-db
 """
 
 import unittest

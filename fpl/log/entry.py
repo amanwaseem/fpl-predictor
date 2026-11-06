@@ -1,10 +1,10 @@
 """One command for an entry: every logged model, from one snapshot (#47).
 
-RUNBOOK steps 3-6, run for each model in LOGGED_MODELS:
+docs/runbook.md steps 3-6, run for each model in LOGGED_MODELS:
 
     scratch run -> real write to predictions/ -> fpl-verify -> fpl-summarise
 
-then a digest to paste into the PR body (RUNBOOK section 8). It calls each
+then a digest to paste into the PR body (docs/runbook.md section 8). It calls each
 command's own main(), so what it writes is what the manual steps write.
 
 Two orderings differ from running the steps by hand, both so that a failure
@@ -119,7 +119,7 @@ def _same_as_scratch(entry, check):
 
 
 def digest(snapshot_id, target_gw, deadline, outputs):
-    """The PR body's record of the run: what RUNBOOK section 8 says to paste."""
+    """The PR body's record of the run: what docs/runbook.md section 8 says to paste."""
     lines = [
         f"## GW{target_gw} entry",
         "",
@@ -263,7 +263,7 @@ def main(snapshot_id=None, dry_run=False, models=LOGGED_MODELS, digest_out=None)
             f"Dry run: nothing was written to {the_log}/ or {season_directory(season, REPORTS)}/."
         )
     else:
-        print("Nothing has been committed. Read the above, then RUNBOOK section 7.")
+        print("Nothing has been committed. Read the above, then docs/runbook.md section 7.")
     return 0
 
 

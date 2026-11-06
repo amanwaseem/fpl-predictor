@@ -1,6 +1,6 @@
 """Tests for fpl-migrate: the schema brought to head with no Alembic config in reach.
 
-Needs a database; see tests/database.py. Locally: make test-db
+Needs a database; see tests/support/database.py. Locally: make test-db
 """
 
 import contextlib
@@ -42,11 +42,17 @@ class TestMigrate(TempCwd):
         return out.getvalue()
 
     def test_an_empty_database_is_brought_to_head(self):
-        self.assertNotIn("tool.alembic", (self.tmp / "pyproject.toml").read_text())
         output = self.run_migrate()
         self.assertIn(f"from empty to {migrate.head()}", output)
         tables = set(inspect(self.engine).get_table_names())
         self.assertEqual(tables, set(Base.metadata.tables) | {"alembic_version"})
+
+    def test_alembic_settings_in_the_working_directory_are_not_read(self):
+        """It finds the migrations in the package, whatever a checkout says."""
+        with (self.tmp / "pyproject.toml").open("a") as f:
+            f.write('\n[tool.alembic]\nscript_location = "nowhere"\n')
+        output = self.run_migrate()
+        self.assertIn(f"from empty to {migrate.head()}", output)
 
     def test_a_database_at_head_is_left_alone(self):
         self.run_migrate()
