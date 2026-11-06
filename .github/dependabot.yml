@@ -17,6 +17,15 @@ updates:
     directory: /web
     schedule:
       interval: monthly
+    ignore:
+      # Node's types follow the Node the site runs on (web/.nvmrc), not the
+      # newest Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 is the native compiler: a migration of its own, once the
+      # tools around it (openapi-typescript, typescript-eslint) accept it.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     groups:
       web:
         patterns: ["*"]
