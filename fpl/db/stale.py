@@ -109,7 +109,14 @@ def from_database(connection, season):
     latest = (
         select(PlayerClub.element_id, PlayerClub.team_id)
         .where(PlayerClub.season == season)
-        .order_by(PlayerClub.element_id, func.lower(PlayerClub.gameweeks).desc())
+        # Ties broken so the answer never depends on row order: the open-ended
+        # spell (upper bound NULL, first when descending), then the club.
+        .order_by(
+            PlayerClub.element_id,
+            func.lower(PlayerClub.gameweeks).desc(),
+            func.upper(PlayerClub.gameweeks).desc(),
+            PlayerClub.team_id,
+        )
         .ext(distinct_on(PlayerClub.element_id))
     )
     found["clubs"] = {(r[0],): (r[1],) for r in connection.execute(latest)}

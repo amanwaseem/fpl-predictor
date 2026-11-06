@@ -147,7 +147,14 @@ def first_prices(engine, season, elements, gameweek):
                 PlayerFixtureStats.element_id.in_(elements),
                 Fixture.gameweek >= gameweek,
             )
-            .order_by(PlayerFixtureStats.element_id, Fixture.gameweek)
+            # In a double gameweek, the first fixture's price: what he cost as
+            # the gameweek began, whichever row the database finds first.
+            .order_by(
+                PlayerFixtureStats.element_id,
+                Fixture.gameweek,
+                Fixture.kickoff_utc,
+                Fixture.fixture_id,
+            )
             .ext(distinct_on(PlayerFixtureStats.element_id))
         )
         return dict(rows.all())

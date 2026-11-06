@@ -292,13 +292,13 @@ api = [
     { name = "fastapi", specifier = ">=0.159,<1" },
     { name = "highspy", specifier = ">=1.15,<2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3,<4" },
-    { name = "sqlalchemy", specifier = ">=2.0,<2.2" },
+    { name = "sqlalchemy", specifier = ">=2.1,<2.2" },
     { name = "uvicorn", specifier = ">=0.54,<1" },
 ]
 db = [
     { name = "alembic", specifier = ">=1.20,<2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3,<4" },
-    { name = "sqlalchemy", specifier = ">=2.0,<2.2" },
+    { name = "sqlalchemy", specifier = ">=2.1,<2.2" },
 ]
 dev = [
     { name = "alembic", specifier = ">=1.20,<2" },
@@ -314,7 +314,7 @@ dev = [
     { name = "pytest", specifier = ">=9.1,<10" },
     { name = "ruff", specifier = "==0.17.3" },
     { name = "schemathesis", specifier = ">=4.32,<5" },
-    { name = "sqlalchemy", specifier = ">=2.0,<2.2" },
+    { name = "sqlalchemy", specifier = ">=2.1,<2.2" },
     { name = "uvicorn", specifier = ">=0.54,<1" },
 ]
 ml = [
