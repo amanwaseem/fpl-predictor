@@ -10,7 +10,8 @@ indent_size = 4
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.{ts,tsx,js,json,css,html,yml,yaml}]
+# The site's files, as Prettier lays them out (it reads this file too).
+[*.{ts,tsx,js,mjs,cjs,jsx,json,css,html,yml,yaml}]
 indent_size = 2
 
 [Makefile]
