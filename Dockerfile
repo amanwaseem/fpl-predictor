@@ -9,14 +9,14 @@
 
 # The site, from package-lock.json exactly. Dependencies first, in a layer of
 # their own, so a change to the site's source reinstalls nothing.
-FROM node:24.11.1-slim AS web
+FROM node:24.22.1-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web ./
 RUN npm run build
 
-FROM python:3.13.7-slim AS build
+FROM python:3.13.17-slim AS build
 # uv, pinned like CI's, copied from its release image rather than installed.
 COPY --from=ghcr.io/astral-sh/uv:0.13.0 /uv /usr/local/bin/uv
 # The interpreter is the image's, and the virtualenv lives where the second
@@ -34,7 +34,7 @@ RUN uv sync --locked --no-dev --group api --no-install-project
 COPY fpl ./fpl
 RUN uv sync --locked --no-dev --group api --no-editable
 
-FROM python:3.13.7-slim
+FROM python:3.13.17-slim
 RUN useradd --system --uid 10001 --no-create-home fpl
 COPY --from=build /venv /venv
 # Served by the API at / (ADR 0025).
