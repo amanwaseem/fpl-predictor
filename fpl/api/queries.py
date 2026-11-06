@@ -6,6 +6,7 @@ uses, so the API's scorecard cannot disagree with the scorecard scores/ writes.
 
 from collections import defaultdict
 from decimal import Decimal
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select
@@ -436,7 +437,9 @@ def scorecard(connection, season):
             {k: v for k, v in row.items() if k != "model_version"}
         )
 
-    rows = defaultdict(lambda: defaultdict(list))
+    rows: defaultdict[str, defaultdict[int, list[dict[str, Any]]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     for model, gameweek, predicted, actual, expected_minutes, actual_minutes in connection.execute(
         select(
             PlayerScore.model_version,

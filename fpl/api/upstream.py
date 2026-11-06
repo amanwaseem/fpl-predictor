@@ -28,7 +28,7 @@ from datetime import UTC, datetime, timedelta
 
 import requests
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
 from fpl.db.models import Fixture, PlayerFixtureStats, UpstreamResponse
@@ -69,7 +69,7 @@ def fetch(engine, path):
             )
             # Kept small: anything older than a day will never be served again.
             connection.execute(
-                UpstreamResponse.__table__.delete().where(
+                delete(UpstreamResponse).where(
                     UpstreamResponse.fetched_at_utc < now - timedelta(days=1)
                 )
             )

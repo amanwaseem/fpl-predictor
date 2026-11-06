@@ -19,6 +19,7 @@ import re
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 # The prediction log schema, in SPEC section 5 order. Declared rather than
 # inferred from the first row: the column set is part of the log contract, and
@@ -154,7 +155,7 @@ def read_entry(path):
         if len(values) != len(FIELDS):
             faults.append(f"row {index}: has {len(values)} fields, expected {len(FIELDS)}")
             continue
-        row = dict(zip(FIELDS, values, strict=True))
+        row: dict[str, Any] = dict(zip(FIELDS, values, strict=True))
         parsed = True
         for field in NUMERIC:
             text = row[field]

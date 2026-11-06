@@ -69,7 +69,7 @@ def team_matches(fixtures, histories, target_gw, usable):
         and f.get("team_a_score") is not None
     }
 
-    xg = {}
+    xg: dict[tuple[int, int], float] = {}
     for rows in histories.values():
         for row in rows:
             fixture = played.get(row.get("fixture"))
@@ -177,7 +177,7 @@ class DifficultyRatings:
         by_id = {f["id"]: f for f in fixtures}
         scored = f"{source}_for"
         self.rate = _league_rate(matches, scored)
-        faced = {}
+        faced: dict[int, list[float]] = {}
         for m in matches:
             d = _difficulty_faced(by_id[m["fixture"]], m["home"])
             faced.setdefault(d, []).append(m[scored])

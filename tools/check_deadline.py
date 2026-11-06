@@ -139,6 +139,8 @@ def _entry_deadline(path):
     try:
         with path.open(newline="") as f:
             row = next(csv.DictReader(f), None)
+        if row is None:
+            return None
         return datetime.strptime(row["deadline_utc"], TIMESTAMP).replace(tzinfo=UTC)
     except (OSError, StopIteration, KeyError, TypeError, ValueError, csv.Error):
         return None
@@ -154,7 +156,7 @@ def classify_entries(gameweek, deadline, directory):
       other_season  made for the same gameweek number in another season;
       unreadable    no deadline_utc that can be read.
     """
-    found = {"current": [], "moved": [], "other_season": [], "unreadable": []}
+    found: dict[str, list[str]] = {"current": [], "moved": [], "other_season": [], "unreadable": []}
     directory = Path(directory)
     names = [p.name for p in directory.iterdir()] if directory.is_dir() else []
     for name in entries_for(gameweek, names):

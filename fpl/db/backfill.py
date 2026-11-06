@@ -18,6 +18,7 @@ Run from the repository root, with DATABASE_URL set.
 
 import argparse
 import sys
+from typing import Any
 
 from sqlalchemy import delete, exists, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -63,9 +64,9 @@ EXPECTED: dict[str, dict[str, int]] = {
 
 # Derived from the rest and rebuilt by fpl-features (#84): cleared first, with
 # the record of their build, so fpl-features sees the season as unbuilt.
-DERIVED = [PlayerGameweekFeatures, FeatureBuild]
+DERIVED: list[type[Any]] = [PlayerGameweekFeatures, FeatureBuild]
 # Children before parents, so a season can be deleted in this order.
-TABLES = [PlayerFixtureStats, PlayerClub, Fixture, Gameweek, SeasonPlayer, Team]
+TABLES: list[type[Any]] = [PlayerFixtureStats, PlayerClub, Fixture, Gameweek, SeasonPlayer, Team]
 COUNTED = {model.__tablename__: model for model in reversed(TABLES)}
 
 

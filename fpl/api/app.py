@@ -111,7 +111,8 @@ def create_app(engine=None, web=None):
     app.middleware("http")(http_caching)
     # Outermost, so its line covers the whole request, caching included.
     app.middleware("http")(observability.request_logging)
-    app.openapi = openapi_with_problems(app)
+    # Replacing the method is FastAPI's documented way to extend the schema.
+    app.openapi = openapi_with_problems(app)  # type: ignore[method-assign]
     return app
 
 

@@ -29,6 +29,8 @@ Ties are broken toward lower player ids, making the chosen XI deterministic and
 not merely its total.
 """
 
+from typing import Any
+
 FORMATIONS = [
     (defenders, midfielders, 10 - defenders - midfielders)
     for defenders in range(3, 6)
@@ -52,7 +54,7 @@ class _Flow:
     """
 
     def __init__(self, n_nodes):
-        self.adj = [[] for _ in range(n_nodes)]
+        self.adj: list[list[int]] = [[] for _ in range(n_nodes)]
         self.to, self.cap, self.cost = [], [], []
 
     def add(self, u, v, cap, cost):
@@ -69,8 +71,8 @@ class _Flow:
         n = len(self.adj)
         flow = total = 0
         while flow < wanted:
-            dist = [None] * n
-            via = [None] * n
+            dist: list[Any] = [None] * n
+            via: list[Any] = [None] * n
             dist[source] = 0
             changed = True
             while changed:

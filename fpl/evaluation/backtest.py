@@ -68,7 +68,9 @@ import itertools
 import json
 import math
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from fpl.evaluation import metrics, score
 from fpl.ingest.snapshot import load_live, load_snapshot, usable_rounds
@@ -231,7 +233,7 @@ def _gbm_bundle():
 # histories, target_gw, pasts) returning log-shaped rows. A logged model added
 # here must be the same function its log entries come from; a candidate from
 # fpl/models/candidates.py has no log entries and is never logged.
-MODELS = {
+MODELS: dict[str, Callable[..., Any]] = {
     "baseline-v1": _baseline,
     "baseline-prior": baseline_prior_rows,
     "baseline-fixture": baseline_fixture_rows,
@@ -265,7 +267,7 @@ MODELS = {
 # Keyword arguments to the model function. A model without an entry is scored
 # as it stands. Values are listed rather than ranged so a grid reads as the
 # claim it is: these, and only these, were tried.
-GRIDS = {
+GRIDS: dict[str, dict[str, tuple[Any, ...]]] = {
     # The prior's weight for players without a usable last season, before it
     # fades: the flat prior's 270, and more, out past where form stops
     # mattering.
@@ -315,7 +317,7 @@ def _comparator_values(histories):
         # Per round, not per row: a double gameweek is two rows and one round,
         # and averaging its fixtures separately would halve a double's haul and
         # stretch the window back past the rounds it claims to cover.
-        by_round = {}
+        by_round: dict[int, int] = {}
         for r in rows:
             by_round[r["round"]] = by_round.get(r["round"], 0) + r.get("total_points", 0)
         recent = [by_round[rnd] for rnd in sorted(by_round, reverse=True)[:RECENT_ROUNDS]]
@@ -345,7 +347,7 @@ def club_residuals(matched):
     once, one way or the other. The spread of these sums across clubs is how
     much of the week's error came club-shaped.
     """
-    sums = {}
+    sums: dict[Any, float] = {}
     for p in matched:
         if p["expected_minutes"] > 0:
             sums[p["team"]] = sums.get(p["team"], 0.0) + p["predicted_points"] - p["actual_points"]

@@ -244,7 +244,7 @@ def fixture_counts(fixtures, target_gw):
     Almost always 1, but blanks (0) and doubles (2) happen and are the most
     common source of badly wrong predictions.
     """
-    counts = {}
+    counts: dict[int, int] = {}
     for f in fixtures:
         if f.get("event") != target_gw:
             continue

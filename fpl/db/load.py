@@ -195,7 +195,7 @@ def club_spells(history, fixtures_by_id, current_team, next_gameweek):
     the next gameweek, if it differs from the last one in the history. If the
     club changed inside a gameweek, the later club has that gameweek.
     """
-    starts = []
+    starts: list[tuple[int, int]] = []
     for row in sorted(history, key=lambda h: (h["round"], h.get("kickoff_time") or "")):
         fixture = fixtures_by_id.get(row["fixture"])
         if fixture is None:

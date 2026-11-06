@@ -34,6 +34,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import requests
 from sqlalchemy import Boolean, Integer, SmallInteger
@@ -286,6 +287,8 @@ def _events(fixtures):
         elif before is not None:
             deadlines[gw] = deadlines[before] + timedelta(weeks=gw - before)
         else:
+            # deadlines is not empty, so a gameweek has a neighbour on one side.
+            assert after is not None
             deadlines[gw] = deadlines[after] - timedelta(weeks=after - gw)
     return [
         {
@@ -331,8 +334,8 @@ def _unscored(row):
 def _fixtures(season, rows):
     """Fixtures as the API's fixtures endpoint gives them, from the player rows.
     Every row of a fixture must agree about it, its two sides included."""
-    sides = defaultdict(dict)
-    facts = {}
+    sides: defaultdict[int, dict[str, int]] = defaultdict(dict)
+    facts: dict[int, tuple[Any, ...]] = {}
     for row in rows:
         fid = int(row["fixture"])
         # A home player's opponent is the away side, and the other way round.
@@ -377,7 +380,7 @@ def _typed_row(row):
     """A merged_gw row as an element-summary history row: the API's types, with
     numbers it sends as strings (expected goals, ICT) left as strings for
     stats_row, and an empty cell as no value."""
-    typed = {}
+    typed: dict[str, Any] = {}
     for key, value in row.items():
         column = STAT_COLUMNS.get(key)
         if value == "":

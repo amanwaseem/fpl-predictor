@@ -63,6 +63,7 @@ import re
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from check_deadline import (
     Malformed,
@@ -160,7 +161,7 @@ def decide(
     bootstrap, predictions_dir, prs, branches, now, window_hours=WINDOW_HOURS, ignore_window=False
 ):
     """A dict: action, gameweek, deadline, season, branch, late, why."""
-    out = {
+    out: dict[str, Any] = {
         "action": SKIP,
         "gameweek": None,
         "deadline": None,

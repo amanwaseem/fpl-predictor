@@ -14,12 +14,12 @@ repos:
         entry: uv run --locked ruff format
         language: system
         types: [python]
-      # mypy reads its files from pyproject.toml, so it checks fpl/ whole
+      # mypy reads its files from pyproject.toml, so it checks fpl/, tools/ and tests/ whole
       # rather than only the files staged; and it runs when its config or the
       # versions it checks against change, not only the Python.
       - id: mypy
         name: mypy
         entry: uv run --locked mypy
         language: system
-        files: ^(fpl/.*\.py|pyproject\.toml|uv\.lock)$
+        files: ^((fpl|tools|tests)/.*\.py|pyproject\.toml|uv\.lock)$
         pass_filenames: false

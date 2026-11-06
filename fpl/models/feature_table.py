@@ -38,6 +38,7 @@ for seasons before FPL published them (2022/23).
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import Any
 
 from fpl.models.features import settled_before
 from fpl.models.teams import Ratings, clean_sheet_probability, team_matches
@@ -105,7 +106,7 @@ def ratings_before(data, gameweek, usable):
 
 def _rounds(rows):
     """Per round, most recent first: minutes, points, xG, xA, bonus, fixtures, a 60."""
-    by_round = defaultdict(
+    by_round: defaultdict[int, dict[str, Any]] = defaultdict(
         lambda: {
             "minutes": 0,
             "points": 0,

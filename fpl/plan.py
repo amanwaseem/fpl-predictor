@@ -47,6 +47,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass
+from typing import Any
 
 from fpl.evaluation.xi import MAX_PER_CLUB, POSITIONS, SCALE, best_xi, check_positions
 from fpl.ingest.snapshot import load_snapshot, player_summaries, resolve_target_gw, usable_rounds
@@ -353,7 +354,7 @@ def _solve(
     n = len(pool)
     owned = [i for i in range(n) if pool[i]["player_id"] in selling]
 
-    weeks = []
+    weeks: list[dict[str, Any]] = []
     value = 0
     transfer_count = 0
     for k, worth in enumerate(worth_by_week):

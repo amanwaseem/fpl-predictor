@@ -130,13 +130,14 @@ def predict_rows(
     teams = {t["id"]: t["short_name"] for t in bootstrap["teams"]}
     positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
     counts = fixture_counts(fixtures, target_gw)
-    target_fixtures = {}
+    target_fixtures: dict[int, list[dict]] = {}
     for f in fixtures:
         if f.get("event") == target_gw:
             target_fixtures.setdefault(f["team_h"], []).append(f)
             target_fixtures.setdefault(f["team_a"], []).append(f)
 
     matches = team_matches(fixtures, histories, target_gw, usable)
+    ratings: DifficultyRatings | Ratings
     if strength == "fdr":
         ratings = DifficultyRatings(matches, fixtures, prior_matches=prior_matches)
     else:
@@ -186,7 +187,7 @@ def predict_rows(
                     season_minutes(history, target_gw, usable),
                     player_prior_minutes,
                 )
-                priors = (parts["total"], parts["attack"], parts["clean_sheet"])
+                priors: tuple[float, ...] = (parts["total"], parts["attack"], parts["clean_sheet"])
             else:
                 prior_minutes = POSITION_PRIOR_MINUTES
                 priors = (POSITION_PRIOR_PP90.get(position, 3.5), *league.get(position, (0.0, 0.0)))
@@ -200,7 +201,7 @@ def predict_rows(
                     )
 
             minutes = sum(r["minutes"] for r in recent)
-            observed = (
+            observed: tuple[float, ...] = (
                 sum(r["points"] for r in recent),
                 sum(attack_points(r, position) for r in window),
                 sum(clean_sheet_points(r, position) for r in window),
