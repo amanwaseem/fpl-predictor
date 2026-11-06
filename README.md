@@ -26,15 +26,15 @@ curl -s https://fpl-predictor-aman.fly.dev/v1/scorecard
 ### The record so far
 
 2026/27, pooled over every player in every scored gameweek, from
-[`scores/cumulative.json`](scores/cumulative.json) (actuals from snapshot `20261027T032902Z`,
+[`scores/cumulative.json`](scores/cumulative.json) (actuals from snapshot `20261106T063726Z`,
 taken once the latest of them settled). Lower MAE is better; `form` is FPL's own form figure,
 the naive prediction a model has to beat.
 
 | Model | Role | Scored | Missed | MAE | `form` MAE | XI points | `form` XI points |
 |---|---|---|---|---|---|---|---|
-| `baseline-v1` | baseline | GW4, GW6, GW8 | GW5, GW7 | 1.099 | 1.294 | 155 | 100 |
-| `form-fixture-v1` | main | GW6, GW8 | GW7 | 1.065 | 1.303 | 79 | 68 |
-| `gbm-v1` | challenger | from GW9 | | | | | |
+| `baseline-v1` | baseline | GW4, GW6, GW8, GW9 | GW5, GW7 | 1.061 | 1.239 | 217 | 162 |
+| `form-fixture-v1` | main | GW6, GW8, GW9 | GW7 | 1.030 | 1.227 | 134 | 130 |
+| `gbm-v1` | challenger | GW9 | | 0.951 | 1.075 | 69 | 62 |
 
 "XI points" is what each model's best predicted starting eleven actually scored, summed over
 its gameweeks. A missed gameweek had no entry before the deadline, and stays missed.
@@ -52,6 +52,9 @@ points of each one's best predicted XI. From `scores/gw*_*.json`, harness-v1.
 | GW6 | `form-fixture-v1` | 1.028 | 0.744 | 1.228 | 30 | 38 |
 | GW8 | `baseline-v1` | 1.114 | 0.728 | 1.377 | 50 | 30 |
 | GW8 | `form-fixture-v1` | 1.103 | 0.729 | 1.377 | 49 | 30 |
+| GW9 | `baseline-v1` | 0.948 | 0.781 | 1.075 | 62 | 62 |
+| GW9 | `form-fixture-v1` | 0.958 | 0.776 | 1.075 | 55 | 62 |
+| GW9 | `gbm-v1` | 0.951 | 0.774 | 1.075 | 69 | 62 |
 
 A handful of gameweeks is too few to tell two models apart by eye; held-out backtests over past
 seasons are what judge that ([`reports/gbm-v1.md`](reports/gbm-v1.md)).
