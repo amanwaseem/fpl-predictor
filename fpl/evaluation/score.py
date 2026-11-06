@@ -43,6 +43,7 @@ import csv
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from fpl.evaluation import metrics
 from fpl.evaluation.xi import best_xi
@@ -179,7 +180,7 @@ def _xi(pool, choose_by):
 
 
 def _grouped(matched, key):
-    groups = {}
+    groups: dict[Any, list[dict[str, Any]]] = {}
     for p in matched:
         groups.setdefault(p[key], []).append(p)
     return {
@@ -429,7 +430,7 @@ def cumulative(scored, events, entries):
     contradicted = roles.entries_after_retirement(entries, season)
     if contradicted:
         raise SystemExit("The log contradicts fpl.log.roles: " + "; ".join(contradicted))
-    out = {"harness_version": HARNESS_VERSION, "models": {}}
+    out: dict[str, Any] = {"harness_version": HARNESS_VERSION, "models": {}}
     models = sorted({model for _, model in entries})
     for model in models:
         logged = sorted(gw for gw, m in entries if m == model)
@@ -580,7 +581,8 @@ def main(actuals_id, out_dir=None, log_dir=None):
 
     # Baseline first, so every other model's head-to-head can see it.
     order = sorted(entries, key=lambda k: (k[0], k[1] != BASELINE_MODEL, k[1]))
-    scored, live_cache = {}, {}
+    scored: dict[tuple[int, str], Any] = {}
+    live_cache: dict[int, Any] = {}
     for gw, model in order:
         path = entries[(gw, model)]
         if gw not in settled:

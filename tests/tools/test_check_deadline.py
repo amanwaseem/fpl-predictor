@@ -22,6 +22,7 @@ from unittest import mock
 TOOLS = Path(__file__).resolve().parents[2] / "tools"
 sys.path.insert(0, str(TOOLS))
 _spec = importlib.util.spec_from_file_location("check_deadline", TOOLS / "check_deadline.py")
+assert _spec is not None and _spec.loader is not None
 check_deadline = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(check_deadline)
 

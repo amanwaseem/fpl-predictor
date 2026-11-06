@@ -16,7 +16,7 @@ try:
     import numpy
 # OSError: installed, but its OpenMP runtime is not (brew install libomp on macOS).
 except (ImportError, OSError):  # pragma: no cover - the ml group is not usable
-    lightgbm = None
+    lightgbm = None  # type: ignore[assignment]
 
 
 def data(n=600, features=6, seed=3):

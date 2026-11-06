@@ -101,8 +101,8 @@ packages = [
 "fpl.db.migrations" = ["script.py.mako"]
 "fpl.models" = ["registry.json"]
 
-# Lint, not format. `ruff format` would rewrite most of the repository for no
-# change in meaning and bury `git blame` under it, so only `ruff check` runs.
+# Lint and format, both checked in CI and by pre-commit: `ruff check` and
+# `ruff format --check` (`make lint`).
 #
 # The rule set is deliberately small: pyflakes and pycodestyle errors, import
 # order, bugbear and pyupgrade. Each finds real mistakes rather than enforcing
@@ -135,18 +135,28 @@ parallel = true
 [tool.coverage.report]
 skip_empty = true
 
-# Types (#76): checked in CI and by pre-commit. Non-strict to start, on fpl/
-# only; a module that is fully annotated can opt in to stricter checks below,
-# one at a time, rather than the whole package at once.
 [tool.pytest.ini_options]
 # Only the suite: not scratch/, data/raw/ or anything else that matches test_*.
 testpaths = ["tests"]
 
+# Types (#76): checked in CI and by pre-commit, over the package, the scripts
+# in tools/ and the tests. Not --strict, which would mean annotating every
+# function signature, but the bodies of unannotated functions are checked
+# too. tools/ is on the path because the tests import its scripts by name,
+# as the scripts run.
 [tool.mypy]
 python_version = "3.13"
-files = ["fpl"]
+files = ["fpl", "tools", "tests"]
+mypy_path = "tools"
+check_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
+
+# Test bodies are not checked: most tests set their fixtures up in setUpClass,
+# as unittest does, and mypy cannot see attributes made there.
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+check_untyped_defs = false
 
 # highspy ships no type information.
 [[tool.mypy.overrides]]

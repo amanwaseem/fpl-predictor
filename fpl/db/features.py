@@ -165,7 +165,7 @@ def fingerprint(connection, season):
     built by: its results, fixtures, clubs, settled rounds and committed entries,
     and the season before it, whose totals are the last-season columns."""
     stats, before = PlayerFixtureStats, season_before(season)
-    parts = [FEATURE_VERSION]
+    parts: list[object] = [FEATURE_VERSION]
     for s in (season, before):
         parts.append(
             tuple(

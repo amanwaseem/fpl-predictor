@@ -34,6 +34,7 @@ import sys
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fpl.evaluation import metrics
 from fpl.ingest.history import SEASONS
@@ -49,7 +50,7 @@ CV_SEASONS = SEASONS[-3:]
 BOOTSTRAP = 500
 SEED = 85
 ROUNDS = 300
-PARAMS = {
+PARAMS: dict[str, Any] = {
     "learning_rate": 0.05,
     "num_leaves": 31,
     "min_data_in_leaf": 100,
@@ -63,7 +64,7 @@ PARAMS = {
     "seed": SEED,
     "verbose": -1,
 }
-OBJECTIVES = {
+OBJECTIVES: dict[str, dict[str, Any]] = {
     "sixty": {"objective": "binary"},
     "minutes_long": {"objective": "regression"},
     "minutes_short": {"objective": "regression"},
@@ -176,7 +177,7 @@ def bootstrap(by_gameweek, statistics, draws=BOOTSTRAP, seed=SEED):
     resampled with replacement: one set of draws, every statistic on each."""
     rng = random.Random(seed)
     keys = sorted(by_gameweek)
-    values = {name: [] for name in statistics}
+    values: dict[str, list[float]] = {name: [] for name in statistics}
     for _ in range(draws):
         sample = [p for k in (rng.choice(keys) for _ in keys) for p in by_gameweek[k]]
         for name, statistic in statistics.items():

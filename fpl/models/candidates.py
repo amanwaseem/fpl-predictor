@@ -163,7 +163,8 @@ def price_fit(bootstrap, pasts, floor=None, xg_weight=None):
     """
     season = previous_season(bootstrap["events"])
     positions = {p["id"]: p["singular_name_short"] for p in bootstrap["element_types"]}
-    fitted, unfitted = {}, {}
+    fitted: dict[str, list[tuple[float, tuple[float, float, float]]]] = {}
+    unfitted: dict[str, list[float]] = {}
     for player in bootstrap["elements"]:
         position = positions.get(player["element_type"], "UNK")
         price = player["now_cost"] / 10.0

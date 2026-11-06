@@ -27,7 +27,7 @@ def recent_history(history, target_gw, usable):
     `usable` by construction and kept anyway: a leak here invalidates the whole
     track record.
     """
-    by_round = {}
+    by_round: dict[int, dict[str, int]] = {}
     for h in history:
         rnd = h.get("round")
         if rnd is None or rnd >= target_gw or rnd not in usable:
@@ -341,7 +341,7 @@ def league_rates(elements, positions, histories, target_gw, usable, parts):
     minutes, so a position's prior for each part comes from what it actually
     earned, from the same rounds a player is judged on.
     """
-    totals = {}
+    totals: dict[str, list[float]] = {}
     for player in elements:
         position = positions.get(player["element_type"], "UNK")
         t = totals.setdefault(position, [0.0] * len(parts) + [0])
@@ -420,10 +420,10 @@ def chance_of_sixty(rows, player):
     `rows` are the window's raw history rows (recent_rows). Per fixture, so a
     double counts both of its matches.
     """
-    by_round = {}
+    by_round: dict[int, tuple[int, int]] = {}
     for row in rows:
-        played, total = by_round.get(row["round"], (0, 0))
-        by_round[row["round"]] = (played + ((row.get("minutes") or 0) >= 60), total + 1)
+        played, count = by_round.get(row["round"], (0, 0))
+        by_round[row["round"]] = (played + ((row.get("minutes") or 0) >= 60), count + 1)
     total = weight_sum = 0.0
     for i, rnd in enumerate(sorted(by_round, reverse=True)):
         played, fixtures = by_round[rnd]

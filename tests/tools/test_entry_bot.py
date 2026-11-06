@@ -27,6 +27,7 @@ TOOLS = Path(__file__).resolve().parents[2] / "tools"
 # shares the watchdog's reading of bootstrap, the log and PRs.
 sys.path.insert(0, str(TOOLS))
 _spec = importlib.util.spec_from_file_location("entry_bot", TOOLS / "entry_bot.py")
+assert _spec is not None and _spec.loader is not None
 entry_bot = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(entry_bot)
 check_deadline = sys.modules["check_deadline"]
@@ -509,11 +510,13 @@ class FrozenTime(datetime):
 class TestCheckSnapshot(fixtures.TempCwd):
     def setUp(self):
         super().setUp()
-        self.id = "20261030T225500Z"
-        self.snapshot(self.id, events=fixtures.season(9, at(6).strftime(STAMP)), latest=True)
+        self.snapshot_id = "20261030T225500Z"
+        self.snapshot(
+            self.snapshot_id, events=fixtures.season(9, at(6).strftime(STAMP)), latest=True
+        )
 
     def problem(self, snapshot_id=None, gameweek=9, now=NOW, max_age=60):
-        return entry_bot.snapshot_problem(snapshot_id or self.id, gameweek, now, max_age)
+        return entry_bot.snapshot_problem(snapshot_id or self.snapshot_id, gameweek, now, max_age)
 
     def test_a_fresh_snapshot_for_the_planned_gameweek_passes(self):
         self.assertIsNone(self.problem())
@@ -541,7 +544,9 @@ class TestCheckSnapshot(fixtures.TempCwd):
             redirect_stdout(io.StringIO()) as out,
             mock.patch.object(entry_bot, "datetime", FrozenTime),
         ):
-            code = entry_bot.cli(["check-snapshot", "--snapshot", self.id, "--gameweek", "9"])
+            code = entry_bot.cli(
+                ["check-snapshot", "--snapshot", self.snapshot_id, "--gameweek", "9"]
+            )
         self.assertEqual(code, 0, out.getvalue())
 
 

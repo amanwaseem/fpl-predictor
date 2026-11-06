@@ -27,6 +27,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from alembic.script import ScriptDirectory
 from alembic.util import CommandError
@@ -56,7 +57,12 @@ from fpl.paths import require_project_root
 
 RAW = Path("data/raw")
 SHOWN = 5
-TABLES = {"gameweeks": Gameweek, "fixtures": Fixture, "teams": Team, "players": SeasonPlayer}
+TABLES: dict[str, type[Any]] = {
+    "gameweeks": Gameweek,
+    "fixtures": Fixture,
+    "teams": Team,
+    "players": SeasonPlayer,
+}
 
 
 def _split(model):
