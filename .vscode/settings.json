@@ -36,7 +36,8 @@
     "pyproject.toml": "uv.lock, .pre-commit-config.yaml, Makefile",
     "README.md": "LICENSE",
     "Dockerfile": ".dockerignore, docker-compose.yml, fly.toml",
-    ".gitignore": ".gitattributes"
+    ".gitignore": ".gitattributes, .editorconfig",
+    "package.json": "package-lock.json, .nvmrc, .gitignore, .prettierrc.json, .prettierignore, eslint.config.js, tsconfig.json, vite.config.ts, playwright.config.ts"
   },
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.testing.pytestEnabled": true,

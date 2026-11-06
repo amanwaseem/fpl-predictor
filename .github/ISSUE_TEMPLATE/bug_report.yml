@@ -1,0 +1,22 @@
+name: Bug report
+description: Something on the site, the API or in the code does not work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: A page or API URL, a command, or a file.
+      placeholder: https://fpl-predictor-aman.fly.dev/optimise?team=...
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Error messages, the response body, logs, or screenshots.

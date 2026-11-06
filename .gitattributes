@@ -1,0 +1,14 @@
+# The log and its scores are written by Python's csv module, with CRLF line
+# endings, and committed entries are immutable byte for byte. No end-of-line
+# conversion, whatever a clone's core.autocrlf says.
+predictions/*.csv -text
+predictions-*/*.csv -text
+scores/*.csv -text
+scores-*/*.csv -text
+
+# Generated files: collapsed in GitHub's diffs, and left out of its language
+# statistics.
+docs/openapi.json linguist-generated
+web/src/api/schema.d.ts linguist-generated
+uv.lock linguist-generated
+web/package-lock.json linguist-generated
