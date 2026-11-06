@@ -33,6 +33,10 @@ updates:
   # The image's base images. Python stays on 3.13 (3.14 is a minor version to
   # semver) and Node on 24, as pyproject.toml and web/.nvmrc pin them. uv is
   # pinned here and in .github/actions/uv together, so it is bumped by hand.
+  #
+  # Also by hand: postgres:17.6, pinned in docker-compose.yml and in ci.yml's
+  # service containers, which Dependabot cannot update. The three move
+  # together, on Neon's major version.
   - package-ecosystem: docker
     directory: /
     schedule:
