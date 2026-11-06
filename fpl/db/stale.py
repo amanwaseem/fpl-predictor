@@ -32,7 +32,7 @@ from typing import Any
 from alembic.script import ScriptDirectory
 from alembic.util import CommandError
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 
 from fpl.db.load import (
     fixture_rows,
@@ -110,7 +110,7 @@ def from_database(connection, season):
         select(PlayerClub.element_id, PlayerClub.team_id)
         .where(PlayerClub.season == season)
         .order_by(PlayerClub.element_id, func.lower(PlayerClub.gameweeks).desc())
-        .distinct(PlayerClub.element_id)
+        .ext(distinct_on(PlayerClub.element_id))
     )
     found["clubs"] = {(r[0],): (r[1],) for r in connection.execute(latest)}
     return found
