@@ -4,7 +4,15 @@ import { Link } from "react-router-dom";
 import { fixed } from "../format";
 import { entryHistoryUrl } from "../log";
 import { modelName } from "../models";
-import { againstBaseline, cell, gameweekList as list, gameweeks, judged, retiredNote, type Model } from "../scorecard";
+import {
+  againstBaseline,
+  cell,
+  gameweekList as list,
+  gameweeks,
+  judged,
+  retiredNote,
+  type Model,
+} from "../scorecard";
 
 export function ScorecardTables({ season, models }: { season: string; models: Model[] }) {
   if (!models.length) return <p>No model has an entry yet.</p>;
@@ -25,14 +33,42 @@ export function ScorecardTables({ season, models }: { season: string; models: Mo
               <th scope="col">Model</th>
               <th scope="col">Scored</th>
               <th scope="col">Missed</th>
-              <th scope="col" className="num" title="Mean absolute error, points">Avg error</th>
-              <th scope="col" className="num" title="Root mean squared error: big misses count more">RMSE</th>
-              <th scope="col" className="num" title="Spearman rank correlation: how well the order of players matched">Rank match</th>
-              <th scope="col" className="num" title="Average error over players the model expected to play">Avg error, starters</th>
-              <th scope="col" className="num" title="Average error in predicted minutes">Minutes error</th>
-              <th scope="col" className="num">Avg error, shared weeks</th>
-              <th scope="col" className="num">Baseline, same weeks</th>
-              <th scope="col" className="num">Difference</th>
+              <th scope="col" className="num" title="Mean absolute error, points">
+                Avg error
+              </th>
+              <th
+                scope="col"
+                className="num"
+                title="Root mean squared error: big misses count more"
+              >
+                RMSE
+              </th>
+              <th
+                scope="col"
+                className="num"
+                title="Spearman rank correlation: how well the order of players matched"
+              >
+                Rank match
+              </th>
+              <th
+                scope="col"
+                className="num"
+                title="Average error over players the model expected to play"
+              >
+                Avg error, starters
+              </th>
+              <th scope="col" className="num" title="Average error in predicted minutes">
+                Minutes error
+              </th>
+              <th scope="col" className="num">
+                Avg error, shared weeks
+              </th>
+              <th scope="col" className="num">
+                Baseline, same weeks
+              </th>
+              <th scope="col" className="num">
+                Difference
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -41,8 +77,7 @@ export function ScorecardTables({ season, models }: { season: string; models: Mo
               return (
                 <tr key={m.model_version}>
                   <th scope="row">
-                    {modelName(m.model_version)}{" "}
-                    <code className="muted">{m.model_version}</code>
+                    {modelName(m.model_version)} <code className="muted">{m.model_version}</code>
                     {retiredNote(m) && <span className="pill pill-neutral"> {retiredNote(m)}</span>}
                   </th>
                   <td>{list(m.gameweeks_scored)}</td>
@@ -98,8 +133,18 @@ export function ScorecardTables({ season, models }: { season: string; models: Mo
                 {models.map((m) => {
                   const c = cell(m, gw, baseline);
                   const key = m.model_version;
-                  if (c.kind === "missed") return <td key={key} className="num missed">missed</td>;
-                  if (c.kind === "none") return <td key={key} className="num muted">–</td>;
+                  if (c.kind === "missed")
+                    return (
+                      <td key={key} className="num missed">
+                        missed
+                      </td>
+                    );
+                  if (c.kind === "none")
+                    return (
+                      <td key={key} className="num muted">
+                        –
+                      </td>
+                    );
                   const href = entryHistoryUrl(season, gw, m.model_version);
                   const text = c.kind === "pending" ? "pending" : fixed(c.week.mae);
                   const diff =

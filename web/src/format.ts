@@ -11,7 +11,11 @@ export function formatLocal(iso: string | null | undefined): string {
   const d = iso ? new Date(iso) : null;
   if (!d || Number.isNaN(d.getTime())) return "unknown";
   const day = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
+  const time = d.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
   return `${day}, ${time}`;
 }
 

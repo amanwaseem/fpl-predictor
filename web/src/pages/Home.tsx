@@ -1,7 +1,15 @@
 import { Link } from "react-router-dom";
 import { type Schemas } from "../api/client";
-import { POSITION_NAMES, POSITIONS, useEntry, useModels, useScorecard, useStatus } from "../api/queries";
-import { ClubBadge, Countdown, Loading, PlayerPhoto, StatusPill, useTitle } from "../components/bits";
+import {
+  POSITION_NAMES,
+  POSITIONS,
+  useEntry,
+  useModels,
+  useScorecard,
+  useStatus,
+} from "../api/queries";
+import { ClubBadge, Countdown, Loading, PlayerPhoto, StatusPill } from "../components/bits";
+import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
 import { ScorecardTables } from "../components/ScorecardTables";
 import { REPOSITORY } from "../log";
@@ -58,7 +66,9 @@ export function Home() {
           <section className="section" aria-labelledby="top-picks">
             <div className="section-head">
               <h2 id="top-picks">Top picks for gameweek {latest}</h2>
-              <Link to={`/gameweeks/${latest}?model=${featured}`}>All {modelName(featured)} predictions →</Link>
+              <Link to={`/gameweeks/${latest}?model=${featured}`}>
+                All {modelName(featured)} predictions →
+              </Link>
             </div>
             <TopPicks gameweek={latest} model={featured} />
           </section>
@@ -87,9 +97,9 @@ export function Home() {
             <div className="card step">
               <h3>Publish</h3>
               <p className="muted small">
-                The predictions are committed to a{" "}
-                <a href={REPOSITORY}>public log on GitHub</a>. Git's history shows they came before
-                the deadline, and a check refuses any later edit.
+                The predictions are committed to a <a href={REPOSITORY}>public log on GitHub</a>.
+                Git's history shows they came before the deadline, and a check refuses any later
+                edit.
               </p>
             </div>
             <div className="card step">
@@ -113,14 +123,27 @@ export function Home() {
   );
 }
 
-function DeadlineCard({ status, error }: { status: Schemas["Status"] | undefined; error: Error | null }) {
+function DeadlineCard({
+  status,
+  error,
+}: {
+  status: Schemas["Status"] | undefined;
+  error: Error | null;
+}) {
   if (error) return <Problem error={error} />;
-  if (!status) return <div className="deadline-card"><Loading /></div>;
+  if (!status)
+    return (
+      <div className="deadline-card">
+        <Loading />
+      </div>
+    );
   const next = status.next_gameweek;
   return (
     <div className="deadline-card">
       <p className="eyebrow">{next ? `Gameweek ${next} deadline` : "Next deadline"}</p>
-      <div className="big">{next && status.next_deadline_utc ? <Countdown to={status.next_deadline_utc} /> : "–"}</div>
+      <div className="big">
+        {next && status.next_deadline_utc ? <Countdown to={status.next_deadline_utc} /> : "–"}
+      </div>
       <dl aria-label="Status">
         {next && (
           <>
@@ -137,7 +160,11 @@ function DeadlineCard({ status, error }: { status: Schemas["Status"] | undefined
         <dt>Season</dt>
         <dd>{status.season}</dd>
         <dt>Last scored</dt>
-        <dd>{status.latest_settled_gameweek ? `Gameweek ${status.latest_settled_gameweek}` : "None yet"}</dd>
+        <dd>
+          {status.latest_settled_gameweek
+            ? `Gameweek ${status.latest_settled_gameweek}`
+            : "None yet"}
+        </dd>
       </dl>
     </div>
   );
@@ -154,7 +181,10 @@ function TopPicks({ gameweek, model }: { gameweek: number; model: string }) {
         <div className="card pick-group" key={position}>
           <h3>
             {POSITION_NAMES[position]}
-            <Link className="small" to={`/gameweeks/${gameweek}?model=${model}&position=${position}`}>
+            <Link
+              className="small"
+              to={`/gameweeks/${gameweek}?model=${model}&position=${position}`}
+            >
               More
             </Link>
           </h3>
@@ -208,7 +238,9 @@ function Record({ models }: { models: Model[] }) {
                 <span className="pill pill-neutral">{retiredNote(m)}</span>
               ) : (
                 roleName(m.role) &&
-                roleName(m.role) !== modelName(m.model_version) && <span className="tag">{roleName(m.role)}</span>
+                roleName(m.role) !== modelName(m.model_version) && (
+                  <span className="tag">{roleName(m.role)}</span>
+                )
               )}
             </div>
             <p className="muted small">{modelAbout(m.model_version)}</p>
@@ -225,7 +257,9 @@ function Record({ models }: { models: Model[] }) {
                     <>
                       {" "}
                       ·{" "}
-                      <span className={better > 0.05 ? "better" : better < -0.05 ? "worse" : undefined}>
+                      <span
+                        className={better > 0.05 ? "better" : better < -0.05 ? "worse" : undefined}
+                      >
                         {Math.abs(better) < 0.05
                           ? "level with the baseline"
                           : `${Math.abs(better).toFixed(1)}% ${better > 0 ? "more" : "less"} accurate than the baseline`}
@@ -242,9 +276,7 @@ function Record({ models }: { models: Model[] }) {
               </p>
             )}
             {m.gameweeks_missed.length > 0 && (
-              <p className="small missed">
-                Missed {gameweekList(m.gameweeks_missed)}
-              </p>
+              <p className="small missed">Missed {gameweekList(m.gameweeks_missed)}</p>
             )}
             <p className="small muted">
               <code>{m.model_version}</code>

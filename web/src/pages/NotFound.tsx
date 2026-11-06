@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useTitle } from "../components/bits";
+import { useTitle } from "../useTitle";
 
 export function NotFound() {
   useTitle("Not found");

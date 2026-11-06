@@ -3,4 +3,5 @@
 export const SITE_NAME = "fpl-predictor";
 
 // One line on what the site is, for the front page and the footer.
-export const TAGLINE = "Points predictions for every Premier League player, made before every deadline.";
+export const TAGLINE =
+  "Points predictions for every Premier League player, made before every deadline.";
