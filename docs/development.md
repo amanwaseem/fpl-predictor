@@ -180,7 +180,16 @@ cd web && npm run lint          # ESLint: TypeScript, the rules of hooks, fast r
 cd web && npm run format        # Prettier; CI runs `npm run format:check`
 cd web && npm run e2e            # Playwright against BASE_URL (default 127.0.0.1:8000)
 cd web && npm run screenshots    # retake the README's screenshots into scratch/screenshots/
-gh release upload site-screenshots scratch/screenshots/*.png --clobber   # and publish them
+```
+
+The README's screenshots are not committed: they are assets of the
+`site-screenshots` release. After a visible change to the site, retake and
+replace them, from the repository root (the first time, see the steps at the
+top of `web/scripts/screenshots.mjs`):
+
+```bash
+npm --prefix web run screenshots
+gh release upload site-screenshots scratch/screenshots/*.png --clobber
 ```
 
 The pages: Home (`/`: the next deadline, this gameweek's top picks, the track

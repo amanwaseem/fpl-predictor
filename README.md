@@ -137,10 +137,11 @@ Everything runs on GitHub Actions:
 |---|---|---|
 | `entry` | Hourly, acting in the window before each deadline | Snapshots the API, makes every model's entry, verifies it, and opens a PR that merges itself once CI passes |
 | `ingest` | Daily | Snapshots the API and loads it into production, so results reach the site |
-| `ci` | Every pull request | Lint, types, the tests on Linux and macOS, the database and API fuzzing, the image, the site's end-to-end tests, and the log's immutability |
-| `deploy` | Every green merge to `main` | Migrates, projects the log, deploys to Fly.io and smoke-tests the live URL |
+| `ci` | Every pull request, and every push to `main` | Lint, types, the tests on Linux and macOS, the database and API fuzzing, the image, the site's end-to-end tests, and the log's immutability |
+| `deploy` | When `ci` passes on a push to `main` | Migrates, projects the log, deploys to Fly.io and smoke-tests the live URL |
 | `deadline` | Hourly | Warns when a deadline is near with no entry |
 | `uptime` | Hourly | Checks the live API and how fresh its data is |
+| `backfill` | By hand | Loads the ten past seasons into production, as the learned model's training data |
 
 ## Tech stack
 

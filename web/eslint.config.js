@@ -29,4 +29,11 @@ export default defineConfig([
     files: ["e2e/**/*.ts", "*.config.ts"],
     languageOptions: { globals: globals.node },
   },
+  // Plain JavaScript scripts, run by Node and driving a browser, so the
+  // callbacks they hand Playwright see the page's globals.
+  {
+    files: ["scripts/**/*.mjs"],
+    extends: [js.configs.recommended, prettier],
+    languageOptions: { ecmaVersion: 2022, globals: { ...globals.node, ...globals.browser } },
+  },
 ]);
