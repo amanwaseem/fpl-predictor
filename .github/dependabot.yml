@@ -1,7 +1,13 @@
-# Dependency updates, by GitHub's own Dependabot: once a month, one grouped PR
-# per ecosystem, merged by hand once CI passes, and never in the days before a
-# deadline. Security fixes arrive as they are published, through the
-# repository's Dependabot security updates, not on this schedule.
+# Dependency updates, by GitHub's own Dependabot, once a month: each
+# ecosystem's minor and patch updates in one grouped PR, and every major
+# update in a PR of its own, so a major that breaks holds back nothing else.
+# Merged by hand once CI passes, and never in the days before a deadline.
+# Security fixes arrive as they are published, through the repository's
+# Dependabot security updates, not on this schedule.
+#
+# The Node major is pinned in three places that move together, by hand:
+# web/.nvmrc, the Dockerfile's node image (held below), and @types/node
+# (held below).
 version: 2
 updates:
   # pyproject.toml and uv.lock: every group, the runtime included.
@@ -12,23 +18,24 @@ updates:
     groups:
       python:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: monthly
     ignore:
-      # Node's types follow the Node the site runs on (web/.nvmrc), not the
-      # newest Node.
+      # Node's types follow the Node the site runs on: see the top of this file.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
-      # TypeScript 7 is the native compiler: a migration of its own, once the
-      # tools around it (openapi-typescript, typescript-eslint) accept it.
+      # Held at TypeScript 5 until openapi-typescript and typescript-eslint
+      # accept a newer major (#159).
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
     groups:
       web:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # The workflows and the composite action they share.
   - package-ecosystem: github-actions
@@ -38,10 +45,12 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # The image's base images. Python stays on 3.13 (3.14 is a minor version to
-  # semver) and Node on 24, as pyproject.toml and web/.nvmrc pin them. uv is
-  # pinned here and in .github/actions/uv together, so it is bumped by hand.
+  # semver), as pyproject.toml pins it, and Node on its major (see the top of
+  # this file). uv is pinned here and in .github/actions/uv together, so it is
+  # bumped by hand.
   #
   # Also by hand: postgres:17.6, pinned in docker-compose.yml and in ci.yml's
   # service containers, which Dependabot cannot update. The three move
@@ -59,3 +68,4 @@ updates:
     groups:
       docker:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
