@@ -157,6 +157,8 @@ data/                snapshots and downloaded models (gitignored)
 | [Operations](docs/operations.md) | Monitoring, SLOs and incident response for the live service |
 | [Deploy](docs/deploy.md) | One-time setup of Fly.io, Neon and the GitHub secrets |
 | [Decision records](docs/adr/README.md) | Why the project is built the way it is, one decision at a time |
+| [Contributing](.github/CONTRIBUTING.md) | How to propose a change, and the checks it must pass |
+| [Security](.github/SECURITY.md) | How to report a vulnerability privately |
 
 ## Data
 
