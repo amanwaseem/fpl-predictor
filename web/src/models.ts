@@ -9,7 +9,8 @@ type Role = Schemas["Model"]["role"];
 const MODELS: Record<string, { name: string; about: string }> = {
   "baseline-v1": {
     name: "Baseline",
-    about: "Recent minutes and scoring rate, adjusted for availability. The yardstick the others must beat.",
+    about:
+      "Recent minutes and scoring rate, adjusted for availability. The yardstick the others must beat.",
   },
   "form-fixture-v1": {
     name: "Form & fixtures",
@@ -17,7 +18,8 @@ const MODELS: Record<string, { name: string; about: string }> = {
   },
   "gbm-v1": {
     name: "Machine learning",
-    about: "A gradient-boosted model trained on ten past seasons, minutes and points predicted separately.",
+    about:
+      "A gradient-boosted model trained on ten past seasons, minutes and points predicted separately.",
   },
 };
 

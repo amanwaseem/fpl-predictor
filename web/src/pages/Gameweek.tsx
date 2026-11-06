@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { type Schemas } from "../api/client";
 import { ENTRY_LIMIT, POSITION_NAMES, POSITIONS, useEntry, useModels } from "../api/queries";
-import { ClubBadge, Loading, PlayerPhoto, StatusPill, useTitle } from "../components/bits";
+import { ClubBadge, Loading, PlayerPhoto, StatusPill } from "../components/bits";
+import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
 import { clubName } from "../clubs";
 import { formatLocal, formatUtc, positiveInt, signed } from "../format";
@@ -11,7 +19,8 @@ import { modelAbout, modelName } from "../models";
 import { NotFound } from "./NotFound";
 
 type Row = Schemas["Prediction"];
-type SortKey = "predicted_points" | "actual_points" | "error" | "price" | "expected_minutes" | "web_name";
+type SortKey =
+  "predicted_points" | "actual_points" | "error" | "price" | "expected_minutes" | "web_name";
 
 // Rows shown at first, and added by each "show more".
 const PAGE = 50;
@@ -35,10 +44,25 @@ function sortValue(r: Row, key: SortKey): number | string | null {
 export function LatestGameweek() {
   useTitle("Predictions");
   const models = useModels();
-  if (models.isError) return <div className="wrap page"><Problem error={models.error} /></div>;
-  if (!models.data) return <div className="wrap page"><Loading /></div>;
+  if (models.isError)
+    return (
+      <div className="wrap page">
+        <Problem error={models.error} />
+      </div>
+    );
+  if (!models.data)
+    return (
+      <div className="wrap page">
+        <Loading />
+      </div>
+    );
   const latest = Math.max(0, ...models.data.models.flatMap((m) => m.gameweeks_logged));
-  if (!latest) return <div className="wrap page"><p>No predictions yet.</p></div>;
+  if (!latest)
+    return (
+      <div className="wrap page">
+        <p>No predictions yet.</p>
+      </div>
+    );
   return <Navigate to={`/gameweeks/${latest}`} replace />;
 }
 
@@ -116,7 +140,13 @@ function Entry({ gameweek }: { gameweek: number }) {
         if (x !== y) return x === null ? 1 : -1;
       } else {
         const order =
-          typeof x === "string" && typeof y === "string" ? x.localeCompare(y) : x < y ? -1 : x > y ? 1 : 0;
+          typeof x === "string" && typeof y === "string"
+            ? x.localeCompare(y)
+            : x < y
+              ? -1
+              : x > y
+                ? 1
+                : 0;
         if (order) return ascending ? order : -order;
       }
       // Ties by player id, as the log orders them, whichever way round.
@@ -189,7 +219,12 @@ function Entry({ gameweek }: { gameweek: number }) {
               All
             </button>
             {POSITIONS.map((p) => (
-              <button key={p} type="button" aria-pressed={position === p} onClick={() => update("position", p)}>
+              <button
+                key={p}
+                type="button"
+                aria-pressed={position === p}
+                onClick={() => update("position", p)}
+              >
                 {POSITION_NAMES[p]}
               </button>
             ))}
@@ -227,8 +262,12 @@ function Entry({ gameweek }: { gameweek: number }) {
             <span>
               {modelName(entry.data.model_version)} <code>{entry.data.model_version}</code>
             </span>
-            <span title={formatUtc(entry.data.generated_at_utc)}>Made {formatLocal(entry.data.generated_at_utc)}</span>
-            <span title={formatUtc(entry.data.deadline_utc)}>Deadline {formatLocal(entry.data.deadline_utc)}</span>
+            <span title={formatUtc(entry.data.generated_at_utc)}>
+              Made {formatLocal(entry.data.generated_at_utc)}
+            </span>
+            <span title={formatUtc(entry.data.deadline_utc)}>
+              Deadline {formatLocal(entry.data.deadline_utc)}
+            </span>
             <span>
               Snapshot <code>{entry.data.snapshot_id}</code>
             </span>
@@ -252,7 +291,9 @@ function Entry({ gameweek }: { gameweek: number }) {
                   {COLUMNS.map((c) => (
                     <SortHeader
                       key={c.key}
-                      column={!scored && c.key === "actual_points" ? { ...c, className: "hide-sm" } : c}
+                      column={
+                        !scored && c.key === "actual_points" ? { ...c, className: "hide-sm" } : c
+                      }
                       sort={sort}
                       ascending={ascending}
                       onSort={sortBy}
@@ -267,7 +308,12 @@ function Entry({ gameweek }: { gameweek: number }) {
                     <tr key={r.player_id} data-position={r.position}>
                       <th scope="row">
                         <span className="player">
-                          <PlayerPhoto code={r.player_code} name={r.web_name} team={r.team} size={36} />
+                          <PlayerPhoto
+                            code={r.player_code}
+                            name={r.web_name}
+                            team={r.team}
+                            size={36}
+                          />
                           <span className="player-text">
                             <Link className="player-name" to={`/players/${r.player_id}`}>
                               {r.web_name}
@@ -285,13 +331,17 @@ function Entry({ gameweek }: { gameweek: number }) {
                       <td className="num">
                         <span className="points">
                           <span className="bar" aria-hidden="true">
-                            <span style={{ width: `${(Math.max(0, r.predicted_points) / top) * 100}%` }} />
+                            <span
+                              style={{ width: `${(Math.max(0, r.predicted_points) / top) * 100}%` }}
+                            />
                           </span>
                           <strong>{r.predicted_points.toFixed(2)}</strong>
                         </span>
                       </td>
                       <td className={scored ? "num" : "num hide-sm"}>{r.actual_points ?? "–"}</td>
-                      <td className={`num hide-sm ${e === null ? "" : e > 0 ? "worse" : e < 0 ? "better" : ""}`}>
+                      <td
+                        className={`num hide-sm ${e === null ? "" : e > 0 ? "worse" : e < 0 ? "better" : ""}`}
+                      >
                         {e === null ? "–" : signed(e, 2)}
                       </td>
                     </tr>
@@ -299,10 +349,18 @@ function Entry({ gameweek }: { gameweek: number }) {
                 })}
               </tbody>
             </table>
-            {rows.length === 0 && <p className="muted" style={{ padding: "1rem" }}>No players match.</p>}
+            {rows.length === 0 && (
+              <p className="muted" style={{ padding: "1rem" }}>
+                No players match.
+              </p>
+            )}
             {rows.length > shown && (
               <div className="show-more">
-                <button type="button" className="button button-ghost" onClick={() => setShown(shown + PAGE)}>
+                <button
+                  type="button"
+                  className="button button-ghost"
+                  onClick={() => setShown(shown + PAGE)}
+                >
                   Show more ({rows.length - shown} left)
                 </button>
               </div>
@@ -334,7 +392,9 @@ function SortHeader({
   return (
     <th
       scope="col"
-      className={[column.numeric ? "num" : "", column.className ?? ""].join(" ").trim() || undefined}
+      className={
+        [column.numeric ? "num" : "", column.className ?? ""].join(" ").trim() || undefined
+      }
       aria-sort={active ? (ascending ? "ascending" : "descending") : "none"}
     >
       <button type="button" className="sort" onClick={() => onSort(column.key)}>

@@ -12,7 +12,9 @@ test("the best squad from scratch is fifteen players, solved from the log", asyn
 // The advice route reads the manager's team from the live FPL API, which CI
 // does not call: it is stubbed, around a squad the real optimiser picked.
 test("advice for a team shows its transfers and XI", async ({ page, request }) => {
-  const real = await (await request.post("/v1/optimise", { data: { model: "baseline-v1" } })).json();
+  const real = await (
+    await request.post("/v1/optimise", { data: { model: "baseline-v1" } })
+  ).json();
   const [out, into] = [real.squad.bench[0], real.squad.xi[0]];
   await page.route("**/v1/entries/123/advice*", (route) =>
     route.fulfill({
@@ -75,8 +77,11 @@ test("an upstream failure is shown as the API words it", async ({ page }) => {
 test("the form follows the URL, back and forward included", async ({ page }) => {
   for (const id of ["11", "22"]) {
     await page.route(`**/v1/entries/${id}/advice*`, (route) =>
-      route.fulfill({ status: 404, contentType: "application/problem+json",
-        json: { type: "about:blank", title: "Not Found", status: 404, detail: `No team ${id}.` } }),
+      route.fulfill({
+        status: 404,
+        contentType: "application/problem+json",
+        json: { type: "about:blank", title: "Not Found", status: 404, detail: `No team ${id}.` },
+      }),
     );
   }
   await page.goto("/optimise?team=11");

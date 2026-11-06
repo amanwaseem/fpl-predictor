@@ -3,7 +3,8 @@ import type { CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
 import { POSITION_NAMES } from "../api/queries";
-import { ClubBadge, Loading, PlayerPhoto, useTitle } from "../components/bits";
+import { ClubBadge, Loading, PlayerPhoto } from "../components/bits";
+import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
 import { clubColours, clubName } from "../clubs";
 import { fixed, positiveInt } from "../format";
@@ -25,8 +26,18 @@ function PlayerPage({ playerId }: { playerId: number }) {
   });
   useTitle(player.data ? `${player.data.first_name} ${player.data.second_name}` : "Player");
 
-  if (player.isPending) return <div className="wrap page"><Loading /></div>;
-  if (player.isError) return <div className="wrap page"><Problem error={player.error} /></div>;
+  if (player.isPending)
+    return (
+      <div className="wrap page">
+        <Loading />
+      </div>
+    );
+  if (player.isError)
+    return (
+      <div className="wrap page">
+        <Problem error={player.error} />
+      </div>
+    );
   const p = player.data;
 
   const models = [...new Set(p.predictions.map((x) => x.model_version))].sort();
@@ -75,7 +86,9 @@ function PlayerPage({ playerId }: { playerId: number }) {
               {p.clubs.length <= 1
                 ? `${clubName(club)}, ${p.season}`
                 : p.clubs
-                    .map((c) => `${clubName(c.team)} GW${c.first_gameweek}–${c.last_gameweek ?? ""}`)
+                    .map(
+                      (c) => `${clubName(c.team)} GW${c.first_gameweek}–${c.last_gameweek ?? ""}`,
+                    )
                     .join(", then ")}
             </span>
           </p>
@@ -83,7 +96,9 @@ function PlayerPage({ playerId }: { playerId: number }) {
         <dl className="stat-strip" style={{ flexBasis: "100%" }}>
           {next.map((x) => (
             <div className="stat" key={x.model_version}>
-              <dt>GW{x.gameweek}, {modelName(x.model_version)}</dt>
+              <dt>
+                GW{x.gameweek}, {modelName(x.model_version)}
+              </dt>
               <dd>{x.predicted_points.toFixed(1)}</dd>
             </div>
           ))}
@@ -117,8 +132,12 @@ function PlayerPage({ playerId }: { playerId: number }) {
                 <tr>
                   <th scope="col">Gameweek</th>
                   <th scope="col">Opponent</th>
-                  <th scope="col" className="num">Minutes</th>
-                  <th scope="col" className="num">Points</th>
+                  <th scope="col" className="num">
+                    Minutes
+                  </th>
+                  <th scope="col" className="num">
+                    Points
+                  </th>
                   {models.map((m) => (
                     <th scope="col" className="num" key={m}>
                       {modelName(m)}
@@ -140,7 +159,9 @@ function PlayerPage({ playerId }: { playerId: number }) {
                       </th>
                       <td>
                         {fixtures.length
-                          ? fixtures.map((f) => `${f.opponent} (${f.was_home ? "H" : "A"})`).join(", ")
+                          ? fixtures
+                              .map((f) => `${f.opponent} (${f.was_home ? "H" : "A"})`)
+                              .join(", ")
                           : "–"}
                       </td>
                       <td className="num">{minutes(gw, fixtures) ?? "–"}</td>

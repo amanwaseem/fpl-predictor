@@ -37,7 +37,10 @@ export function useEntry(gameweek: number | null | undefined, model: string | nu
 // {player id: FPL player code} from an entry, for photos where a response
 // (the optimiser's picks) has ids but no codes. It is the entry the
 // predictions page fetches, under the same key, so it is often cached.
-export function usePhotoCodes(gameweek: number | null | undefined, model: string | null | undefined) {
+export function usePhotoCodes(
+  gameweek: number | null | undefined,
+  model: string | null | undefined,
+) {
   const entry = useEntry(gameweek, model);
   return useMemo(
     () => new Map((entry.data?.items ?? []).map((p) => [p.player_id, p.player_code])),

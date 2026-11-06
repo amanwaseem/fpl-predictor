@@ -1,9 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
 import { useModels, usePhotoCodes } from "../api/queries";
-import { ClubBadge, Loading, PlayerPhoto, useTitle } from "../components/bits";
+import { ClubBadge, Loading, PlayerPhoto } from "../components/bits";
+import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
 import { SquadView } from "../components/SquadView";
 import { fixed, formatLocal, positiveInt, signed } from "../format";
@@ -33,10 +34,15 @@ export function Optimise() {
     model: params.get("model") ?? "",
     free: params.get("free") ?? "",
   });
+  // Reset while rendering, not in an effect: React's pattern for state that
+  // follows a prop (react.dev, "You might not need an effect"). `params` is a
+  // new object only when the URL has changed.
   const [form, setForm] = useState(fromUrl);
-  useEffect(() => {
+  const [formParams, setFormParams] = useState(params);
+  if (params !== formParams) {
+    setFormParams(params);
     setForm(fromUrl());
-  }, [params]);
+  }
   const chosen = form.model || model || "";
   // A model from a link that is not offered is still shown as chosen.
   const offered = live.map((m) => m.model_version);
@@ -104,7 +110,9 @@ export function Optimise() {
               {offered.map((name) => (
                 <option key={name} value={name}>
                   {modelName(name)}
-                  {live.find((m) => m.model_version === name)?.role === "main" ? " (recommended)" : ""}
+                  {live.find((m) => m.model_version === name)?.role === "main"
+                    ? " (recommended)"
+                    : ""}
                 </option>
               ))}
             </select>
@@ -151,8 +159,8 @@ export function Optimise() {
           </div>
           {advice.data.deadline_passed && (
             <p role="alert" className="problem problem-warn">
-              The gameweek {advice.data.gameweek} deadline has passed. This is what the model
-              would have advised.
+              The gameweek {advice.data.gameweek} deadline has passed. This is what the model would
+              have advised.
             </p>
           )}
           {advice.data.plan && <PlanView plan={advice.data.plan} codes={adviceCodes} />}
@@ -160,8 +168,8 @@ export function Optimise() {
           <SquadView squad={advice.data.squad} label="Advised squad" codes={adviceCodes} />
           <p className="note small after">
             Based on your squad as of gameweek {advice.data.picks_gameweek}. FPL keeps selling
-            prices and free transfers private, so unless you gave them they were estimated.
-            Selling prices: {advice.data.estimates.selling_prices} Free transfers:{" "}
+            prices and free transfers private, so unless you gave them they were estimated. Selling
+            prices: {advice.data.estimates.selling_prices} Free transfers:{" "}
             {advice.data.estimates.free_transfers}
           </p>
         </section>
@@ -217,10 +225,15 @@ function PlanView({ plan, codes }: { plan: Plan; codes: Map<number, number | nul
           ) : (
             <>
               Expected gain this gameweek:{" "}
-              <strong className={plan.xi_gain > 0 ? "better" : plan.xi_gain < 0 ? "worse" : undefined}>
+              <strong
+                className={plan.xi_gain > 0 ? "better" : plan.xi_gain < 0 ? "worse" : undefined}
+              >
                 {signed(plan.xi_gain, 2)} points
               </strong>
-              {plan.hits ? `, after ${plan.hits} hit${plan.hits === 1 ? "" : "s"} (−${plan.hit_points})` : ""}.
+              {plan.hits
+                ? `, after ${plan.hits} hit${plan.hits === 1 ? "" : "s"} (−${plan.hit_points})`
+                : ""}
+              .
             </>
           )}{" "}
           {plan.free_transfers} free transfer{plan.free_transfers === 1 ? "" : "s"} · bank £
@@ -239,7 +252,12 @@ function PlanView({ plan, codes }: { plan: Plan; codes: Map<number, number | nul
           {plan.transfers.map((t) => (
             <li className="transfer" key={t.out.player_id}>
               <span className="player out">
-                <PlayerPhoto code={codes.get(t.out.player_id)} name={t.out.web_name} team={t.out.team} size={40} />
+                <PlayerPhoto
+                  code={codes.get(t.out.player_id)}
+                  name={t.out.web_name}
+                  team={t.out.team}
+                  size={40}
+                />
                 <span className="player-text">
                   <span className="transfer-label">Out</span>
                   <Link className="player-name" to={`/players/${t.out.player_id}`}>
@@ -253,9 +271,16 @@ function PlanView({ plan, codes }: { plan: Plan; codes: Map<number, number | nul
                   </span>
                 </span>
               </span>
-              <span className="transfer-arrow" aria-hidden="true">→</span>
+              <span className="transfer-arrow" aria-hidden="true">
+                →
+              </span>
               <span className="player in">
-                <PlayerPhoto code={codes.get(t.into.player_id)} name={t.into.web_name} team={t.into.team} size={40} />
+                <PlayerPhoto
+                  code={codes.get(t.into.player_id)}
+                  name={t.into.web_name}
+                  team={t.into.team}
+                  size={40}
+                />
                 <span className="player-text">
                   <span className="transfer-label">In</span>
                   <Link className="player-name" to={`/players/${t.into.player_id}`}>

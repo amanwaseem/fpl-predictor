@@ -1,0 +1,6 @@
+dist
+test-results
+playwright-report
+package-lock.json
+# Generated from docs/openapi.json by `npm run gen:api`.
+src/api/schema.d.ts

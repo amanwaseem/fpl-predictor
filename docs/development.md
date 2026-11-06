@@ -176,6 +176,8 @@ make serve                       # the API, and the site at / once built
 cd web && npm run dev            # or Vite's dev server, proxying /v1 to `make serve`
 cd web && API_TARGET=https://fpl-predictor-aman.fly.dev npm run dev   # the same, against live data
 cd web && npm run gen:api        # after `make openapi`: regenerate the typed client
+cd web && npm run lint          # ESLint: TypeScript, the rules of hooks, fast refresh
+cd web && npm run format        # Prettier; CI runs `npm run format:check`
 cd web && npm run e2e            # Playwright against BASE_URL (default 127.0.0.1:8000)
 ```
 

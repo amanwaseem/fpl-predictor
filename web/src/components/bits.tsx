@@ -1,7 +1,6 @@
 // Small pieces every page uses: player photos, club badges, availability,
 // the deadline countdown and the page title.
 import { useEffect, useState } from "react";
-import { SITE_NAME } from "../brand";
 import { clubColours, clubName } from "../clubs";
 
 // FPL's own photo CDN, keyed by the player's code (#136). These are Premier
@@ -89,13 +88,6 @@ export function Countdown({ to }: { to: string }) {
   const h = Math.floor((minutes % 1440) / 60);
   const m = minutes % 60;
   return <>{d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`}</>;
-}
-
-// The tab's title: "<page> · <site>", or the site alone.
-export function useTitle(page: string | null) {
-  useEffect(() => {
-    document.title = page ? `${page} · ${SITE_NAME}` : SITE_NAME;
-  }, [page]);
 }
 
 export function Loading({ what = "Loading" }: { what?: string }) {

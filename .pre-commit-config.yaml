@@ -14,12 +14,25 @@ repos:
         entry: uv run --locked ruff format
         language: system
         types: [python]
-      # mypy reads its files from pyproject.toml, so it checks fpl/, tools/ and tests/ whole
-      # rather than only the files staged; and it runs when its config or the
-      # versions it checks against change, not only the Python.
+      # mypy reads its files from pyproject.toml, so it checks fpl/, tools/ and
+      # tests/ whole rather than only the files staged; and it runs when its
+      # config or the versions it checks against change, not only the Python.
       - id: mypy
         name: mypy
         entry: uv run --locked mypy
         language: system
         files: ^((fpl|tools|tests)/.*\.py|pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+      # The site, with the versions in web/package-lock.json (`npm ci` in web/
+      # first). Prettier fixes what it can; ESLint only reports.
+      - id: prettier
+        name: prettier (web)
+        entry: bash -c 'cd web && npx --no-install prettier --write --ignore-unknown "${@#web/}"' --
+        language: system
+        files: ^web/
+      - id: eslint
+        name: eslint (web)
+        entry: bash -c 'cd web && npx --no-install eslint .'
+        language: system
+        files: ^web/.*\.(ts|tsx|js)$
         pass_filenames: false

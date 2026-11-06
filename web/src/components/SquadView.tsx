@@ -24,7 +24,12 @@ export function SquadView({
     const captain = p.player_id === squad.captain.player_id;
     const vice = p.player_id === squad.vice_captain.player_id;
     return (
-      <li className="shirt" key={p.player_id} data-captain={captain || undefined} data-vice={vice || undefined}>
+      <li
+        className="shirt"
+        key={p.player_id}
+        data-captain={captain || undefined}
+        data-vice={vice || undefined}
+      >
         {(captain || vice) && (
           <span
             className={`armband${vice ? " armband-vice" : ""}`}
@@ -35,12 +40,14 @@ export function SquadView({
           </span>
         )}
         <PlayerPhoto code={codes.get(p.player_id)} name={p.web_name} team={p.team} size={56} />
-        <Link className="shirt-name" to={`/players/${p.player_id}`} title={`${p.web_name}, ${p.team}`}>
+        <Link
+          className="shirt-name"
+          to={`/players/${p.player_id}`}
+          title={`${p.web_name}, ${p.team}`}
+        >
           {p.web_name}
         </Link>
-        <span className="shirt-points">
-          {fixed(p.predicted_points * (captain ? 2 : 1), 1)} pts
-        </span>
+        <span className="shirt-points">{fixed(p.predicted_points * (captain ? 2 : 1), 1)} pts</span>
       </li>
     );
   };

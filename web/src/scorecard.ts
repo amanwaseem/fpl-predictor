@@ -13,7 +13,8 @@ export function judged(difference: number) {
 export type Model = Schemas["ScorecardModel"];
 
 // "GW5, GW7", or "none".
-export const gameweekList = (gws: number[]) => (gws.length ? gws.map((g) => `GW${g}`).join(", ") : "none");
+export const gameweekList = (gws: number[]) =>
+  gws.length ? gws.map((g) => `GW${g}`).join(", ") : "none";
 
 // "Retired after GW6", the role otherwise, as the scorecard shows it.
 export function retiredNote(model: Model): string | null {
@@ -31,7 +32,11 @@ export type Cell =
 export function cell(model: Model, gameweek: number, baseline: Model | undefined): Cell {
   const week = model.per_gameweek.find((w) => w.gameweek === gameweek);
   if (week) {
-    return { kind: "scored", week, baseline: baseline?.per_gameweek.find((w) => w.gameweek === gameweek) };
+    return {
+      kind: "scored",
+      week,
+      baseline: baseline?.per_gameweek.find((w) => w.gameweek === gameweek),
+    };
   }
   if (model.gameweeks_missed.includes(gameweek)) return { kind: "missed" };
   if (model.gameweeks_logged.includes(gameweek)) return { kind: "pending" };

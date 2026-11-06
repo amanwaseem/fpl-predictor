@@ -13,13 +13,18 @@ test("the API is for developers: in the footer, not the main navigation", async 
     "Predictions",
     "My team",
   ]);
-  await expect(page.getByRole("contentinfo").getByRole("link", { name: /API/ })).toHaveAttribute("href", "/docs");
+  await expect(page.getByRole("contentinfo").getByRole("link", { name: /API/ })).toHaveAttribute(
+    "href",
+    "/docs",
+  );
 });
 
 test("the front page shows this gameweek's top picks by position", async ({ page }) => {
   await page.goto("/");
   for (const position of ["goalkeepers", "defenders", "midfielders", "forwards"]) {
-    await expect(page.getByRole("list", { name: `Top ${position}` }).getByRole("listitem")).toHaveCount(3);
+    await expect(
+      page.getByRole("list", { name: `Top ${position}` }).getByRole("listitem"),
+    ).toHaveCount(3);
   }
 });
 
