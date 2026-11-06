@@ -142,7 +142,10 @@ def _entry_deadline(path):
         if row is None:
             return None
         return datetime.strptime(row["deadline_utc"], TIMESTAMP).replace(tzinfo=UTC)
-    except (OSError, StopIteration, KeyError, TypeError, ValueError, csv.Error):
+    # OSError: unreadable. csv.Error: not CSV. KeyError: no deadline_utc column.
+    # TypeError: a short first row, whose missing deadline_utc DictReader fills
+    # with None. ValueError: not a timestamp.
+    except (OSError, csv.Error, KeyError, TypeError, ValueError):
         return None
 
 

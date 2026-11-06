@@ -13,7 +13,7 @@ import unittest.mock
 from pathlib import Path
 
 from alembic import command
-from sqlalchemy import func, select, update
+from sqlalchemy import Engine, func, select, update
 
 from fpl.db import backfill, features
 from fpl.db.models import Fixture, Gameweek, PlayerFixtureStats, PlayerGameweekFeatures
@@ -37,6 +37,8 @@ def setUpModule():
 
 
 class FeaturesCase(unittest.TestCase):
+    engine: Engine
+
     @classmethod
     def setUpClass(cls):
         command.upgrade(alembic_config(), "head")
@@ -180,6 +182,8 @@ class TestSyntheticSeason(FeaturesCase):
 )
 class TestTheRealArchive(FeaturesCase):
     """All ten past seasons; and the leak test on one with expected goals."""
+
+    built: dict[str, tuple[int, int]]
 
     @classmethod
     def setUpClass(cls):

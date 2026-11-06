@@ -121,9 +121,12 @@ class TestHook(unittest.TestCase):
         league = League()
         league.pasts[1] = past(goals_scored=20, expected_goals="18.0", expected_assists="4.0")
         called = []
-        league.predict(
-            SOFT, positional_prior=lambda pl, pos, pr, m, _: (called.append(pl["id"]), (pr, m))[1]
-        )
+
+        def record(player, position, prior, minutes, _season_minutes):
+            called.append(player["id"])
+            return prior, minutes
+
+        league.predict(SOFT, positional_prior=record)
         self.assertNotIn(1, called)
         self.assertIn(3, called)
 

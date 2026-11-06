@@ -33,7 +33,7 @@ jobs:
       # GitHub format annotates the offending lines on the PR diff.
       - run: ruff check --output-format=github .
       - run: ruff format --check .
-      # Types, non-strict on fpl/ to start (#76); [tool.mypy] in pyproject.toml.
+      # Types over fpl/, tools/ and tests/ (#76); [tool.mypy] in pyproject.toml.
       - run: mypy
 
   # Every real log entry is produced on macOS, so the suite runs there as well

@@ -12,7 +12,7 @@ import unittest.mock
 from pathlib import Path
 
 from alembic import command
-from sqlalchemy import func, insert, select
+from sqlalchemy import Engine, func, insert, select
 
 from fpl.db import backfill
 from fpl.db.models import Player, PlayerFixtureStats, Season, SeasonPlayer, Snapshot
@@ -35,6 +35,8 @@ def setUpModule():
 
 
 class BackfillCase(unittest.TestCase):
+    engine: Engine
+
     @classmethod
     def setUpClass(cls):
         command.upgrade(alembic_config(), "head")
@@ -133,6 +135,8 @@ class TestSyntheticBackfill(BackfillCase):
 class TestTheRealArchive(BackfillCase):
     """All ten seasons, against the counts pinned in fpl.db.backfill.EXPECTED."""
 
+    loaded: dict[str, dict[str, int]]
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -172,7 +176,7 @@ class TestTheRealArchive(BackfillCase):
             ).all()
         self.assertEqual([season for season, _ in rows], history.SEASONS[1:])
         # His FPL totals: 303 in 2017/18, 344 in 2024/25.
-        points = dict(rows)
+        points = {season: total for season, total in rows}
         self.assertEqual((points["2017/18"], points["2024/25"]), (303, 344))
 
 

@@ -8,6 +8,7 @@ gameweek must not change; corrupt the round before, and they must.
 import copy
 import random
 import unittest
+from typing import Any
 
 from fpl.models import feature_table
 from fpl.models.feature_table import SeasonData, build_gameweek
@@ -41,7 +42,7 @@ def season(seed=7, with_xg=True):
         for pid in range(1, 2 * CLUBS + 1)
     }
     clubs = {pid: [((pid + 1) // 2, 1, 38)] for pid in players}
-    histories = {pid: [] for pid in players}
+    histories: dict[int, list[dict[str, Any]]] = {pid: [] for pid in players}
     for f in fixtures:
         for pid, spells in clubs.items():
             team = spells[0][0]

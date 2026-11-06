@@ -62,7 +62,7 @@ class TestRecordSoFar(unittest.TestCase):
         self.assertEqual(set(self.rows), set(self.cumulative) | set(roles.ROLES))
 
     def test_the_actuals_snapshot_is_the_one_scored_against(self):
-        by_snapshot = {}
+        by_snapshot: dict[str, list[str]] = {}
         for name, e in entries().items():
             by_snapshot.setdefault(e["actuals_snapshot_id"], []).append(name)
         self.assertEqual(len(by_snapshot), 1, f"scores/ mixes actuals snapshots: {by_snapshot}")

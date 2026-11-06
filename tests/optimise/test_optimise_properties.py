@@ -12,6 +12,7 @@ these look for the rule a hand-built pool would never think to break.
 """
 
 import unittest
+from typing import Any
 
 from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
@@ -25,7 +26,7 @@ PROPERTIES = settings(max_examples=40, deadline=None, suppress_health_check=[Hea
 
 @st.composite
 def pools(draw):
-    players = []
+    players: list[dict[str, Any]] = []
     for position, (low, high) in {
         "GKP": (2, 4),
         "DEF": (5, 9),
@@ -62,7 +63,7 @@ def objective(squad, bench_weight=optimise.BENCH_WEIGHT):
 
 def greedy(pool, budget=optimise.BUDGET):
     """Highest points first, wherever it still leaves room to fill the squad. Or None."""
-    chosen = []
+    chosen: list[dict[str, Any]] = []
     for player in sorted(pool, key=lambda p: (-p["predicted_points"], p["player_id"])):
         open_slots = {pos: QUOTA[pos] - sum(c["position"] == pos for c in chosen) for pos in QUOTA}
         if open_slots[player["position"]] == 0:

@@ -2,6 +2,7 @@
 
 import math
 import unittest
+from typing import Any
 
 from fpl.evaluation import backtest
 from fpl.models import teams
@@ -179,7 +180,8 @@ class TestCandidate(unittest.TestCase):
             "element_types": fixtures.ELEMENT_TYPES,
             "events": EVENTS,
         }
-        self.history_fixtures, self.histories = [], {p: [] for p in range(1, 6)}
+        self.history_fixtures: list[dict[str, Any]] = []
+        self.histories: dict[int, list[dict[str, Any]]] = {p: [] for p in range(1, 6)}
         for gw in (1, 2, 3):
             for fid, home, away, home_pids, away_pids in (
                 (gw * 10, 1, 3, (1, 2), (3,)),
