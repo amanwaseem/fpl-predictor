@@ -2,16 +2,17 @@
 // rules of hooks, and Vite's fast-refresh rule. Layout is Prettier's job, so
 // eslint-config-prettier turns off every rule that would fight it.
 import js from "@eslint/js";
+import { fileURLToPath } from "node:url";
 import prettier from "eslint-config-prettier";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
-import { defineConfig, globalIgnores } from "eslint/config";
+import { defineConfig, includeIgnoreFile } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  // Generated from docs/openapi.json by `npm run gen:api`.
-  globalIgnores(["dist", "test-results", "playwright-report", "src/api/schema.d.ts"]),
+  // What is built or generated: one list, Prettier's.
+  includeIgnoreFile(fileURLToPath(new URL(".prettierignore", import.meta.url))),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [
@@ -22,5 +23,10 @@ export default defineConfig([
       prettier,
     ],
     languageOptions: { ecmaVersion: 2022, globals: globals.browser },
+  },
+  // Run by Node, not the browser: the end-to-end tests and the tools' configs.
+  {
+    files: ["e2e/**/*.ts", "*.config.ts"],
+    languageOptions: { globals: globals.node },
   },
 ]);

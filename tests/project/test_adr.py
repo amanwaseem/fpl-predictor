@@ -11,7 +11,7 @@ STATUS = re.compile(r"^- \*\*Status:\*\* (Accepted|Proposed|Open|Superseded by (
 
 def records(directory=ADR_DIR):
     """{number: path} for every record, failing on a misnamed file."""
-    found = {}
+    found: dict[int, Path] = {}
     for path in sorted(directory.glob("*.md")):
         if path.name == "README.md":
             continue

@@ -35,12 +35,13 @@ export function Optimise() {
     free: params.get("free") ?? "",
   });
   // Reset while rendering, not in an effect: React's pattern for state that
-  // follows a prop (react.dev, "You might not need an effect"). `params` is a
-  // new object only when the URL has changed.
+  // follows a prop (react.dev, "You might not need an effect"). Compared as
+  // text, so a new params object for the same URL changes nothing.
   const [form, setForm] = useState(fromUrl);
-  const [formParams, setFormParams] = useState(params);
-  if (params !== formParams) {
-    setFormParams(params);
+  const search = params.toString();
+  const [formSearch, setFormSearch] = useState(search);
+  if (search !== formSearch) {
+    setFormSearch(search);
     setForm(fromUrl());
   }
   const chosen = form.model || model || "";

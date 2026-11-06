@@ -7,7 +7,7 @@ import os
 from decimal import Decimal
 
 from alembic import command
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import Engine, delete, func, insert, select, update
 
 from fpl.db.models import PlayerScore, Prediction, PredictionEntry
 from fpl.db.project import project, read_log
@@ -30,6 +30,8 @@ def setUpModule():
 
 class DatabaseCase(TempCwd):
     """A working directory of its own, and empty log tables before and after."""
+
+    engine: Engine
 
     @classmethod
     def setUpClass(cls):

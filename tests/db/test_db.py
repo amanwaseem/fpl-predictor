@@ -9,8 +9,9 @@ from decimal import Decimal
 
 from alembic import command
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import insert, inspect, select
+from sqlalchemy import Engine, insert, inspect, select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.exc import IntegrityError, SAWarning
 
@@ -41,6 +42,9 @@ def setUpModule():
 
 
 class TestMigrations(unittest.TestCase):
+    config: Config
+    engine: Engine
+
     @classmethod
     def setUpClass(cls):
         cls.config = alembic_config()
@@ -75,6 +79,8 @@ class TestMigrations(unittest.TestCase):
 
 class TestConstraints(unittest.TestCase):
     """Each test runs in a transaction that is rolled back afterwards."""
+
+    engine: Engine
 
     @classmethod
     def setUpClass(cls):

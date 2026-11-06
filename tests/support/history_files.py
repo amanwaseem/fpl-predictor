@@ -6,6 +6,7 @@ GW2 Team 2 v Team 1. Player 3 moves from Team 1 to Team 2 after GW1.
 
 import csv
 from pathlib import Path
+from typing import Any
 
 from fpl.db.models import PlayerFixtureStats
 
@@ -30,7 +31,7 @@ def player(pid, team, element_type=3, code=None, web_name=None):
 
 
 def gw_row(element, fixture, gw, *, home, opponent, kickoff, scores=(2, 1), points=5):
-    row = {name: 0 for name in STAT_NAMES}
+    row: dict[str, Any] = {name: 0 for name in STAT_NAMES}
     row.update(
         {
             "name": f"p{element}",

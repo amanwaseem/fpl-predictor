@@ -27,12 +27,13 @@ repos:
       # first). Prettier fixes what it can; ESLint only reports.
       - id: prettier
         name: prettier (web)
-        entry: bash -c 'cd web && npx --no-install prettier --write --ignore-unknown "${@#web/}"' --
+        entry: bash -c 'cd web && { test -d node_modules || { echo "web/node_modules is missing - run npm ci in web/ first"; exit 1; }; } && npx --no-install prettier --write --ignore-unknown "${@#web/}"' --
         language: system
         files: ^web/
       - id: eslint
         name: eslint (web)
-        entry: bash -c 'cd web && npx --no-install eslint .'
+        entry: bash -c 'cd web && { test -d node_modules || { echo "web/node_modules is missing - run npm ci in web/ first"; exit 1; }; } && npx --no-install eslint .'
         language: system
-        files: ^web/.*\.(ts|tsx|js)$
+        # Its dependencies too: a new rule arrives with a bump, not an edit.
+        files: ^web/(.*\.(ts|tsx|js|mjs)|package(-lock)?\.json)$
         pass_filenames: false

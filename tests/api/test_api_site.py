@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 
 from fpl.api import site
 from fpl.api.app import create_app
@@ -30,6 +30,8 @@ def built_site():
 
 class SiteCase(unittest.TestCase):
     web: Path | None = None
+    engine: Engine
+    client: TestClient
 
     @classmethod
     def setUpClass(cls):

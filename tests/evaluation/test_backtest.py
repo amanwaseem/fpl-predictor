@@ -8,12 +8,14 @@ target gameweek's results — and demands byte-identical predictions.
 
 import contextlib
 import copy
+import functools
 import io
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from fpl.evaluation import backtest
@@ -141,7 +143,7 @@ class TestNoLeak(fixtures.TempCwd):
 
     def setUp(self):
         super().setUp()
-        self.pasts = {}
+        self.pasts: dict[int, list[dict[str, Any]]] = {}
         self.bootstrap, self.fx, self.histories = read(build_season(self.tmp), self.pasts)
         # gbm-v1 with a tiny model of its own, rather than the released one.
         patch = mock.patch.object(backtest, "_gbm_bundle", tiny_bundle)
@@ -308,7 +310,8 @@ class TestSameModel(fixtures.TempCwd):
         usable, _ = usable_rounds(bootstrap["events"], 3)
         expected = predict_baseline.predict_rows(bootstrap, fx, histories, 3, usable)
 
-        replayed = replay_rows(*read(later), 3)
+        later_bootstrap, later_fx, later_histories = read(later)
+        replayed = replay_rows(later_bootstrap, later_fx, later_histories, 3)
         keys = (
             "player_id",
             "predicted_points",
@@ -452,7 +455,7 @@ class TestHeldOut(fixtures.TempCwd):
             self.assertNotIn(fold["gameweek"], train)
             maes = {}
             for scale in backtest.GRIDS["scaled"]["scale"]:
-                backtest.MODELS["fixed"] = lambda *view, scale=scale: _scaled(*view, scale=scale)
+                backtest.MODELS["fixed"] = functools.partial(_scaled, scale=scale)
                 maes[scale] = backtest.run(None, "fixed", train)["pooled"]["all"]["mae"]
             self.assertEqual(fold["chosen"], {"scale": min(maes, key=lambda s: (maes[s], s))})
 

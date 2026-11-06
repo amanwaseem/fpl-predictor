@@ -142,7 +142,8 @@ testpaths = ["tests"]
 # Types (#76): checked in CI and by pre-commit, over the package, the scripts
 # in tools/ and the tests. Not --strict, which would mean annotating every
 # function signature, but the bodies of unannotated functions are checked
-# too. tools/ is on the path because the tests import its scripts by name,
+# too, the tests' included: a fixture made in setUpClass is declared on its
+# class. tools/ is on the path because the tests import its scripts by name,
 # as the scripts run.
 [tool.mypy]
 python_version = "3.13"
@@ -151,12 +152,6 @@ mypy_path = "tools"
 check_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
-
-# Test bodies are not checked: most tests set their fixtures up in setUpClass,
-# as unittest does, and mypy cannot see attributes made there.
-[[tool.mypy.overrides]]
-module = ["tests.*"]
-check_untyped_defs = false
 
 # highspy ships no type information.
 [[tool.mypy.overrides]]

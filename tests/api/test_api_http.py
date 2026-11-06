@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fastapi import Response
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 
 from fpl.api.app import create_app, matches
 from fpl.api.problems import MEDIA_TYPE
@@ -28,6 +28,9 @@ NOWHERE = "postgresql+psycopg://nobody@127.0.0.1:1/nothing?connect_timeout=1"
 
 
 class TestWithoutADatabase(unittest.TestCase):
+    engine: Engine
+    client: TestClient
+
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine(NOWHERE)

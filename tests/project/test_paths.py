@@ -84,6 +84,7 @@ class TestEveryCommandChecks(unittest.TestCase):
                 continue
             with self.subTest(command=command):
                 module = importlib.import_module(target.partition(":")[0])
+                assert module.__file__ is not None
                 tree = ast.parse(Path(module.__file__).read_text())
                 cli = next(
                     node

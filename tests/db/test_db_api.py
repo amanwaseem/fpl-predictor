@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from alembic import command
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, insert, update
+from sqlalchemy import Engine, delete, insert, update
 from sqlalchemy.dialects.postgresql import Range
 
 from fpl.api.app import create_app
@@ -176,6 +176,8 @@ def seed_season(engine):
 
 
 class APICase(TempCwd):
+    engine: Engine
+
     @classmethod
     def setUpClass(cls):
         command.upgrade(alembic_config(), "head")

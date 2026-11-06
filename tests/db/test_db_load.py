@@ -6,10 +6,11 @@ Needs a database; see tests/support/database.py. Locally: make test-db
 import os
 import unittest
 from decimal import Decimal
+from typing import Any
 from unittest import mock
 
 from alembic import command
-from sqlalchemy import func, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.dialects.postgresql import Range
 from sqlalchemy.exc import IntegrityError
 
@@ -64,7 +65,7 @@ def full_fixture(fid, gw, home, away, *, finished):
 
 def history_row(pid, fixture, *, home, minutes=90, points=6):
     """A history row with every stat column the loader reads, as the API spells it."""
-    row = {column.name: 0 for column in PlayerFixtureStats.__table__.columns}
+    row: dict[str, Any] = {column.name: 0 for column in PlayerFixtureStats.__table__.columns}
     row.update(
         {
             "element": pid,
@@ -101,6 +102,8 @@ EVENTS = [
 
 
 class TestLoad(TempCwd):
+    engine: Engine
+
     @classmethod
     def setUpClass(cls):
         command.upgrade(alembic_config(), "head")

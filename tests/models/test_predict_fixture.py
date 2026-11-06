@@ -13,6 +13,7 @@ import json
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from typing import Any
 
 from fpl.ingest.snapshot import usable_rounds
 from fpl.log import verify_entry
@@ -78,7 +79,7 @@ class League:
             fixtures.element(pid, team=club, element_type=pos) for pid, club, pos in self.PLAYERS
         ]
         self.history_fixtures = []
-        self.histories = {pid: [] for pid, _, _ in self.PLAYERS}
+        self.histories: dict[int, list[dict[str, Any]]] = {pid: [] for pid, _, _ in self.PLAYERS}
         self.pasts = {}
         for gw in (1, 2, 3):
             for fid, home, away in ((gw * 10, 1, 3), (gw * 10 + 1, 2, 4)):
@@ -255,7 +256,10 @@ def rated_league(case, deadline, later=()):
     played, for a test that predicts past the next deadline (tests/optimise/test_plan.py).
     """
     clubs = range(1, fixtures.LEAGUE_SIZE + 1)
-    fx, histories, elements, pid = [], {}, [], 0
+    fx: list[dict[str, Any]] = []
+    histories: dict[int, list[dict[str, Any]]] = {}
+    elements: list[dict[str, Any]] = []
+    pid = 0
     for gw in (1, 2, 3):
         for i in range(0, len(clubs), 2):
             fx.append(played(gw * 100 + i, gw, clubs[i], clubs[i + 1], (gw + i) % 3, i % 2))
