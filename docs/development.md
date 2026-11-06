@@ -179,6 +179,8 @@ cd web && npm run gen:api        # after `make openapi`: regenerate the typed cl
 cd web && npm run lint          # ESLint: TypeScript, the rules of hooks, fast refresh
 cd web && npm run format        # Prettier; CI runs `npm run format:check`
 cd web && npm run e2e            # Playwright against BASE_URL (default 127.0.0.1:8000)
+cd web && npm run screenshots    # retake the README's screenshots into scratch/screenshots/
+gh release upload site-screenshots scratch/screenshots/*.png --clobber   # and publish them
 ```
 
 The pages: Home (`/`: the next deadline, this gameweek's top picks, the track
