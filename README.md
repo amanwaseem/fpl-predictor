@@ -13,6 +13,11 @@ so the claim is falsifiable and the receipts are in the git history. CI refuses 
 entry already in the log, so the track record (bad weeks and missed ones included) is exactly
 what the history shows.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/amanwaseem/fpl-predictor/releases/download/site-screenshots/home-dark.png">
+  <img src="https://github.com/amanwaseem/fpl-predictor/releases/download/site-screenshots/home-light.png" alt="The site's home page: the countdown to the next deadline, and the top predicted players by position">
+</picture>
+
 On top of the log sit a squad optimiser, a public API and a website:
 
 - **Website:** [fpl-predictor-aman.fly.dev](https://fpl-predictor-aman.fly.dev): this week's
@@ -100,6 +105,42 @@ cannot beat the baseline on held-out past seasons is never logged
 Squad selection is a constrained optimisation over the predictions: an integer programme that
 maximises expected points under the £100m budget, a valid formation, at most three players per
 club, and the points cost of transfers, over one gameweek or a plan of up to six.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/amanwaseem/fpl-predictor/releases/download/site-screenshots/squad-dark.png">
+  <img src="https://github.com/amanwaseem/fpl-predictor/releases/download/site-screenshots/squad-light.png" alt="The best squad from scratch on a pitch: fifteen players with their predicted points, captain and vice-captain marked, and the bench in order">
+</picture>
+
+## Architecture
+
+```mermaid
+flowchart LR
+    FPL[("FPL API")] -->|"fpl-fetch"| SNAP["Snapshot<br/>data/raw/"]
+    SNAP --> MODELS["Models<br/>baseline · form-fixture · gbm"]
+    MODELS -->|"PR before the deadline"| LOG[("predictions/<br/>append-only log")]
+    LOG -->|"fpl-score, once settled"| SCORES[("scores/")]
+    SNAP -->|"fpl-load"| DB[("Postgres")]
+    LOG -->|"fpl-project"| DB
+    SCORES -->|"fpl-project"| DB
+    DB -.->|"fpl-train-gbm"| MODELS
+    DB --> API["FastAPI<br/>/v1"]
+    API --> SOLVER["Squad optimiser<br/>HiGHS"]
+    API --> SITE["React site"]
+```
+
+Git is the source of truth: Postgres holds a projection of the log that CI rebuilds and checks
+against git on every pull request, plus the snapshots the API serves.
+
+Everything runs on GitHub Actions:
+
+| Workflow | When | What it does |
+|---|---|---|
+| `entry` | Hourly, acting in the window before each deadline | Snapshots the API, makes every model's entry, verifies it, and opens a PR that merges itself once CI passes |
+| `ingest` | Daily | Snapshots the API and loads it into production, so results reach the site |
+| `ci` | Every pull request | Lint, types, the tests on Linux and macOS, the database and API fuzzing, the image, the site's end-to-end tests, and the log's immutability |
+| `deploy` | Every green merge to `main` | Migrates, projects the log, deploys to Fly.io and smoke-tests the live URL |
+| `deadline` | Hourly | Warns when a deadline is near with no entry |
+| `uptime` | Hourly | Checks the live API and how fresh its data is |
 
 ## Tech stack
 

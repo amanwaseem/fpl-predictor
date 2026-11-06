@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "gen:api": "openapi-typescript ../docs/openapi.json --default-non-nullable false -o src/api/schema.d.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.107.0",
