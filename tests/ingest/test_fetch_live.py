@@ -179,3 +179,35 @@ class TestLoadLive(StubbedAPI):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRetries(unittest.TestCase):
+    """A client error answers the same again; a server error or rate limit may not (#167)."""
+
+    @staticmethod
+    def failing(status):
+        import requests
+
+        response = requests.Response()
+        response.status_code = status
+        return patch.object(
+            fetch.requests,
+            "get",
+            side_effect=requests.HTTPError(f"{status}", response=response),
+        )
+
+    def attempts(self, status):
+        import requests
+
+        with self.failing(status) as get, patch.object(fetch.time, "sleep"):
+            with redirect_stdout(io.StringIO()), self.assertRaises(requests.HTTPError):
+                fetch.get("element-summary/612/")
+        return get.call_count
+
+    def test_a_404_is_not_retried(self):
+        self.assertEqual(self.attempts(404), 1)
+
+    def test_a_server_error_and_a_rate_limit_are(self):
+        for status in (503, 429):
+            with self.subTest(status=status):
+                self.assertEqual(self.attempts(status), fetch.RETRIES)

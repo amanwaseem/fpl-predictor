@@ -12,6 +12,7 @@ which Fly's proxy sets; anywhere else the header is anyone's to send, so the
 socket's peer is used.
 """
 
+import math
 import os
 import sys
 import threading
@@ -30,7 +31,9 @@ def parse(setting):
     if setting.strip().lower() in ("off", "0", ""):
         return None
     count, slash, seconds = setting.partition("/")
-    if not slash or int(count) < 1 or float(seconds) <= 0:
+    # isfinite: nan and inf parse as floats, and pass `> 0` or fail it
+    # silently; either breaks the window arithmetic (#167).
+    if not slash or int(count) < 1 or not math.isfinite(float(seconds)) or float(seconds) <= 0:
         raise ValueError(f"{setting!r} is not a rate: want requests/seconds, like 10/60, or off")
     return int(count), float(seconds)
 

@@ -71,6 +71,7 @@ INCOMPLETE = {
     "no user": (f"postgresql://:{PASSWORD}@{HOST}/{DATABASE}", ["no user"]),
     "no password": (f"postgresql://{USER}@{HOST}/{DATABASE}", ["no password"]),
     "no host": (f"postgresql://{USER}:{PASSWORD}@/{DATABASE}", ["no host"]),
+    "a port and no host": (f"postgresql://{USER}:{PASSWORD}@:5432/{DATABASE}", ["no host"]),
     "no database": (f"postgresql://{USER}:{PASSWORD}@{HOST}", ["names no database"]),
 }
 

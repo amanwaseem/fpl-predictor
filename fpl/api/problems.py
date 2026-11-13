@@ -58,8 +58,10 @@ async def validation_error(request: Request, exc: RequestValidationError):
 
 
 async def server_error(request: Request, exc: Exception):
-    # Not logged here: Starlette re-raises after this handler, and the server
-    # logs the traceback then. Logging it here too would print it twice.
+    # A fallback. observability.request_logging answers an unhandled error
+    # first, with its request id, and logs it; this answers one raised outside
+    # that middleware, so the reply is still a problem document. Not logged:
+    # Starlette re-raises after it, and the server logs the traceback.
     return problem_response(request, 500)
 
 

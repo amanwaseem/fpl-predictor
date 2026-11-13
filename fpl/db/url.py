@@ -115,7 +115,9 @@ def url_problems(url, complete=False):
                 )
         if not given(parts.password, "password"):
             found.append("it has no password")
-        if not given(parts.netloc.rpartition("@")[2], "host"):
+        # The host, not the netloc: "@:5432" has a port and no host, and libpq
+        # would then try a Unix socket on Fly (#167).
+        if not given(parts.hostname, "host"):
             found.append("it has no host")
         if not given(parts.path.strip("/"), "dbname"):
             found.append("it names no database")

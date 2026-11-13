@@ -16,7 +16,13 @@ from alembic import command
 from sqlalchemy import Engine, func, select, update
 
 from fpl.db import backfill, features
-from fpl.db.models import Fixture, Gameweek, PlayerFixtureStats, PlayerGameweekFeatures
+from fpl.db.models import (
+    Fixture,
+    Gameweek,
+    PlayerFixtureStats,
+    PlayerGameweekFeatures,
+    SeasonPlayer,
+)
 from fpl.db.session import make_engine
 from fpl.ingest import history
 from fpl.models import feature_table
@@ -140,6 +146,39 @@ class TestSyntheticSeason(FeaturesCase):
             self.assertEqual(
                 features.stale_seasons(c, ["2016/17", "2017/18"]), ["2016/17", "2017/18"]
             )
+
+    def test_points_moving_between_players_rebuilds_the_season(self):
+        """Every sum stays the same: a bonus correction looks like this (#167)."""
+        features.build_season(self.engine, "2016/17")
+        with self.engine.begin() as c:
+            for element, change in ((1, 1), (2, -1)):
+                c.execute(
+                    update(PlayerFixtureStats)
+                    .where(
+                        PlayerFixtureStats.season == "2016/17",
+                        PlayerFixtureStats.element_id == element,
+                    )
+                    .values(total_points=PlayerFixtureStats.total_points + change)
+                )
+            self.assertEqual(features.stale_seasons(c, ["2016/17"]), ["2016/17"])
+
+    def test_a_player_changing_position_rebuilds_the_season(self):
+        features.build_season(self.engine, "2016/17")
+        with self.engine.begin() as c:
+            c.execute(
+                update(SeasonPlayer)
+                .where(SeasonPlayer.season == "2016/17", SeasonPlayer.element_id == 1)
+                .values(position="FWD" if self.position(c, 1) != "FWD" else "MID")
+            )
+            self.assertEqual(features.stale_seasons(c, ["2016/17"]), ["2016/17"])
+
+    @staticmethod
+    def position(connection, element):
+        return connection.scalar(
+            select(SeasonPlayer.position).where(
+                SeasonPlayer.season == "2016/17", SeasonPlayer.element_id == element
+            )
+        )
 
     def test_a_round_settling_rebuilds_the_season(self):
         with self.engine.begin() as c:

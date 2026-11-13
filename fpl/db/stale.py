@@ -38,6 +38,7 @@ from fpl.db.load import (
     fixture_rows,
     gameweek_rows,
     player_elements,
+    player_rows,
     season_of,
     season_player_rows,
     team_rows,
@@ -47,6 +48,7 @@ from fpl.db.models import (
     Fixture,
     Gameweek,
     IngestCheck,
+    Player,
     PlayerClub,
     SeasonPlayer,
     Snapshot,
@@ -91,6 +93,9 @@ def from_api(bootstrap, fixtures):
         "fixtures": _keyed(Fixture, fixture_rows("", fixtures)),
         "teams": _keyed(Team, team_rows("", bootstrap)),
         "players": _keyed(SeasonPlayer, season_player_rows("", elements)),
+        # People's names, which the load writes too: a corrected name is a
+        # change like any other (#167).
+        "names": _keyed(Player, player_rows(elements)),
     }
     if any(not e["finished"] for e in bootstrap["events"]):
         api["clubs"] = {(e["id"],): (e["team"],) for e in elements}
@@ -120,6 +125,12 @@ def from_database(connection, season):
         .ext(distinct_on(PlayerClub.element_id))
     )
     found["clubs"] = {(r[0],): (r[1],) for r in connection.execute(latest)}
+    names = (
+        select(Player.code, Player.first_name, Player.second_name)
+        .join(SeasonPlayer, SeasonPlayer.player_code == Player.code)
+        .where(SeasonPlayer.season == season)
+    )
+    found["names"] = {(r[0],): (r[1], r[2]) for r in connection.execute(names)}
     return found
 
 
