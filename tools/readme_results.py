@@ -27,6 +27,10 @@ from pathlib import Path
 
 RECORD_HEADING = "### The record so far"
 PER_GAMEWEEK_HEADING = "<b>Results so far</b>"
+PER_GAMEWEEK_HEADER = (
+    "| Gameweek | Model | MAE | Spearman | `form` MAE | XI points | `form` XI points |",
+    "|---|---|---|---|---|---|---|",
+)
 SNAPSHOT = re.compile(r"\(actuals from snapshot `(\d{8}T\d{6}Z)`")
 
 

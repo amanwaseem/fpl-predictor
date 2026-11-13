@@ -145,6 +145,8 @@ jobs:
           git diff --cached --name-status | python tools/score_bot.py check-changes --scores-dir "$SCORES_DIR" --gameweeks $GAMEWEEKS
           python tools/score_bot.py check-comparators --scores-dir "$SCORES_DIR" --gameweeks $GAMEWEEKS
           python tools/check_log_immutable.py --ref origin/main
+          # unittest, not pytest: the job installs --no-dev, and the test is a
+          # plain unittest.TestCase.
           python -m unittest tests.project.test_readme
           { echo '```diff'; git diff --cached -- README.md; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
@@ -163,7 +165,7 @@ jobs:
           tarball="$RUNNER_TEMP/$tag.tar.gz"
           tar -C data/raw -czf "$tarball" "$SNAPSHOT"
           sha=$(sha256sum "$tarball" | cut -d' ' -f1)
-          named=$(echo $GAMEWEEKS | sed -E 's/([0-9]+)/GW\1/g; s/ /, /g')
+          named=$(python tools/score_bot.py named --gameweeks $GAMEWEEKS)
           gh release create "$tag" "$tarball" --target main --latest=false \
             --title "Snapshot $SNAPSHOT ($named actuals)" \
             --notes "Raw FPL API snapshot holding the final results $named was scored against. SHA-256 of the tarball: \`$sha\`. To rescore: docs/runbook.md section 10."
@@ -194,7 +196,7 @@ jobs:
           echo "pushed=true" >> "$GITHUB_OUTPUT"
 
       - name: Remove the release after a failure before the push
-        if: failure() && steps.release.outputs.tag != '' && steps.push.outputs.pushed != 'true'
+        if: (failure() || cancelled()) && steps.release.outputs.tag != '' && steps.push.outputs.pushed != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
@@ -215,7 +217,7 @@ jobs:
             --tag "$TAG" --sha "$SHA" --scores-dir "$SCORES_DIR" \
             --release-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$RUNNER_TEMP/body.md"
-          named=$(echo $GAMEWEEKS | sed -E 's/([0-9]+)/GW\1/g; s/ /, /g')
+          named=$(python tools/score_bot.py named --gameweeks $GAMEWEEKS)
           # A create that times out may still have opened the PR, so each
           # failure checks before trying again.
           for attempt in 1 2 3; do

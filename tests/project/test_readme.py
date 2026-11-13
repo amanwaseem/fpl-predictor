@@ -11,10 +11,14 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from fpl.log import roles
+from fpl.log.contract import SCORES as SCORES_BASE
+from fpl.log.contract import season_directories
 
 ROOT = Path(__file__).resolve().parents[2]
 README = ROOT / "README.md"
-SCORES = ROOT / "scores"
+# The newest season's scores: the README shows the season under way, and the
+# score workflow rewrites it from that season's directory (#162).
+SCORES = list(season_directories(ROOT, SCORES_BASE).values())[-1]
 
 
 def table_after(text, heading):

@@ -15,7 +15,9 @@ Subcommands:
   check-snapshot    the fresh snapshot holds those gameweeks' final results and
                     was taken between gameweeks.
   check-changes     the only changes are scores/ and README.md, and every
-                    gameweek scored before is unchanged but for the actuals id.
+                    score file already there is unchanged but for the actuals id.
+  check-comparators every new score file has its form comparators.
+  named             the gameweeks as the titles name them: "GW9 and GW10".
   commit-message    the score commit's message, naming the actuals release.
   pr-body           the PR body: each new gameweek's results, the snapshot.
 
@@ -25,12 +27,15 @@ gameweek to start is settled too. That last condition is what keeps the
 actuals snapshot between gameweeks: a snapshot mid-gameweek has zeroed rows for
 fixtures not yet played (CLAUDE.md). It skips, rather than acts, when:
 
+- a score-bot PR is open: the workflow arms its auto-merge;
 - an open PR already changes the season's scores/, whoever opened it;
-- the workflow's own branch has an open PR: the workflow arms its auto-merge.
+- an open PR adds an entry for a gameweek about to be scored, such as one
+  waiting to be accepted late (ADR 0026): scored once it merges or closes.
 
-It fails for a person to look when the workflow's branch exists without an
-open PR. A closed one was a veto, and branches are never deleted, so the
-gameweek is left to be scored by hand (docs/runbook.md section 10).
+Branches are never deleted, so a gameweek scored again (an entry accepted
+after it was first scored) takes the next free name, -2, -3. It fails for a
+person to look when a branch of its has no open or merged PR: a closed one was
+a veto, and the gameweek is scored by hand (docs/runbook.md section 10).
 
 An unreadable API is "could not check": it skips, and the next run tries again.
 
@@ -89,6 +94,18 @@ def unscored(log_dir, scores_dir):
     return found
 
 
+def entry_gameweeks(paths, log_dir):
+    """The gameweeks of the entries among `paths` in `log_dir`."""
+    found = []
+    for path in paths:
+        if Path(path).parent == Path(log_dir) and path.endswith(".csv"):
+            try:
+                found.append(parse_entry_filename(path)[0])
+            except ValueError:
+                continue
+    return found
+
+
 def decide(bootstrap, prs, branches, now, root="."):
     """{"action", "why", "gameweeks", "season", "branch", "log_dir", "scores_dir"}."""
     out: dict[str, Any] = {
@@ -123,30 +140,45 @@ def decide(bootstrap, prs, branches, now, root="."):
     if not ready:
         return result(SKIP, "Every settled gameweek in the log is scored.")
 
-    branch = bot_branch(out["season"], ready[-1])
-    out.update(gameweeks=ready, branch=branch)
-    named = ", ".join(f"GW{gw}" for gw in ready)
+    out.update(gameweeks=ready)
+    gameweeks = named(ready)
 
     if len(prs) >= PR_LIMIT:
         return result(FAIL, f"{len(prs)} PRs listed: the list may be truncated. Raise PR_LIMIT.")
     for pr in prs:
         if pr.get("state") != "OPEN":
             continue
-        if pr.get("headRefName") == branch:
-            return result(SKIP, f"#{pr['number']} is already open to score {named}.")
         paths = [f.get("path", "") for f in pr.get("files") or []]
+        if str(pr.get("headRefName", "")).startswith("score-bot/"):
+            return result(SKIP, f"#{pr['number']} is already open to score {gameweeks}.")
         if any(p.startswith(f"{scores_dir}/") for p in paths):
+            return result(SKIP, f"#{pr['number']} already changes {scores_dir}/; it goes first.")
+        adding = sorted(set(entry_gameweeks(paths, log_dir)) & set(ready))
+        if adding:
+            # Scoring now would leave that entry to a second run, and a late
+            # one may yet be accepted (ADR 0026): wait until it merges or closes.
             return result(
                 SKIP,
-                f"#{pr['number']} already changes {scores_dir}/; it goes first.",
+                f"#{pr['number']} adds a {named(adding)} entry; scored once it merges or closes.",
             )
-    if branch in branches:
-        return result(
-            FAIL,
-            f"{branch} exists with no open PR: a run failed after pushing, or its PR was "
-            f"closed. A person has to look; score {named} by hand (docs/runbook.md section 10).",
-        )
-    return result(ACT, f"Scoring {named}.")
+
+    # Branches are never deleted, so a gameweek scored twice (an entry accepted
+    # after its gameweek was first scored) takes the next free name. A branch
+    # whose PR merged is history; any other is for a person to look at.
+    base = bot_branch(out["season"], ready[-1])
+    for n in range(1, 100):
+        branch = base if n == 1 else f"{base}-{n}"
+        if branch not in branches:
+            break
+        if not any(pr.get("state") == "MERGED" for pr in prs if pr.get("headRefName") == branch):
+            return result(
+                FAIL,
+                f"{branch} exists with no open or merged PR: a run failed after pushing, or its "
+                f"PR was closed. A person has to look; score {gameweeks} by hand "
+                "(docs/runbook.md section 10).",
+            )
+    out.update(branch=branch)
+    return result(ACT, f"Scoring {gameweeks}.")
 
 
 def cmd_decide(args, now=None):
@@ -217,14 +249,35 @@ def without_actuals_id(text):
     return data
 
 
+def cumulative_problems(before, after, gameweeks):
+    """Ways cumulative.json's per-gameweek figures moved for a gameweek not being scored.
+
+    The pooled figures move with every new gameweek; each earlier gameweek's
+    own line must not.
+    """
+    problems = []
+    for model, block in before.get("models", {}).items():
+        new_block = after.get("models", {}).get(model)
+        if new_block is None:
+            problems.append(f"cumulative.json: {model} is gone")
+            continue
+        old = {g["gameweek"]: g for g in block.get("per_gameweek", [])}
+        new = {g["gameweek"]: g for g in new_block.get("per_gameweek", [])}
+        for gw, line in old.items():
+            if gw not in gameweeks and new.get(gw) != line:
+                problems.append(f"cumulative.json: {model}'s GW{gw} figures changed")
+    return problems
+
+
 def change_problems(lines, gameweeks, scores_dir, show):
     """Every way `git diff --name-status` lines go beyond a scoring run.
 
-    `show(path)` returns the file as it was before, for comparing a score file
-    that was there already.
+    `show(path)` returns the file as it was before. A score file that was there
+    already, of any gameweek, may change only in its actuals_snapshot_id: a
+    gameweek rescored for an entry accepted late keeps its other models' scores.
     """
     problems = []
-    new_names = {f"gw{gw:02d}_" for gw in gameweeks}
+    new_names = tuple(f"gw{gw:02d}_" for gw in gameweeks)
     for line in lines:
         if not line.strip():
             continue
@@ -233,22 +286,19 @@ def change_problems(lines, gameweeks, scores_dir, show):
         if path == README:
             if status != "M":
                 problems.append(f"{status} {path}: README.md may only be modified")
-            continue
-        if Path(path).parent != Path(scores_dir):
+        elif Path(path).parent != Path(scores_dir):
             problems.append(f"{status} {path}: outside {scores_dir}/ and README.md")
-            continue
-        is_new = any(name.startswith(prefix) for prefix in new_names)
-        if status == "A" and not is_new:
-            problems.append(f"A {path}: a score file for a gameweek not being scored")
-        elif status == "M" and name == "cumulative.json":
-            continue
-        elif status == "M" and name.endswith(".json") and not is_new:
-            before = without_actuals_id(show(path))
-            after = without_actuals_id(Path(path).read_text())
-            if before != after:
+        elif name == "cumulative.json" and status == "M":
+            before, after = json.loads(show(path)), json.loads(Path(path).read_text())
+            problems += cumulative_problems(before, after, gameweeks)
+        elif status == "A":
+            if not name.startswith(new_names):
+                problems.append(f"A {path}: a score file for a gameweek not being scored")
+        elif status == "M" and name.endswith(".json"):
+            if without_actuals_id(show(path)) != without_actuals_id(Path(path).read_text()):
                 problems.append(f"M {path}: changed beyond its actuals_snapshot_id")
-        elif status != "A":
-            problems.append(f"{status} {path}: an earlier gameweek's scores changed")
+        else:
+            problems.append(f"{status} {path}: a score file already there changed")
     return problems
 
 
@@ -264,8 +314,7 @@ def cmd_check_changes(args):
     for p in problems:
         print(f"REFUSED: {p}")
     if not problems:
-        named = ", ".join(f"GW{gw}" for gw in args.gameweeks)
-        print(f"OK: only {named}'s scores are new; earlier gameweeks are unchanged.")
+        print(f"OK: only {named(args.gameweeks)}'s scores are new; the rest are unchanged.")
     return 1 if problems else 0
 
 
@@ -279,19 +328,20 @@ def new_scores(scores_dir, gameweeks):
     return found
 
 
-def comparator_problems(scores_dir, gameweeks):
-    """Score files for `gameweeks` that have no comparators: their snapshot was missing."""
+def comparator_problems(scores):
+    """Score files with no comparators: their entry's snapshot was missing."""
     return [
         f"GW{d['gameweek']} {d['model_version']} has no comparators: its entry's snapshot "
         f"{d['prediction_snapshot_id']} was not fetched"
-        for d in new_scores(scores_dir, gameweeks)
+        for d in scores
         if not d["comparators"].get("available")
     ]
 
 
 def cmd_check_comparators(args):
-    problems = comparator_problems(args.scores_dir, set(args.gameweeks))
-    if not new_scores(args.scores_dir, set(args.gameweeks)):
+    scores = new_scores(args.scores_dir, set(args.gameweeks))
+    problems = comparator_problems(scores)
+    if not scores:
         problems.append("no score files for the gameweeks being scored")
     for p in problems:
         print(f"REFUSED: {p}")
@@ -306,21 +356,10 @@ def named(gameweeks):
 
 
 def results_table(scores):
-    from readme_results import points, three
+    """The PR's table: the README's per-gameweek rows for the new gameweeks."""
+    from readme_results import PER_GAMEWEEK_HEADER, per_gameweek_rows
 
-    lines = [
-        "| Gameweek | Model | MAE | Spearman | `form` MAE | XI points | `form` XI points |",
-        "|---|---|---|---|---|---|---|",
-    ]
-    for d in scores:
-        form = d["comparators"].get("form", {})
-        xi = d["xi"]["captured"]["actual"] if d["xi"]["available"] else None
-        lines.append(
-            f"| GW{d['gameweek']} | `{d['model_version']}` | {three(d['metrics']['all']['mae'])} "
-            f"| {three(d['metrics']['all']['spearman'])} | {three(form.get('mae'))} "
-            f"| {points(xi)} | {points(form.get('xi_actual'))} |"
-        )
-    return "\n".join(lines)
+    return "\n".join([*PER_GAMEWEEK_HEADER, *per_gameweek_rows(scores)])
 
 
 def commit_message(gameweeks, snapshot_id, tag, sha):
@@ -374,6 +413,11 @@ def cmd_pr_body(args):
     return 0
 
 
+def cmd_named(args):
+    print(named(args.gameweeks))
+    return 0
+
+
 def cli(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
@@ -398,6 +442,9 @@ def cli(argv=None):
     p.add_argument("--scores-dir", required=True)
     p.add_argument("--gameweeks", type=int, nargs="+", required=True)
 
+    p = sub.add_parser("named")
+    p.add_argument("--gameweeks", type=int, nargs="+", required=True)
+
     p = sub.add_parser("commit-message")
     for name in ("--snapshot", "--tag", "--sha"):
         p.add_argument(name, required=True)
@@ -415,6 +462,7 @@ def cli(argv=None):
         "check-snapshot": cmd_check_snapshot,
         "check-changes": cmd_check_changes,
         "check-comparators": cmd_check_comparators,
+        "named": cmd_named,
         "commit-message": cmd_commit_message,
         "pr-body": cmd_pr_body,
     }[args.command](args)
