@@ -33,8 +33,10 @@ jobs:
   deploy:
     # Only a CI run for a push to main, and only a green one. A PR's CI run on
     # a branch named main does not count.
+    # A manual deploy is of main only: from a branch it would put unmerged code
+    # and log entries in production (#165).
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
@@ -46,7 +48,24 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      # CI runs on two pushes can finish out of order, and this run may have
+      # queued behind a newer deploy. Main's newest commit has its own CI run,
+      # and its own deploy, so an older one stands down rather than overwrite
+      # it (#165).
+      - name: This is still main's newest commit
+        id: newest
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          git fetch -q origin main
+          tip=$(git rev-parse origin/main)
+          if [ "$tip" != "$SHA" ]; then
+            echo "Main has moved on to $tip; its own CI run deploys it. Not deploying $SHA."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check the deploy is configured
+        if: steps.newest.outputs.skip != 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -68,17 +87,21 @@ jobs:
 
       # 1.6, pinned by commit rather than by a tag that can be moved.
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+        if: steps.newest.outputs.skip != 'true'
 
       - name: Deploy, migrating first
+        if: steps.newest.outputs.skip != 'true'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: flyctl deploy --remote-only --wait-timeout 300
 
       - uses: ./.github/actions/uv
+        if: steps.newest.outputs.skip != 'true'
         with:
           args: "--no-dev --group db"
 
       - name: Project the committed log into production, and reconcile it
+        if: steps.newest.outputs.skip != 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
@@ -86,6 +109,7 @@ jobs:
           fpl-reconcile
 
       - name: Smoke-test the live API
+        if: steps.newest.outputs.skip != 'true'
         run: |
           for i in $(seq 1 20); do
             curl -sf "$APP_URL/readyz" > /dev/null && break

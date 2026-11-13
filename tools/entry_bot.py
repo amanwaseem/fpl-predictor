@@ -94,8 +94,11 @@ from fpl.log.contract import (
 # watchdog's alarm (check_deadline.ALARM_HOURS) sits inside this.
 WINDOW_HOURS = 12
 
-# `gh pr list` is asked for this many. A list that long may be truncated, and
-# a truncated list could hide the PR that already adds this week's entry.
+# `gh pr list` is asked for this many open PRs. A list that long may be
+# truncated, and could hide the PR that already adds this week's entry. Closed
+# and merged PRs are listed separately, newest first and without their files:
+# only recent ones, from this gameweek's branches, matter, so that list may be
+# cut short (#165).
 PR_LIMIT = 500
 
 ACT, RESUME, SKIP, FAIL = "act", "resume", "skip", "fail"
@@ -292,6 +295,10 @@ def write_outputs(**values):
                 f.write(f"{key}={'' if value is None else value}\n")
 
 
+def open_count(prs):
+    return sum(1 for pr in prs if pr.get("state", "OPEN") == "OPEN")
+
+
 def read_branches(path):
     names = Path(path).read_text().split()
     if not names:
@@ -310,10 +317,10 @@ def cmd_decide(args, now=None):
         write_outputs(action=SKIP, gameweek=None, deadline=None, season=None, branch=None, late="")
         return 0
     prs = load_prs(args.prs)
-    if len(prs) >= PR_LIMIT:
+    if open_count(prs) >= PR_LIMIT:
         report(
             FAIL,
-            f"{len(prs)} PRs listed: the list may be truncated, and could hide "
+            f"{open_count(prs)} open PRs listed: the list may be truncated, and could hide "
             "the one that already adds this entry. Raise PR_LIMIT.",
         )
         write_outputs(action=FAIL)

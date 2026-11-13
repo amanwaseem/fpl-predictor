@@ -14,9 +14,9 @@ Subcommands:
                     from its release.
   check-snapshot    the fresh snapshot holds those gameweeks' final results and
                     was taken between gameweeks.
-  check-changes     the only changes are scores/ and README.md, and every
-                    score file already there is unchanged but for the actuals id.
-  check-comparators every new score file has its form comparators.
+  check-changes     the only changes are scores/ and README.md, every score
+                    file already there is unchanged but for the actuals id, and
+                    every new one has its form comparators.
   named             the gameweeks as the titles name them: "GW9 and GW10".
   commit-message    the score commit's message, naming the actuals release.
   pr-body           the PR body: each new gameweek's results, the snapshot.
@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from check_deadline import load_bootstrap, load_prs
-from entry_bot import PR_LIMIT, read_branches, report, write_outputs
+from entry_bot import PR_LIMIT, open_count, read_branches, report, write_outputs
 
 from fpl.ingest.snapshot import load_snapshot
 from fpl.log.contract import (
@@ -65,6 +65,11 @@ from fpl.log.contract import (
 )
 
 ACT, SKIP, FAIL = "act", "skip", "fail"
+
+# A score PR open this long has not merged itself: ci is red, or auto-merge
+# was never armed. Skipping behind it would stall scoring with every run
+# green, so from then on each run fails, and GitHub emails.
+STUCK_HOURS = 24
 README = "README.md"
 TITLE = "Score workflow"
 
@@ -85,13 +90,19 @@ def latest_started(events, now):
 
 
 def unscored(log_dir, scores_dir):
-    """{gameweek: [model, ...]} for every entry in the log with no score file."""
+    """({gameweek: [model, ...]} for every entry with no score file,
+    [files in the log that are not entries])."""
     found: dict[int, list[str]] = {}
+    strays = []
     for path in sorted(Path(log_dir).glob("*.csv")):
-        gameweek, model = parse_entry_filename(path)
+        try:
+            gameweek, model = parse_entry_filename(path)
+        except ValueError:
+            strays.append(path.name)
+            continue
         if not (Path(scores_dir) / f"{path.stem}.json").exists():
             found.setdefault(gameweek, []).append(model)
-    return found
+    return found, strays
 
 
 def entry_gameweeks(paths, log_dir):
@@ -134,7 +145,13 @@ def decide(bootstrap, prs, branches, now, root="."):
     log_dir = season_directory(season)
     scores_dir = season_directory(season, SCORES)
     done = {e["id"] for e in events if settled(e)}
-    waiting = unscored(Path(root) / log_dir, Path(root) / scores_dir)
+    waiting, strays = unscored(Path(root) / log_dir, Path(root) / scores_dir)
+    if strays:
+        return result(
+            FAIL,
+            f"{log_dir}/ holds {', '.join(strays)}, which are not entries; fpl-score refuses "
+            "that. A person has to look.",
+        )
     ready = sorted(gw for gw in waiting if gw in done)
     out.update(season=season.replace("/", "-"), log_dir=str(log_dir), scores_dir=str(scores_dir))
     if not ready:
@@ -143,13 +160,25 @@ def decide(bootstrap, prs, branches, now, root="."):
     out.update(gameweeks=ready)
     gameweeks = named(ready)
 
-    if len(prs) >= PR_LIMIT:
-        return result(FAIL, f"{len(prs)} PRs listed: the list may be truncated. Raise PR_LIMIT.")
+    if open_count(prs) >= PR_LIMIT:
+        return result(
+            FAIL, f"{open_count(prs)} open PRs listed: the list may be truncated. Raise PR_LIMIT."
+        )
     for pr in prs:
         if pr.get("state") != "OPEN":
             continue
         paths = [f.get("path", "") for f in pr.get("files") or []]
         if str(pr.get("headRefName", "")).startswith("score-bot/"):
+            opened = pr.get("createdAt")
+            age = (
+                (now - parse_timestamp(opened, "createdAt")).total_seconds() / 3600 if opened else 0
+            )
+            if age > STUCK_HOURS:
+                return result(
+                    FAIL,
+                    f"#{pr['number']} has been open {age:.0f} hours without merging itself: its "
+                    "ci is red, or auto-merge is off. A person has to look.",
+                )
             return result(SKIP, f"#{pr['number']} is already open to score {gameweeks}.")
         if any(p.startswith(f"{scores_dir}/") for p in paths):
             return result(SKIP, f"#{pr['number']} already changes {scores_dir}/; it goes first.")
@@ -243,12 +272,6 @@ def cmd_check_snapshot(args, now=None):
     return 0
 
 
-def without_actuals_id(text):
-    data = json.loads(text)
-    data.pop("actuals_snapshot_id", None)
-    return data
-
-
 def cumulative_problems(before, after, gameweeks):
     """Ways cumulative.json's per-gameweek figures moved for a gameweek not being scored.
 
@@ -269,15 +292,29 @@ def cumulative_problems(before, after, gameweeks):
     return problems
 
 
+def comparable(text, rescored):
+    """A score file as compared before and after: without its actuals id, and,
+    for a gameweek being rescored, without its head-to-head against the
+    baseline, which a late baseline entry adds."""
+    data = json.loads(text)
+    data.pop("actuals_snapshot_id", None)
+    if rescored:
+        data.pop("head_to_head", None)
+    return data
+
+
 def change_problems(lines, gameweeks, scores_dir, show):
     """Every way `git diff --name-status` lines go beyond a scoring run.
 
     `show(path)` returns the file as it was before. A score file that was there
-    already, of any gameweek, may change only in its actuals_snapshot_id: a
-    gameweek rescored for an entry accepted late keeps its other models' scores.
+    already may change only in its actuals_snapshot_id, so a gameweek rescored
+    for an entry accepted late keeps its other models' scores. Every new score
+    file must have its form comparators: without them, its entry's snapshot
+    was not fetched.
     """
     problems = []
     new_names = tuple(f"gw{gw:02d}_" for gw in gameweeks)
+    added = 0
     for line in lines:
         if not line.strip():
             continue
@@ -288,17 +325,27 @@ def change_problems(lines, gameweeks, scores_dir, show):
                 problems.append(f"{status} {path}: README.md may only be modified")
         elif Path(path).parent != Path(scores_dir):
             problems.append(f"{status} {path}: outside {scores_dir}/ and README.md")
-        elif name == "cumulative.json" and status == "M":
-            before, after = json.loads(show(path)), json.loads(Path(path).read_text())
-            problems += cumulative_problems(before, after, gameweeks)
+        elif name == "cumulative.json":
+            # Added in a season's first scoring run; modified in every other.
+            if status == "M":
+                before, after = json.loads(show(path)), json.loads(Path(path).read_text())
+                problems += cumulative_problems(before, after, gameweeks)
+            elif status != "A":
+                problems.append(f"{status} {path}: cumulative.json may only change")
         elif status == "A":
             if not name.startswith(new_names):
                 problems.append(f"A {path}: a score file for a gameweek not being scored")
+            elif name.endswith(".json"):
+                added += 1
+                problems += comparator_problems([json.loads(Path(path).read_text())])
         elif status == "M" and name.endswith(".json"):
-            if without_actuals_id(show(path)) != without_actuals_id(Path(path).read_text()):
+            rescored = name.startswith(new_names)
+            if comparable(show(path), rescored) != comparable(Path(path).read_text(), rescored):
                 problems.append(f"M {path}: changed beyond its actuals_snapshot_id")
         else:
             problems.append(f"{status} {path}: a score file already there changed")
+    if not added:
+        problems.append(f"no new score file for {named(sorted(gameweeks))}")
     return problems
 
 
@@ -314,7 +361,10 @@ def cmd_check_changes(args):
     for p in problems:
         print(f"REFUSED: {p}")
     if not problems:
-        print(f"OK: only {named(args.gameweeks)}'s scores are new; the rest are unchanged.")
+        print(
+            f"OK: only {named(args.gameweeks)}'s scores are new, with comparators; "
+            "the rest are unchanged."
+        )
     return 1 if problems else 0
 
 
@@ -336,18 +386,6 @@ def comparator_problems(scores):
         for d in scores
         if not d["comparators"].get("available")
     ]
-
-
-def cmd_check_comparators(args):
-    scores = new_scores(args.scores_dir, set(args.gameweeks))
-    problems = comparator_problems(scores)
-    if not scores:
-        problems.append("no score files for the gameweeks being scored")
-    for p in problems:
-        print(f"REFUSED: {p}")
-    if not problems:
-        print("OK: every new score file has its comparators.")
-    return 1 if problems else 0
 
 
 def named(gameweeks):
@@ -438,10 +476,6 @@ def cli(argv=None):
     p.add_argument("--scores-dir", required=True)
     p.add_argument("--gameweeks", type=int, nargs="+", required=True)
 
-    p = sub.add_parser("check-comparators")
-    p.add_argument("--scores-dir", required=True)
-    p.add_argument("--gameweeks", type=int, nargs="+", required=True)
-
     p = sub.add_parser("named")
     p.add_argument("--gameweeks", type=int, nargs="+", required=True)
 
@@ -461,7 +495,6 @@ def cli(argv=None):
         "entry-snapshots": cmd_entry_snapshots,
         "check-snapshot": cmd_check_snapshot,
         "check-changes": cmd_check_changes,
-        "check-comparators": cmd_check_comparators,
         "named": cmd_named,
         "commit-message": cmd_commit_message,
         "pr-body": cmd_pr_body,

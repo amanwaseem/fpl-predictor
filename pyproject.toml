@@ -1,8 +1,9 @@
 # The package and its tooling config. Exact versions, transitive ones
 # included, are in uv.lock, which every log entry's reproducibility claim
 # rests on: `uv sync --locked` installs exactly what the lock says, and fails
-# if the lock no longer matches this file. The project itself is installed
-# editable, the only supported install (ADR 0011).
+# if the lock no longer matches this file. A checkout installs the project
+# editable (ADR 0011); the Docker image, which has no checkout, installs it
+# non-editable (ADR 0015).
 
 [build-system]
 requires = ["setuptools>=77"]

@@ -71,7 +71,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr list --state all --limit 500 --json number,state,headRefName,files > "$RUNNER_TEMP/prs.json"
+          # Every open PR, with its files; closed and merged ones newest first,
+          # without, since only this gameweek's branches matter among them (#165).
+          gh pr list --state open --limit 500 --json number,state,headRefName,files,createdAt > "$RUNNER_TEMP/open.json"
+          gh pr list --state all --limit 300 --json number,state,headRefName \
+            -q '[.[] | select(.state != "OPEN")]' > "$RUNNER_TEMP/closed.json"
+          jq -s 'add' "$RUNNER_TEMP/open.json" "$RUNNER_TEMP/closed.json" > "$RUNNER_TEMP/prs.json"
           gh api --paginate "repos/$GITHUB_REPOSITORY/branches" -q '.[].name' > "$RUNNER_TEMP/branches.txt"
           python tools/score_bot.py decide --prs "$RUNNER_TEMP/prs.json" --branches "$RUNNER_TEMP/branches.txt"
 
@@ -86,23 +91,10 @@ jobs:
           fi
           { gh api -i "repos/$GITHUB_REPOSITORY" 2>/dev/null || true; } | python tools/entry_bot.py token-expiry --fail-days 0.5
 
-      # About six minutes. Not piped: a failed fetch has to fail the step.
-      - name: Snapshot the API
-        if: steps.plan.outputs.action == 'act'
-        run: fpl-fetch
-
-      - name: The snapshot holds final results, between gameweeks
-        if: steps.plan.outputs.action == 'act'
-        id: snapshot
-        env:
-          GAMEWEEKS: ${{ steps.plan.outputs.gameweeks }}
-        run: |
-          id=$(cat data/raw/LATEST)
-          python tools/score_bot.py check-snapshot --snapshot "$id" --gameweeks $GAMEWEEKS
-          echo "id=$id" >> "$GITHUB_OUTPUT"
-
       # The form comparators read the snapshot each entry was made from. The
-      # entry workflow released it, and its commit records the SHA-256.
+      # entry workflow released it, and its commit records the SHA-256. Before
+      # the six-minute fetch, so an entry made by hand, with no release, fails
+      # in seconds (#165).
       - name: Fetch the new entries' snapshots from their releases
         if: steps.plan.outputs.action == 'act'
         env:
@@ -120,9 +112,25 @@ jobs:
             gh release download "$tag" --pattern "$tag.tar.gz" --dir "$RUNNER_TEMP/release"
             actual=$(sha256sum "$RUNNER_TEMP/release/$tag.tar.gz" | cut -d' ' -f1)
             [ "$actual" = "$sha" ] || { echo "$tag.tar.gz has SHA-256 $actual; the entry commit says $sha."; exit 1; }
+            mkdir -p data/raw
             tar -xzf "$RUNNER_TEMP/release/$tag.tar.gz" -C data/raw
             echo "$tag: SHA-256 checked, extracted."
           done < "$RUNNER_TEMP/snapshots.txt"
+
+      # About six minutes. Not piped: a failed fetch has to fail the step.
+      - name: Snapshot the API
+        if: steps.plan.outputs.action == 'act'
+        run: fpl-fetch
+
+      - name: The snapshot holds final results, between gameweeks
+        if: steps.plan.outputs.action == 'act'
+        id: snapshot
+        env:
+          GAMEWEEKS: ${{ steps.plan.outputs.gameweeks }}
+        run: |
+          id=$(cat data/raw/LATEST)
+          python tools/score_bot.py check-snapshot --snapshot "$id" --gameweeks $GAMEWEEKS
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
       - name: Score, and bring the README into line
         if: steps.plan.outputs.action == 'act'
@@ -143,7 +151,6 @@ jobs:
           git diff --cached --name-status
           [ -z "$(git status --porcelain --untracked-files=no | grep -v '^[AM] ')" ] || { git status --short; echo "Changes outside the index."; exit 1; }
           git diff --cached --name-status | python tools/score_bot.py check-changes --scores-dir "$SCORES_DIR" --gameweeks $GAMEWEEKS
-          python tools/score_bot.py check-comparators --scores-dir "$SCORES_DIR" --gameweeks $GAMEWEEKS
           python tools/check_log_immutable.py --ref origin/main
           # unittest, not pytest: the job installs --no-dev, and the test is a
           # plain unittest.TestCase.

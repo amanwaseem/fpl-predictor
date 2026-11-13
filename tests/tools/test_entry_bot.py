@@ -453,14 +453,20 @@ class TestDecideCommand(unittest.TestCase):
         self.assertEqual(self.outputs_written()["action"], "resume")
         self.assertEqual(self.outputs_written()["branch"], BOT)
 
-    def test_a_list_as_long_as_the_limit_fails(self):
+    def test_an_open_list_as_long_as_the_limit_fails(self):
         """A truncated list could hide the PR that already adds this entry."""
-        self.prs.write_text(
-            json.dumps([pr(n, "README.md", state="MERGED") for n in range(entry_bot.PR_LIMIT)])
-        )
+        self.prs.write_text(json.dumps([pr(n, "README.md") for n in range(entry_bot.PR_LIMIT)]))
         code, out = self.invoke("--fake-deadline-hours", "6", "--fake-gameweek", "9")
         self.assertEqual(code, 1)
         self.assertIn("truncated", out)
+
+    def test_closed_and_merged_prs_do_not_count_towards_the_limit(self):
+        """Listed newest first and maybe cut short; only open ones must be whole (#165)."""
+        self.prs.write_text(
+            json.dumps([pr(n, "README.md", state="MERGED") for n in range(entry_bot.PR_LIMIT)])
+        )
+        code, _ = self.invoke("--fake-deadline-hours", "6", "--fake-gameweek", "9")
+        self.assertEqual(code, 0)
 
     def test_an_empty_branch_list_is_refused(self):
         """No branches at all, not even main, means the listing failed."""

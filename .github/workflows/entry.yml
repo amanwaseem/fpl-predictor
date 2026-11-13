@@ -98,7 +98,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr list --state all --limit 500 --json number,state,headRefName,files > "$RUNNER_TEMP/prs.json"
+          # Every open PR, with its files; closed and merged ones newest first,
+          # without, since only this gameweek's branches matter among them (#165).
+          gh pr list --state open --limit 500 --json number,state,headRefName,files,createdAt > "$RUNNER_TEMP/open.json"
+          gh pr list --state all --limit 300 --json number,state,headRefName \
+            -q '[.[] | select(.state != "OPEN")]' > "$RUNNER_TEMP/closed.json"
+          jq -s 'add' "$RUNNER_TEMP/open.json" "$RUNNER_TEMP/closed.json" > "$RUNNER_TEMP/prs.json"
           gh api --paginate "repos/$GITHUB_REPOSITORY/branches" -q '.[].name' > "$RUNNER_TEMP/branches.txt"
           args=(--prs "$RUNNER_TEMP/prs.json" --branches "$RUNNER_TEMP/branches.txt")
           if [ -n "$FAKE_HOURS" ] && [ "$DRY_RUN" != "true" ]; then
@@ -235,10 +240,11 @@ jobs:
             "https://x-access-token:${BOT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
           echo "pushed=true" >> "$GITHUB_OUTPUT"
 
-      # Before the push nothing names the release, so it goes. After the push
+      # Before the push nothing names the release, so it goes, on a cancelled
+      # or timed-out run too. After the push
       # the commit names it and the next run resumes from it, so it stays.
       - name: Remove the release after a failure before the push
-        if: failure() && steps.release.outputs.tag != '' && steps.push.outputs.pushed != 'true'
+        if: (failure() || cancelled()) && steps.release.outputs.tag != '' && steps.push.outputs.pushed != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
