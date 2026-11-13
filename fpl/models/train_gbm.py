@@ -182,8 +182,18 @@ def bootstrap(by_gameweek, statistics, draws=BOOTSTRAP, seed=SEED):
         sample = [p for k in (rng.choice(keys) for _ in keys) for p in by_gameweek[k]]
         for name, statistic in statistics.items():
             values[name].append(statistic(sample))
-    tail = int(0.025 * draws)
-    return {name: (sorted(v)[tail], sorted(v)[draws - 1 - tail]) for name, v in values.items()}
+    return {name: _interval(v) for name, v in values.items()}
+
+
+def _interval(values):
+    """The middle 95% of `values`, leaving out draws the statistic had no value for:
+    Spearman's rho is None on a resample where one side is constant, and None does
+    not sort with numbers (#169). (None, None) if no draw had one."""
+    known = sorted(v for v in values if v is not None)
+    if not known:
+        return (None, None)
+    tail = int(0.025 * len(known))
+    return (known[tail], known[len(known) - 1 - tail])
 
 
 def evaluate(bundle, rows):
@@ -243,7 +253,7 @@ def cross_validate(rows):
 
 def report(folds, live=None):
     def ci(pair):
-        return f"{pair[0]:.3f} to {pair[1]:.3f}"
+        return "n/a" if pair[0] is None else f"{pair[0]:.3f} to {pair[1]:.3f}"
 
     lines = [
         f"# {MODEL_VERSION}: held-out report",

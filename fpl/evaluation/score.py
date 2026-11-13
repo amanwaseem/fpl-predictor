@@ -407,7 +407,13 @@ def pooled_comparators(results):
         return {"available": False, "gameweeks": []}
     out: dict = {"available": True, "gameweeks": [r["gameweek"] for r in with_comparators]}
     for name in COMPARATORS:
-        blocks = [(r["comparators"][name], r["metrics"]["all"]["n"]) for r in with_comparators]
+        # Each block by its own count: a carried block was computed against
+        # an earlier actuals snapshot, whose join may have matched other rows (#169).
+        blocks = [
+            (b, b.get("n", r["metrics"]["all"]["n"]))
+            for r in with_comparators
+            for b in [r["comparators"][name]]
+        ]
         n = sum(count for _, count in blocks)
         pooled = {"n": n, "mae": sum(b["mae"] * count for b, count in blocks) / n}
         xis = [b["xi_actual"] for b, _ in blocks if b.get("xi_actual") is not None]
@@ -562,7 +568,7 @@ def main(actuals_id, out_dir=None, log_dir=None):
     for path in entries.values():
         rows, faults = read_entry(path)
         if faults or not rows:
-            continue  # reported below, once the entry is scored
+            continue  # reported below: when it is scored, or as a warning while pending
         made_for = season_of_deadline(parse_timestamp(rows[0]["deadline_utc"], f"{path}"))
         if made_for != season:
             raise SystemExit(
@@ -587,6 +593,10 @@ def main(actuals_id, out_dir=None, log_dir=None):
         path = entries[(gw, model)]
         if gw not in settled:
             print(f"pending:   GW{gw} {model} — results not final")
+            # Said now, not when the week settles and scoring fails on it (#169).
+            _, faults = read_entry(path)
+            if faults:
+                print(f"WARNING:   {path} does not read as an entry: {faults[0]}")
             continue
         rows, faults = read_entry(path)
         if faults:

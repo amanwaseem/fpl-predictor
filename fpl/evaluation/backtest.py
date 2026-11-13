@@ -73,7 +73,7 @@ from pathlib import Path
 from typing import Any
 
 from fpl.evaluation import metrics, score
-from fpl.ingest.snapshot import load_live, load_snapshot, usable_rounds
+from fpl.ingest.snapshot import load_live, load_snapshot, player_summaries, usable_rounds
 from fpl.models import gbm, predict_fixture
 from fpl.models.candidates import (
     baseline_fixture_rows,
@@ -157,6 +157,12 @@ def as_of(bootstrap, fixtures, histories, target_gw):
 
     Returns (bootstrap, fixtures, histories) in the same shapes as the
     originals, so a model reads it exactly as it reads a real snapshot.
+
+    One thing it cannot cut back: whether an earlier round had settled by the
+    deadline. A snapshot records data_checked as it is now, not when it
+    flipped, so a round that settled only after GW `target_gw`'s deadline (a
+    midweek round, say) counts as usable here where the live entry left it
+    out. The replay can know slightly more than the deadline did (#169).
     """
     before = {
         pid: [r for r in rows if r.get("round") is not None and r["round"] < target_gw]
@@ -429,11 +435,9 @@ def _load(snapshot_id, model, gameweeks):
     if not gameweeks:
         raise SystemExit(f"No settled gameweeks with actuals in {snap.name} to replay.")
 
-    histories, pasts = {}, {}
-    for p in bootstrap["elements"]:
-        summary = json.loads((players_dir / f"{p['id']}.json").read_text())
-        histories[p["id"]] = summary.get("history", [])
-        pasts[p["id"]] = summary.get("history_past", [])
+    # As the predictors read it: a player with no element-summary file is left
+    # out, rather than stopping the replay with a traceback (#169).
+    histories, pasts = player_summaries(bootstrap, players_dir)
     return snap, bootstrap, fixtures, histories, pasts, gameweeks
 
 

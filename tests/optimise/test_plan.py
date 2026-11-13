@@ -162,6 +162,33 @@ class TestAcrossWeeks(unittest.TestCase):
         for week in result.weeks:
             self.assertGreaterEqual(week.bank_after, 0.0)
 
+    def test_an_unavailable_player_sold_is_never_bought_back(self):
+        """Owned and injured: he may be kept, but once sold he is not for sale (#169).
+        Selling 8 for a stand-in this week and buying him back next would be the
+        best plan if he could be bought; he cannot, as fpl-optimise has it."""
+        squad = even_squad()
+        squad[7]["status"] = "i"
+        for p in squad[8:12]:
+            p["predicted_points"] = 8.0
+        pool = squad + [player(200, "MID", 0.0, price=3.0)]
+        worth = {1: {8: 0.0, 200: 10.0}, 2: {8: 10.0, 200: 0.0}}
+        result = best_plan(
+            weeks_of(pool, worth), owned(squad), 20.0, 2, discount=1.0, bench_weight=0.0
+        )
+        self.assertEqual(bought(result.weeks[0]), [200])
+        self.assertNotIn(8, bought(result.weeks[1]))
+        # And when he is allowed, he comes back.
+        allowed = best_plan(
+            weeks_of(pool, worth),
+            owned(squad),
+            20.0,
+            2,
+            discount=1.0,
+            bench_weight=0.0,
+            include_unavailable=True,
+        )
+        self.assertIn(8, bought(allowed.weeks[1]))
+
     def test_the_bank_after_each_week_adds_up(self):
         self.pool[-2]["price"], self.pool[-1]["price"] = 6.0, 7.0
         result = self.plan({1: {100: 6.0}, 2: {101: 6.0}})

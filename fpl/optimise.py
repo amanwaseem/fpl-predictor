@@ -62,6 +62,7 @@ Needs the HiGHS solver, in the optimise group: uv sync --inexact --group optimis
 
 import argparse
 import json
+import math
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -501,10 +502,12 @@ def check_current(players, current, bank, free_transfers):
             have = sum(p["position"] == position for p in known)
             if have != quota:
                 found.append(f"{have} {position} in the squad, not {quota}")
-    if any(price <= 0 for price in current.values()):
-        found.append("every selling price must be above zero")
-    if bank < 0:
-        found.append(f"the bank is £{bank:.1f}m, below zero")
+    # isfinite first: nan compares false with everything, so `<= 0` lets it
+    # through, and inf passes too, then breaks the arithmetic in tenths (#169).
+    if any(not math.isfinite(price) or price <= 0 for price in current.values()):
+        found.append("every selling price must be a number above zero")
+    if not math.isfinite(bank) or bank < 0:
+        found.append(f"the bank is {bank}, not a number of millions from zero up")
     # bool is an int in Python, so a JSON true would otherwise pass as 1.
     if (
         isinstance(free_transfers, bool)
