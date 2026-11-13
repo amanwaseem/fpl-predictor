@@ -78,6 +78,25 @@ test("back from a player returns to the rows the reader had expanded", async ({ 
   await expect(rows).toHaveCount(100);
 });
 
+test("one page's expanded rows do not carry over to another loaded in the same tab", async ({
+  page,
+}) => {
+  // Both loaded directly: React Router gives each first entry the same key.
+  await page.goto("/gameweeks/8?model=baseline-v1");
+  const rows = page.getByRole("table", { name: "Predictions" }).locator("tbody tr");
+  await page.getByRole("button", { name: /Show more/ }).click();
+  await expect(rows).toHaveCount(100);
+  await page.goto("/gameweeks/8?model=baseline-v1&position=MID");
+  await expect(rows).toHaveCount(50);
+});
+
+test("a filter a link carries that no control can show is ignored", async ({ page }) => {
+  await page.goto("/gameweeks/8?model=baseline-v1&position=GK&team=XYZ&sort=status");
+  const rows = page.getByRole("table", { name: "Predictions" }).locator("tbody tr");
+  await expect(rows).toHaveCount(50);
+  await expect(page.getByText("No players match.")).toHaveCount(0);
+});
+
 test("a player's page shows each model's prediction beside what happened", async ({ page }) => {
   // The database in CI holds the log only, not football data: the player is stubbed.
   await page.route("**/v1/players/42", (route) =>

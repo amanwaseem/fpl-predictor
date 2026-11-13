@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { type Schemas } from "../api/client";
 import {
@@ -142,7 +143,11 @@ function DeadlineCard({
     <div className="deadline-card">
       <p className="eyebrow">{next ? `Gameweek ${next} deadline` : "Next deadline"}</p>
       <div className="big">
-        {next && status.next_deadline_utc ? <Countdown to={status.next_deadline_utc} /> : "–"}
+        {next && status.next_deadline_utc ? (
+          <DeadlineCountdown to={status.next_deadline_utc} />
+        ) : (
+          "–"
+        )}
       </div>
       <dl aria-label="Status">
         {next && (
@@ -285,5 +290,18 @@ function Record({ models }: { models: Model[] }) {
         );
       })}
     </div>
+  );
+}
+
+// Counts down to the deadline, then asks for the status again: the API names
+// the next gameweek by the clock, so the card moves on to it rather than read
+// "passed" until a reload.
+function DeadlineCountdown({ to }: { to: string }) {
+  const queryClient = useQueryClient();
+  return (
+    <Countdown
+      to={to}
+      onPassed={() => void queryClient.invalidateQueries({ queryKey: ["status"] })}
+    />
   );
 }

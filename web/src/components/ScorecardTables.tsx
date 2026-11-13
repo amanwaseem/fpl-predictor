@@ -78,7 +78,12 @@ export function ScorecardTables({ season, models }: { season: string; models: Mo
                 <tr key={m.model_version}>
                   <th scope="row">
                     {modelName(m.model_version)} <code className="muted">{m.model_version}</code>
-                    {retiredNote(m) && <span className="pill pill-neutral"> {retiredNote(m)}</span>}
+                    {retiredNote(m) && (
+                      <>
+                        {" "}
+                        <span className="pill pill-neutral">{retiredNote(m)}</span>
+                      </>
+                    )}
                   </th>
                   <td>{list(m.gameweeks_scored)}</td>
                   <td className={m.gameweeks_missed.length ? "missed" : undefined}>
