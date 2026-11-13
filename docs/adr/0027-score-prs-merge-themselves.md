@@ -50,6 +50,11 @@ Earlier gameweeks must not move. The README tables are a rendering of
 - A hand-made entry with no release has no snapshot the workflow can fetch.
   Its comparators would be missing, so the workflow refuses that gameweek and
   it is scored by hand.
+- An open PR adding an entry for the gameweek, such as one waiting to be
+  accepted late (ADR 0026), holds the scoring until it merges or closes.
+  If an entry is accepted after its gameweek was scored, the next run scores
+  the gameweek again, on the next free branch name. The other models' scores
+  for that gameweek may change only in their actuals id.
 - Retiring or promoting a model stays a reviewed decision (ADR 0020). The
   workflow only reports numbers.
 

@@ -153,6 +153,21 @@ class TestDecide(Repo):
         out = self.decide(prs=[pr(8, "scores/cumulative.json", state="CLOSED")])
         self.assertEqual(out["action"], score_bot.ACT)
 
+    def test_an_open_entry_pr_for_the_gameweek_goes_first(self):
+        """An entry waiting to be accepted late (ADR 0026) is scored with the rest."""
+        out = self.decide(prs=[pr(9, "predictions/gw10_form-fixture-v1.csv")])
+        self.assertEqual(out["action"], score_bot.SKIP)
+        self.assertIn("#9", out["why"])
+
+    def test_an_open_entry_pr_for_a_later_gameweek_does_not_block(self):
+        out = self.decide(prs=[pr(9, "predictions/gw11_gbm-v1.csv")])
+        self.assertEqual(out["action"], score_bot.ACT, out["why"])
+
+    def test_a_gameweek_scored_again_takes_the_next_branch(self):
+        """Its first score PR merged; then an entry for it was accepted late."""
+        out = self.decide(prs=[pr(7, branch=BRANCH, state="MERGED")], branches=["main", BRANCH])
+        self.assertEqual((out["action"], out["branch"]), (score_bot.ACT, f"{BRANCH}-2"))
+
     def test_its_branch_without_an_open_pr_is_for_a_person(self):
         """A closed PR was a veto; a pushed branch with none is a half-finished run."""
         out = self.decide(prs=[pr(7, branch=BRANCH, state="CLOSED")], branches=["main", BRANCH])
@@ -197,6 +212,11 @@ class TestChangeProblems(Repo):
         self.scored(9, "gbm-v1", actuals="20261106T063726Z")
         self.before["scores/gw09_gbm-v1.json"] = Path("scores/gw09_gbm-v1.json").read_text()
         self.scored(9, "gbm-v1")  # rescored: only the actuals id moves
+        gw9 = {"gameweek": 9, "mae": 0.95}
+        cumulative = {"models": {"gbm-v1": {"per_gameweek": [gw9]}}}
+        self.before["scores/cumulative.json"] = json.dumps(cumulative)
+        cumulative["models"]["gbm-v1"]["per_gameweek"].append({"gameweek": 10, "mae": 1.0})
+        Path("scores/cumulative.json").write_text(json.dumps(cumulative))
 
     def problems(self, *lines):
         return score_bot.change_problems(lines, {10}, "scores", self.before.__getitem__)
@@ -228,12 +248,47 @@ class TestChangeProblems(Repo):
     def test_a_score_file_for_another_gameweek_is_refused(self):
         self.assertEqual(len(self.problems("A\tscores/gw11_gbm-v1.json")), 1)
 
+    def test_rescoring_a_gameweek_keeps_its_other_models_scores(self):
+        """GW9 again, for an entry accepted late: gbm-v1's GW9 moves only in its id."""
+        problems = score_bot.change_problems(
+            ["M\tscores/gw09_gbm-v1.json", "A\tscores/gw09_baseline-v1.json"],
+            {9},
+            "scores",
+            self.before.__getitem__,
+        )
+        self.assertEqual(problems, [])
+        self.scored(9, "gbm-v1", mae=0.5)
+        problems = score_bot.change_problems(
+            ["M\tscores/gw09_gbm-v1.json"], {9}, "scores", self.before.__getitem__
+        )
+        self.assertEqual(len(problems), 1)
+
+
+class TestCumulativeProblems(unittest.TestCase):
+    @staticmethod
+    def cumulative(*lines):
+        return {"models": {"gbm-v1": {"per_gameweek": [dict(line) for line in lines]}}}
+
+    def test_new_gameweek_and_pooled_figures_may_move(self):
+        before = self.cumulative({"gameweek": 9, "mae": 0.95})
+        after = self.cumulative({"gameweek": 9, "mae": 0.95}, {"gameweek": 10, "mae": 1.0})
+        self.assertEqual(score_bot.cumulative_problems(before, after, {10}), [])
+
+    def test_an_earlier_gameweeks_line_moving_is_refused(self):
+        before = self.cumulative({"gameweek": 9, "mae": 0.95})
+        after = self.cumulative({"gameweek": 9, "mae": 0.90}, {"gameweek": 10, "mae": 1.0})
+        self.assertEqual(len(score_bot.cumulative_problems(before, after, {10})), 1)
+
+    def test_a_model_disappearing_is_refused(self):
+        before = self.cumulative({"gameweek": 9, "mae": 0.95})
+        self.assertEqual(len(score_bot.cumulative_problems(before, {"models": {}}, {10})), 1)
+
 
 class TestComparators(Repo):
     def test_a_new_score_file_without_comparators_is_refused(self):
         self.scored(10, "baseline-v1")
         self.scored(10, "gbm-v1", comparators=False)
-        problems = score_bot.comparator_problems("scores", {10})
+        problems = score_bot.comparator_problems(score_bot.new_scores("scores", {10}))
         self.assertEqual(len(problems), 1)
         self.assertIn("gbm-v1", problems[0])
 
