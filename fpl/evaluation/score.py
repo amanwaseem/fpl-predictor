@@ -133,7 +133,7 @@ def prediction_bootstrap(snapshot_id):
     need it; the entry's own score does not, so its absence is reported
     rather than fatal.
     """
-    if not SNAPSHOT_ID.match(snapshot_id):
+    if not SNAPSHOT_ID.fullmatch(snapshot_id):
         return None
     path = Path("data/raw") / snapshot_id / "bootstrap.json"
     if not path.exists():

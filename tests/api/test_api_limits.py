@@ -21,7 +21,7 @@ class TestParse(unittest.TestCase):
         self.assertEqual(limits.parse("10/60"), (10, 60.0))
 
     def test_a_setting_that_is_not_a_rate_is_refused(self):
-        for setting in ("10", "ten/60", "10/0", "-1/60"):
+        for setting in ("10", "ten/60", "10/0", "-1/60", "10/nan", "10/inf"):
             with self.subTest(setting=setting), self.assertRaises(ValueError):
                 limits.parse(setting)
 

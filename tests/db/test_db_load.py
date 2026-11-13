@@ -215,7 +215,7 @@ class TestLoad(TempCwd):
 
     def test_before_any_load_everything_differs(self):
         self.write(FIRST)
-        self.assertEqual(len(self.compare(FIRST)), 5)
+        self.assertEqual(len(self.compare(FIRST)), 6)
 
     def test_a_transfer_since_the_last_load_is_a_difference(self):
         self.write(FIRST)
@@ -275,6 +275,24 @@ class TestLoad(TempCwd):
                 (3, 1, Range(3, 39)),
             ],
         )
+
+    def test_a_player_fpl_removes_keeps_his_spells(self):
+        """The newest snapshot replaces spells only for the players it lists; one
+        removed since keeps those his stats were loaded with (#167)."""
+        self.write(FIRST)
+        self.load(FIRST)
+        without_3 = [
+            full_element(1, team=1, web_name="Stays"),
+            full_element(2, team=3, web_name="Moved"),
+        ]
+        self.write(SECOND, elements=without_3)
+        self.assertTrue(self.load(SECOND).newest)
+        spells = self.rows(
+            select(PlayerClub.team_id, PlayerClub.gameweeks)
+            .where(PlayerClub.element_id == 3)
+            .order_by(PlayerClub.gameweeks)
+        )
+        self.assertEqual(spells, [(2, Range(1, 3)), (1, Range(3, 39))])
 
     def test_elements_that_are_not_players_are_skipped_and_reported(self):
         self.write(FIRST)

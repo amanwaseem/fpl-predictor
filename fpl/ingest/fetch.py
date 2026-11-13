@@ -5,8 +5,9 @@ back to exactly the data it was produced from.
 
 A snapshot is only usable once manifest.json exists. That file is written
 last, so an interrupted fetch leaves a directory that is visibly incomplete
-rather than one that merely looks finished. Re-running resumes: player and
-live files already on disk are not refetched.
+rather than one that merely looks finished. `fpl-fetch --resume` finishes the
+newest incomplete one: player and live files already on disk are not
+refetched. A plain re-run starts a new snapshot.
 
 Settled gameweeks also get live/<gw>.json, the actual points the scoring
 harness joins predictions against. One request per gameweek, so scoring never
@@ -15,7 +16,7 @@ has to refetch 654 players to find out what happened.
 Usage:
     fpl-fetch                 # full snapshot (slow, ~6 min)
     fpl-fetch --skip-players  # bootstrap + fixtures only (fast)
-    fpl-fetch                 # re-run to resume an interrupted fetch
+    fpl-fetch --resume        # finish an interrupted fetch
 
 Run from the repository root: paths are resolved against the working
 directory, not this file.
@@ -48,7 +49,10 @@ def get(path):
             r.raise_for_status()
             return r.json()
         except requests.RequestException as e:
-            if attempt == RETRIES:
+            # A client error other than rate limiting will answer the same
+            # again: fail now rather than after the backoff (#167).
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if attempt == RETRIES or (status is not None and 400 <= status < 500 and status != 429):
                 raise
             wait = 2**attempt
             print(f"  retry {attempt}/{RETRIES} for {path} after {wait}s ({e})")
@@ -117,8 +121,8 @@ def fetch_live(outdir: Path, events):
     would produce a snapshot whose "actuals" quietly disagree with the ones
     everyone else can see, with nothing in the file admitting it.
 
-    Resumes like the per-player fetch — a live file already on disk is left
-    alone, with no --resume flag needed. It cannot have gone stale: a gameweek
+    Resumes like the per-player fetch — under --resume, a live file already
+    on disk is left alone. It cannot have gone stale: a gameweek
     only becomes data_checked once, and its results do not move afterwards.
 
     Returns the gameweeks that have live data on disk afterwards, which is
@@ -229,7 +233,7 @@ def main(skip_players: bool, resume: bool) -> None:
             raise SystemExit(
                 f"\n{len(missing)} player files missing after fetch. "
                 "No manifest written, so this snapshot cannot be used.\n"
-                "Re-run to resume."
+                "Run fpl-fetch --resume to finish it."
             )
 
     # Written last, and only on success. Its absence is what marks a snapshot

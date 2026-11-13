@@ -124,6 +124,28 @@ class TestBacktestGuard(unittest.TestCase):
         with self.assertRaises(SystemExit):
             resolve_target_gw(events, 4)
 
+    def test_the_last_gameweek_under_way_is_not_upcoming(self):
+        """GW4 is current, its deadline passed, and nothing is next: the season's end.
+        Its availability and prices are post-deadline, so it is refused, and the
+        default run agrees (#167)."""
+        events = [
+            {"id": i, "finished": i < 4, "is_current": i == 4, "deadline_time": "t"}
+            for i in range(1, 5)
+        ]
+        with self.assertRaises(SystemExit):
+            resolve_target_gw(events, 4)
+        with self.assertRaises(SystemExit):
+            resolve_target_gw(events, None)
+
+    def test_without_is_next_the_default_takes_the_same_fallback(self):
+        """Before the API flips is_next, the default and an explicit request agree (#167)."""
+        events = [
+            {"id": i, "finished": i < 3, "is_current": i == 2, "deadline_time": f"d{i}"}
+            for i in range(1, 5)
+        ]
+        self.assertEqual(resolve_target_gw(events, None), (3, "d3"))
+        self.assertEqual(resolve_target_gw(events, 3), (3, "d3"))
+
     def test_unknown_gameweek_refused(self):
         with self.assertRaises(SystemExit):
             resolve_target_gw(self.FORWARD, 99)

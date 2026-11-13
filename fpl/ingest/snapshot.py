@@ -54,7 +54,7 @@ def load_snapshot(snapshot_id=None):
     # directory itself and "/etc" ignores the join — and the resulting
     # directory would be reported below as an interrupted fetch to resume,
     # which is both wrong and destructive advice.
-    if not SNAPSHOT_ID.match(snapshot_id):
+    if not SNAPSHOT_ID.fullmatch(snapshot_id):
         raise SystemExit(
             f"{snapshot_id!r} from {source} is not a snapshot id.\n"
             "Expected a UTC timestamp as written by fpl.ingest.fetch, "
@@ -197,9 +197,14 @@ def resolve_target_gw(events, requested):
     if upcoming is None:
         # Between the last deadline and the API flipping the flag, and at
         # season end, no event carries is_next. Fall back to the first
-        # unfinished gameweek; if every gameweek is finished, any target is a
-        # backtest and there is no safe forward boundary at all.
-        upcoming = next((e for e in events if not e.get("finished")), None)
+        # unfinished gameweek that is not under way: the current one's
+        # deadline has passed, so its availability and prices are
+        # post-deadline. During the last gameweek, and once every gameweek is
+        # finished, any target is a backtest and there is no safe forward
+        # boundary at all.
+        upcoming = next(
+            (e for e in events if not e.get("finished") and not e.get("is_current")), None
+        )
 
     if requested is not None:
         event = next((e for e in events if e["id"] == requested), None)
@@ -232,7 +237,8 @@ def resolve_target_gw(events, requested):
                 f"Take a snapshot closer to the GW{requested} deadline."
             )
     else:
-        event = next((e for e in events if e.get("is_next")), None)
+        # The same boundary as an explicit request, so the two never disagree.
+        event = upcoming
         if event is None:
             raise SystemExit("No upcoming gameweek found — season may be over.")
     return event["id"], event["deadline_time"]

@@ -317,10 +317,17 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
             ]
 
         # Spells are derived whole from one snapshot's histories, so the newest
-        # snapshot replaces them rather than merging with an older derivation.
-        # An older one only adds spells for players who have none.
+        # snapshot replaces them rather than merging with an older derivation:
+        # for the players it lists. One FPL has since removed keeps the spells
+        # its stats were loaded with (#167). An older snapshot only adds spells
+        # for players who have none.
         if report.newest:
-            connection.execute(delete(PlayerClub).where(PlayerClub.season == season))
+            connection.execute(
+                delete(PlayerClub).where(
+                    PlayerClub.season == season,
+                    PlayerClub.element_id.in_([e["id"] for e in elements]),
+                )
+            )
         else:
             have_spells = set(
                 connection.scalars(select(PlayerClub.element_id).where(PlayerClub.season == season))

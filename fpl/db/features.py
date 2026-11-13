@@ -23,8 +23,8 @@ import hashlib
 import sys
 from collections import defaultdict
 
-from sqlalchemy import delete, func, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import Text, cast, delete, func, literal_column, select
+from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
 
 from fpl.db.load import LAST_GAMEWEEK, LOAD_LOCK
 from fpl.db.models import (
@@ -160,71 +160,98 @@ def buildable(data):
     return [g for g in range(1, last + 1) if g in with_fixtures]
 
 
+def _digest(connection, model, columns, where):
+    """An md5 of `columns` over the rows of `model` matching `where`, in key order.
+
+    Every value is in it, so a correction that moves a number from one row to
+    another changes it: a bonus point moving between two players leaves every
+    column's sum the same, and the sums this replaced missed that (#167).
+    """
+    cells = [func.coalesce(cast(c, Text), "~") for c in columns]
+    row = func.concat_ws("|", *cells)
+    keys = [c for c in model.__table__.primary_key.columns]
+    return connection.scalar(
+        select(func.md5(func.string_agg(row, aggregate_order_by(literal_column("','"), *keys))))
+        .select_from(model)
+        .where(where)
+    )
+
+
 def fingerprint(connection, season):
     """A digest of everything `season`'s rows are built from, and the version they are
-    built by: its results, fixtures, clubs, settled rounds and committed entries,
-    and the season before it, whose totals are the last-season columns."""
+    built by: its results, fixtures, clubs, players, settled rounds and committed
+    entries, and the season before it, whose totals are the last-season columns."""
     stats, before = PlayerFixtureStats, season_before(season)
     parts: list[object] = [FEATURE_VERSION]
     for s in (season, before):
         parts.append(
-            tuple(
-                connection.execute(
-                    select(
-                        func.count(),
-                        func.sum(stats.minutes),
-                        func.sum(stats.total_points),
-                        func.sum(stats.bonus),
-                        func.sum(stats.value),
-                        func.sum(func.coalesce(stats.expected_goals, 0)),
-                        func.sum(func.coalesce(stats.expected_assists, 0)),
-                        func.sum(stats.element_id * stats.fixture_id),
-                    ).where(stats.season == s)
-                ).one()
+            _digest(
+                connection,
+                stats,
+                [
+                    stats.element_id,
+                    stats.fixture_id,
+                    stats.minutes,
+                    stats.total_points,
+                    stats.bonus,
+                    stats.value,
+                    stats.expected_goals,
+                    stats.expected_assists,
+                ],
+                stats.season == s,
+            )
+        )
+        parts.append(
+            _digest(
+                connection,
+                SeasonPlayer,
+                [SeasonPlayer.element_id, SeasonPlayer.player_code, SeasonPlayer.position],
+                SeasonPlayer.season == s,
             )
         )
     parts.append(
-        tuple(
-            connection.execute(
-                select(
-                    func.count(),
-                    func.sum(Fixture.gameweek * Fixture.fixture_id),
-                    func.sum(
-                        func.coalesce(Fixture.team_h_score, -1) * 31
-                        + func.coalesce(Fixture.team_a_score, -1)
-                    ),
-                    func.sum(Fixture.team_h * 37 + Fixture.team_a),
-                ).where(Fixture.season == season)
-            ).one()
+        _digest(
+            connection,
+            Fixture,
+            [
+                Fixture.fixture_id,
+                Fixture.gameweek,
+                Fixture.team_h,
+                Fixture.team_a,
+                Fixture.team_h_score,
+                Fixture.team_a_score,
+                Fixture.finished,
+            ],
+            Fixture.season == season,
         )
     )
     parts.append(
-        sorted(
-            connection.scalars(
-                select(Gameweek.gameweek).where(
-                    Gameweek.season == season, Gameweek.finished, Gameweek.data_checked
-                )
-            )
+        _digest(
+            connection,
+            Gameweek,
+            [Gameweek.gameweek, Gameweek.finished, Gameweek.data_checked],
+            Gameweek.season == season,
         )
     )
     parts.append(
-        tuple(
-            connection.execute(
-                select(
-                    func.count(),
-                    func.sum(PlayerClub.element_id * PlayerClub.team_id),
-                    func.sum(func.lower(PlayerClub.gameweeks)),
-                ).where(PlayerClub.season == season)
-            ).one()
+        _digest(
+            connection,
+            PlayerClub,
+            [PlayerClub.element_id, PlayerClub.team_id, PlayerClub.gameweeks],
+            PlayerClub.season == season,
         )
     )
     parts.append(
-        tuple(
-            connection.execute(
-                select(func.count(), func.sum(Prediction.gameweek * Prediction.player_id)).where(
-                    Prediction.season == season
-                )
-            ).one()
+        _digest(
+            connection,
+            Prediction,
+            [
+                Prediction.model_version,
+                Prediction.gameweek,
+                Prediction.player_id,
+                Prediction.status,
+            ],
+            Prediction.season == season,
         )
     )
     return hashlib.sha256(repr(parts).encode()).hexdigest()
@@ -238,6 +265,10 @@ def build_season(engine, season):
         # here cannot change under the build, and a backfill cannot delete the
         # season's players while its features are being written.
         connection.execute(select(func.pg_advisory_xact_lock(LOAD_LOCK)))
+        # Before the rows are read: a deploy's fpl-project can commit entries
+        # between statements, and a digest taken after could name inputs newer
+        # than the rows. Taken first, the worst case is a needless rebuild (#167).
+        inputs = fingerprint(connection, season)
         data = read_season(connection, season)
         gameweeks = buildable(data)
         rows = [row for gw in gameweeks for row in build_gameweek(data, gw)]
@@ -248,7 +279,7 @@ def build_season(engine, season):
             connection.execute(insert(PlayerGameweekFeatures), rows)
         values = {
             "feature_version": FEATURE_VERSION,
-            "inputs": fingerprint(connection, season),
+            "inputs": inputs,
             "rows": len(rows),
             "built_at_utc": func.now(),
         }

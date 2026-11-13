@@ -1,5 +1,6 @@
 """The routes: /v1 for the data, /healthz and /readyz for whoever runs the service."""
 
+import functools
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -237,10 +238,17 @@ def healthz():
     return {"status": "ok"}
 
 
+@functools.cache
+def migration_head():
+    """The migrations shipped with this code: read once, as they cannot change while it
+    runs, rather than parsed from disk on every health probe (#167)."""
+    return migrate.head()
+
+
 @health.get("/readyz", response_model=schemas.Readiness, responses=responses(503))
 def readyz(db: Database):
     """The database answers and its schema is at the latest migration."""
-    head = migrate.head()
+    head = migration_head()
     try:
         with db.connect() as conn:
             conn.execute(text("SELECT 1"))

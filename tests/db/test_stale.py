@@ -35,7 +35,8 @@ FIXTURES = [
 
 
 def player(pid, **kwargs):
-    return element(pid, **kwargs) | {"code": 1000 + pid}
+    names = {"first_name": f"First{pid}", "second_name": f"Second{pid}"}
+    return element(pid, **kwargs) | {"code": 1000 + pid} | names
 
 
 def bootstrap():
@@ -70,13 +71,15 @@ class TestDifferences(unittest.TestCase):
         found = stale.differences(
             stale.from_api(more, FIXTURES), stale.from_api(bootstrap(), FIXTURES)
         )
-        self.assertEqual(found, ["players: 1 differ (3)", "clubs: 1 differ (3)"])
+        self.assertEqual(
+            found, ["players: 1 differ (3)", "names: 1 differ (1003)", "clubs: 1 differ (3)"]
+        )
 
     def test_an_empty_database_differs_everywhere(self):
         found = stale.differences(stale.from_api(bootstrap(), FIXTURES), {})
         self.assertEqual(
             [line.split(":")[0] for line in found],
-            ["gameweeks", "fixtures", "teams", "players", "clubs"],
+            ["gameweeks", "fixtures", "teams", "players", "names", "clubs"],
         )
 
     def test_a_transfer_is_a_difference(self):
@@ -86,6 +89,15 @@ class TestDifferences(unittest.TestCase):
             stale.from_api(moved, FIXTURES), stale.from_api(bootstrap(), FIXTURES)
         )
         self.assertEqual(found, ["clubs: 1 differ (1)"])
+
+    def test_a_corrected_name_is_a_difference(self):
+        """The load writes names too; a correction must trigger it (#167)."""
+        renamed = bootstrap()
+        renamed["elements"][0] = renamed["elements"][0] | {"second_name": "Corrected"}
+        found = stale.differences(
+            stale.from_api(renamed, FIXTURES), stale.from_api(bootstrap(), FIXTURES)
+        )
+        self.assertEqual(found, ["names: 1 differ (1001)"])
 
     def test_clubs_are_not_compared_once_the_season_is_over(self):
         over = bootstrap() | {"events": [e | {"finished": True} for e in EVENTS]}
