@@ -1,0 +1,251 @@
+# Scores each gameweek once it settles, and opens the PR (#162, ADR 0027).
+# Entries were automated first (#68, ADR 0024), because they have a deadline;
+# scoring was left to a person, and the scorecard stopped whenever nobody ran
+# it. This runs every six hours. Once a logged gameweek is finished and
+# data_checked, and no later one has started, it snapshots, fetches the new
+# entries' own snapshots from their releases, runs fpl-score, rewrites the
+# README's results tables, uploads the actuals snapshot as a release and opens
+# the PR with auto-merge on, so it merges itself once `ci` is green and the
+# merge deploys the scorecard. A human can still read it, and closing it is the
+# veto. Every decision and check is in tools/score_bot.py, where it is tested.
+#
+# Nothing leaves the runner until the scores are made and checked: only
+# scores/ and README.md change, earlier gameweeks are unchanged but for the
+# actuals snapshot id, and every new score file has its form comparators. The
+# release comes before the push, because the commit names it, and is deleted
+# again if anything fails before the push. A run that pushes and then fails
+# leaves its branch; the next run refuses to go on from it, and a person
+# finishes by hand (docs/runbook.md section 10). Scoring has no deadline, so
+# that is cheaper than a resume path.
+#
+# ENTRY_BOT_TOKEN, the entry workflow's token, pushes the branch, opens the PR
+# and arms auto-merge, for the same reason as there: a PR opened with the
+# default GITHUB_TOKEN triggers no workflows, so `ci` would never report on it,
+# and its merge would not deploy.
+#
+# Manual runs are dry runs unless told otherwise: everything up to the checks,
+# and nothing released, pushed or opened.
+name: Score
+
+on:
+  schedule:
+    # Every six hours: data_checked flips at no fixed time after a gameweek.
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: score and check; no release, push or PR"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write       # the actuals release
+  pull-requests: read
+
+# Real runs share one group, so two never act at once; a dry run has its own.
+concurrency:
+  group: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && format('score-dry-{0}', github.run_id) || 'score' }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0  # the entry commits' trailers name their snapshots
+      - uses: ./.github/actions/uv
+        with:
+          args: "--no-dev"
+
+      - name: Decide whether to score now
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr list --state all --limit 500 --json number,state,headRefName,files > "$RUNNER_TEMP/prs.json"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/branches" -q '.[].name' > "$RUNNER_TEMP/branches.txt"
+          python tools/score_bot.py decide --prs "$RUNNER_TEMP/prs.json" --branches "$RUNNER_TEMP/branches.txt"
+
+      - name: The bot token works
+        if: steps.plan.outputs.action == 'act' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ENTRY_BOT_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "ENTRY_BOT_TOKEN is not set: the PR would be opened without ci running on it."
+            exit 1
+          fi
+          { gh api -i "repos/$GITHUB_REPOSITORY" 2>/dev/null || true; } | python tools/entry_bot.py token-expiry --fail-days 0.5
+
+      # About six minutes. Not piped: a failed fetch has to fail the step.
+      - name: Snapshot the API
+        if: steps.plan.outputs.action == 'act'
+        run: fpl-fetch
+
+      - name: The snapshot holds final results, between gameweeks
+        if: steps.plan.outputs.action == 'act'
+        id: snapshot
+        env:
+          GAMEWEEKS: ${{ steps.plan.outputs.gameweeks }}
+        run: |
+          id=$(cat data/raw/LATEST)
+          python tools/score_bot.py check-snapshot --snapshot "$id" --gameweeks $GAMEWEEKS
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+      # The form comparators read the snapshot each entry was made from. The
+      # entry workflow released it, and its commit records the SHA-256.
+      - name: Fetch the new entries' snapshots from their releases
+        if: steps.plan.outputs.action == 'act'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GAMEWEEKS: ${{ steps.plan.outputs.gameweeks }}
+          LOG_DIR: ${{ steps.plan.outputs.log_dir }}
+        run: |
+          python tools/score_bot.py entry-snapshots --log-dir "$LOG_DIR" --gameweeks $GAMEWEEKS > "$RUNNER_TEMP/snapshots.txt"
+          while read -r id entry; do
+            read -r tag sha < <(git log --diff-filter=A --format=%B -1 -- "$entry" | python tools/entry_bot.py read-trailers --plain) || true
+            if [ -z "${sha:-}" ] || [ "$tag" != "snapshot-$id" ]; then
+              echo "$entry was not made by the entry workflow from a released snapshot-$id. Score it by hand."
+              exit 1
+            fi
+            gh release download "$tag" --pattern "$tag.tar.gz" --dir "$RUNNER_TEMP/release"
+            actual=$(sha256sum "$RUNNER_TEMP/release/$tag.tar.gz" | cut -d' ' -f1)
+            [ "$actual" = "$sha" ] || { echo "$tag.tar.gz has SHA-256 $actual; the entry commit says $sha."; exit 1; }
+            tar -xzf "$RUNNER_TEMP/release/$tag.tar.gz" -C data/raw
+            echo "$tag: SHA-256 checked, extracted."
+          done < "$RUNNER_TEMP/snapshots.txt"
+
+      - name: Score, and bring the README into line
+        if: steps.plan.outputs.action == 'act'
+        env:
+          SNAPSHOT: ${{ steps.snapshot.outputs.id }}
+          SCORES_DIR: ${{ steps.plan.outputs.scores_dir }}
+        run: |
+          fpl-score --actuals "$SNAPSHOT"
+          python tools/readme_results.py --scores "$SCORES_DIR"
+
+      - name: The only changes are the new scores and the README
+        if: steps.plan.outputs.action == 'act'
+        env:
+          GAMEWEEKS: ${{ steps.plan.outputs.gameweeks }}
+          SCORES_DIR: ${{ steps.plan.outputs.scores_dir }}
+        run: |
+          git add -A -- "$SCORES_DIR" README.md
+          git diff --cached --name-status
+          [ -z "$(git status --porcelain --untracked-files=no | grep -v '^[AM] ')" ] || { git status --short; echo "Changes outside the index."; exit 1; }
+          git diff --cached --name-status | python tools/score_bot.py check-changes --scores-dir "$SCORES_DIR" --gameweeks $GAMEWEEKS
+          python tools/score_bot.py check-comparators --scores-dir "$SCORES_DIR" --gameweeks $GAMEWEEKS
+          python tools/check_log_immutable.py --ref origin/main
+          python -m unittest tests.project.test_readme
+          { echo '```diff'; git diff --cached -- README.md; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the actuals snapshot as a release
+        if: steps.plan.outputs.action == 'act' && env.DRY_RUN != 'true'
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SNAPSHOT: ${{ steps.snapshot.outputs.id }}
+          GAMEWEEKS: ${{ steps.plan.outputs.gameweeks }}
+        run: |
+          tag="snapshot-$SNAPSHOT"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "Release $tag already exists: this snapshot was used by another run."; exit 1
+          fi
+          tarball="$RUNNER_TEMP/$tag.tar.gz"
+          tar -C data/raw -czf "$tarball" "$SNAPSHOT"
+          sha=$(sha256sum "$tarball" | cut -d' ' -f1)
+          named=$(echo $GAMEWEEKS | sed -E 's/([0-9]+)/GW\1/g; s/ /, /g')
+          gh release create "$tag" "$tarball" --target main --latest=false \
+            --title "Snapshot $SNAPSHOT ($named actuals)" \
+            --notes "Raw FPL API snapshot holding the final results $named was scored against. SHA-256 of the tarball: \`$sha\`. To rescore: docs/runbook.md section 10."
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push the scores
+        if: steps.plan.outputs.action == 'act' && env.DRY_RUN != 'true'
+        id: push
+        env:
+          BOT_TOKEN: ${{ secrets.ENTRY_BOT_TOKEN }}
+          GAMEWEEKS: ${{ steps.plan.outputs.gameweeks }}
+          BRANCH: ${{ steps.plan.outputs.branch }}
+          SNAPSHOT: ${{ steps.snapshot.outputs.id }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          python tools/score_bot.py commit-message --gameweeks $GAMEWEEKS --snapshot "$SNAPSHOT" \
+            --tag "$TAG" --sha "$SHA" > "$RUNNER_TEMP/message.txt"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit -q -F "$RUNNER_TEMP/message.txt"
+          # The bot token, not checkout's: the empty extraheader drops the one
+          # checkout configured, so the token in the URL is the one sent.
+          git -c http.https://github.com/.extraheader= push \
+            "https://x-access-token:${BOT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Remove the release after a failure before the push
+        if: failure() && steps.release.outputs.tag != '' && steps.push.outputs.pushed != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: gh release delete "$TAG" --cleanup-tag --yes
+
+      - name: Open the PR
+        if: steps.push.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ENTRY_BOT_TOKEN }}
+          GAMEWEEKS: ${{ steps.plan.outputs.gameweeks }}
+          BRANCH: ${{ steps.plan.outputs.branch }}
+          SNAPSHOT: ${{ steps.snapshot.outputs.id }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SHA: ${{ steps.release.outputs.sha }}
+          SCORES_DIR: ${{ steps.plan.outputs.scores_dir }}
+        run: |
+          python tools/score_bot.py pr-body --gameweeks $GAMEWEEKS --snapshot "$SNAPSHOT" \
+            --tag "$TAG" --sha "$SHA" --scores-dir "$SCORES_DIR" \
+            --release-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$RUNNER_TEMP/body.md"
+          named=$(echo $GAMEWEEKS | sed -E 's/([0-9]+)/GW\1/g; s/ /, /g')
+          # A create that times out may still have opened the PR, so each
+          # failure checks before trying again.
+          for attempt in 1 2 3; do
+            if gh pr create --base main --head "$BRANCH" --title "Score $named" --body-file "$RUNNER_TEMP/body.md"; then
+              exit 0
+            fi
+            if [ "$(gh pr list --head "$BRANCH" --state open --json number -q length)" != "0" ]; then
+              echo "The PR is open after all."; exit 0
+            fi
+            echo "Attempt $attempt failed; retrying."; sleep $((attempt * 20))
+          done
+          echo "Could not open the PR from $BRANCH. Open it by hand."
+          exit 1
+
+      # Merges once `ci` is green, as a rebase like every other PR. Every real
+      # run re-arms open score PRs, so one failure to arm is retried.
+      - name: Open score PRs merge themselves once ci is green
+        if: always() && steps.plan.outcome != 'skipped' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BOT_TOKEN: ${{ secrets.ENTRY_BOT_TOKEN }}
+        run: |
+          failed=0
+          for n in $(gh pr list --state open --json number,headRefName,autoMergeRequest -q \
+              '.[] | select((.headRefName | startswith("score-bot/")) and .autoMergeRequest == null) | .number'); do
+            for attempt in 1 2 3; do
+              GH_TOKEN="$BOT_TOKEN" gh pr merge "$n" --auto --rebase && continue 2
+              echo "Attempt $attempt on #$n failed; retrying."; sleep $((attempt * 20))
+            done
+            echo "Could not turn on auto-merge for #$n. Merge it by hand once ci is green."
+            failed=1
+          done
+          exit $failed

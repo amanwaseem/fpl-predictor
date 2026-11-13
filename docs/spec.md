@@ -383,7 +383,7 @@ horizon follows (#55).
 | GW8 predictions committed | Done, 2026-10-23 |
 | GW9 predictions committed | Done, 2026-10-31: pushed in PR #117 ten hours before the deadline, merged after it, and accepted as on time ([ADR 0026](adr/0026-an-entry-pushed-before-its-deadline-counts.md)). Entry PRs now merge themselves ([ADR 0024](adr/0024-entry-prs-merge-themselves.md)) |
 | GW10 predictions committed | Done, 2026-11-06: made, opened and merged by the entry workflow, unattended, nearly twelve hours before the deadline |
-| Scoring harness | Done |
+| Scoring harness | Done; scoring PRs are made and merged by the score workflow from GW11 ([ADR 0027](adr/0027-score-prs-merge-themselves.md)) |
 | Package structure, CI, ADRs | Done |
 | Optimiser | Done: `fpl-optimise`, `fpl-plan`, and `/v1/optimise` on the API |
 | Component models | Done: form-fixture-v1, logged from GW6; gbm-v1 from GW9 |

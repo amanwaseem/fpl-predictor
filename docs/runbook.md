@@ -560,8 +560,26 @@ under time pressure fifteen minutes before a deadline.
 
 ## 10. Afterwards: score it
 
-Not deadline work. Once GW N has settled — `finished` and `data_checked` both
-true, usually the Monday or Tuesday after — take a snapshot and score:
+Not deadline work, and done for you. `.github/workflows/score.yml` runs every
+six hours (#162, [ADR 0027](adr/0027-score-prs-merge-themselves.md)). Once
+GW N has settled (`finished` and `data_checked` both true, usually the Monday
+or Tuesday after) and GW N+1 has not started, it:
+
+- takes a snapshot;
+- downloads GW N's entry snapshots from their releases;
+- runs `fpl-score`;
+- rewrites the README's results tables with `tools/readme_results.py`;
+- checks that only `scores/` and `README.md` changed and that earlier
+  gameweeks are unchanged;
+- releases the snapshot it scored against;
+- opens a PR that merges itself once `ci` is green.
+
+Close the PR to stop it. It uses `ENTRY_BOT_TOKEN`, as the entry workflow
+does. A manual run is a dry run by default: it scores and checks, and
+releases, pushes and opens nothing.
+
+By hand, when the workflow refuses (its branch is already there, or an entry
+has no released snapshot) or a PR of it was closed: take a snapshot and score:
 
 ```
 fpl-fetch
@@ -570,10 +588,11 @@ fpl-score
 
 The harness rescores every entry in `predictions/` against that snapshot and
 rewrites `scores/` in full. That is safe: `scores/` is derived output, and a
-rerun on the same inputs produces byte-identical files. Commit the changes to
-`scores/` on a branch like any other, with the README's two results tables
-brought up to date in the same commit: `tests/project/test_readme.py` fails until
-every number in them matches `scores/`.
+rerun on the same inputs produces byte-identical files. Then run
+`python tools/readme_results.py` to bring the README's two results tables
+into line, and commit both on a branch like any other.
+`tests/project/test_readme.py` fails until every number in them matches
+`scores/`.
 
 Read the last lines of its output. `pending:` means a gameweek has not settled
 yet; `missed:` means a settled gameweek has no entry and never will.
@@ -594,5 +613,6 @@ fpl-verify predictions/gwNN_<model>.csv                    # gate: non-zero mean
 fpl-summarise predictions/gwNN_<model>.csv --out reports/
 python tools/check_log_immutable.py --ref origin/main      # rule 1, mechanically
 fpl-score                                                  # after GW N settles, not before
+python tools/readme_results.py                             # README tables from scores/
 python tools/entry_bot.py decide --prs F --branches F       # what the entry workflow would decide
 ```
