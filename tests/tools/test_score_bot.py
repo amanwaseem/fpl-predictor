@@ -174,9 +174,28 @@ class TestDecide(Repo):
         self.assertEqual(out["action"], score_bot.FAIL)
         self.assertIn("by hand", out["why"])
 
-    def test_a_truncated_pr_list_fails(self):
-        prs = [pr(n, state="MERGED") for n in range(score_bot.PR_LIMIT)]
+    def test_a_truncated_open_pr_list_fails(self):
+        prs = [pr(n, "docs/x.md") for n in range(score_bot.PR_LIMIT)]
         self.assertEqual(self.decide(prs=prs)["action"], score_bot.FAIL)
+
+    def test_closed_prs_do_not_count_towards_the_limit(self):
+        prs = [pr(n, state="MERGED") for n in range(score_bot.PR_LIMIT)]
+        self.assertEqual(self.decide(prs=prs)["action"], score_bot.ACT)
+
+    def test_a_score_pr_open_a_day_fails(self):
+        """Red ci or no auto-merge: skipping behind it would stall scoring silently (#165)."""
+        stuck = {**pr(7, branch=BRANCH), "createdAt": "2026-11-11T08:00:00Z"}
+        out = self.decide(prs=[stuck], branches=["main", BRANCH])
+        self.assertEqual(out["action"], score_bot.FAIL)
+        self.assertIn("#7", out["why"])
+        fresh = {**stuck, "createdAt": "2026-11-12T08:00:00Z"}
+        self.assertEqual(self.decide(prs=[fresh])["action"], score_bot.SKIP)
+
+    def test_a_file_in_the_log_that_is_not_an_entry_fails(self):
+        Path("predictions/notes.csv").write_text("x\n")
+        out = self.decide()
+        self.assertEqual(out["action"], score_bot.FAIL)
+        self.assertIn("notes.csv", out["why"])
 
     def test_before_the_season_nothing_has_started(self):
         boot = {"events": [event(1, "2026-12-01T11:00:00Z", False)]}
@@ -217,8 +236,11 @@ class TestChangeProblems(Repo):
         self.before["scores/cumulative.json"] = json.dumps(cumulative)
         cumulative["models"]["gbm-v1"]["per_gameweek"].append({"gameweek": 10, "mae": 1.0})
         Path("scores/cumulative.json").write_text(json.dumps(cumulative))
+        self.scored(10, "gbm-v1")
 
     def problems(self, *lines):
+        """The problems with `lines` beside a new GW10 score file, which every run has."""
+        lines = ("A\tscores/gw10_gbm-v1.json", *lines)
         return score_bot.change_problems(lines, {10}, "scores", self.before.__getitem__)
 
     def test_a_scoring_run(self):
@@ -228,10 +250,23 @@ class TestChangeProblems(Repo):
                 "M\tscores/cumulative.json",
                 "M\tscores/gw09_gbm-v1.json",
                 "A\tscores/gw10_gbm-v1.csv",
-                "A\tscores/gw10_gbm-v1.json",
             ),
             [],
         )
+
+    def test_a_run_with_no_new_score_file_is_refused(self):
+        problems = score_bot.change_problems(["M\tREADME.md"], {10}, "scores", self.before.get)
+        self.assertEqual(len(problems), 1)
+
+    def test_a_new_score_file_without_comparators_is_refused(self):
+        self.scored(10, "gbm-v1", comparators=False)
+        problems = self.problems()
+        self.assertEqual(len(problems), 1)
+        self.assertIn("comparators", problems[0])
+
+    def test_a_seasons_first_cumulative_json_is_added(self):
+        """2027/28's first run adds scores-2027-28/cumulative.json (#165)."""
+        self.assertEqual(self.problems("A\tscores/cumulative.json"), [])
 
     def test_an_earlier_gameweeks_numbers_moving_is_refused(self):
         self.scored(9, "gbm-v1", mae=0.5)
@@ -249,7 +284,12 @@ class TestChangeProblems(Repo):
         self.assertEqual(len(self.problems("A\tscores/gw11_gbm-v1.json")), 1)
 
     def test_rescoring_a_gameweek_keeps_its_other_models_scores(self):
-        """GW9 again, for an entry accepted late: gbm-v1's GW9 moves only in its id."""
+        """GW9 again, for an entry accepted late: gbm-v1's GW9 moves only in its id,
+        and in its head-to-head, which a late baseline entry adds."""
+        self.scored(9, "baseline-v1")
+        rescored = json.loads(Path("scores/gw09_gbm-v1.json").read_text())
+        rescored["head_to_head"] = {"available": True}
+        Path("scores/gw09_gbm-v1.json").write_text(json.dumps(rescored))
         problems = score_bot.change_problems(
             ["M\tscores/gw09_gbm-v1.json", "A\tscores/gw09_baseline-v1.json"],
             {9},
@@ -259,9 +299,27 @@ class TestChangeProblems(Repo):
         self.assertEqual(problems, [])
         self.scored(9, "gbm-v1", mae=0.5)
         problems = score_bot.change_problems(
-            ["M\tscores/gw09_gbm-v1.json"], {9}, "scores", self.before.__getitem__
+            ["M\tscores/gw09_gbm-v1.json", "A\tscores/gw09_baseline-v1.json"],
+            {9},
+            "scores",
+            self.before.__getitem__,
         )
         self.assertEqual(len(problems), 1)
+
+    def test_an_old_file_without_comparators_does_not_block_a_rescore(self):
+        """Only new score files must have comparators (#165)."""
+        self.scored(9, "gbm-v1", comparators=False)
+        old = json.loads(self.before["scores/gw09_gbm-v1.json"])
+        old["comparators"] = {"available": False}
+        self.before["scores/gw09_gbm-v1.json"] = json.dumps(old)
+        self.scored(9, "baseline-v1")
+        problems = score_bot.change_problems(
+            ["M\tscores/gw09_gbm-v1.json", "A\tscores/gw09_baseline-v1.json"],
+            {9},
+            "scores",
+            self.before.__getitem__,
+        )
+        self.assertEqual(problems, [])
 
 
 class TestCumulativeProblems(unittest.TestCase):
@@ -282,15 +340,6 @@ class TestCumulativeProblems(unittest.TestCase):
     def test_a_model_disappearing_is_refused(self):
         before = self.cumulative({"gameweek": 9, "mae": 0.95})
         self.assertEqual(len(score_bot.cumulative_problems(before, {"models": {}}, {10})), 1)
-
-
-class TestComparators(Repo):
-    def test_a_new_score_file_without_comparators_is_refused(self):
-        self.scored(10, "baseline-v1")
-        self.scored(10, "gbm-v1", comparators=False)
-        problems = score_bot.comparator_problems(score_bot.new_scores("scores", {10}))
-        self.assertEqual(len(problems), 1)
-        self.assertIn("gbm-v1", problems[0])
 
 
 class TestMessages(Repo):

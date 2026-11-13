@@ -263,6 +263,17 @@ class TestMain(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("merge #90", out)
 
+    def test_an_open_pr_list_as_long_as_the_limit_fails(self):
+        """It may be truncated, and hide the entry's PR (#165)."""
+        write_entry(self.predictions, "gw06_baseline-v1.csv", at(6))
+        prs = self.dir / "prs.json"
+        prs.write_text(
+            json.dumps([pr(n, "README.md") for n in range(check_deadline.OPEN_PR_LIMIT)])
+        )
+        code, out = self.run_main(prs_file=prs, fake_hours=6, fake_gameweek=6)
+        self.assertEqual(code, 1)
+        self.assertIn("truncated", out)
+
     def test_a_pr_file_that_is_not_a_list_is_refused(self):
         prs = self.dir / "prs.json"
         prs.write_text("{}")

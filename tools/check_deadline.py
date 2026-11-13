@@ -70,6 +70,10 @@ SEASON_APART = timedelta(days=120)
 
 PASS, FAIL = "pass", "fail"
 
+# deadline.yml lists this many open PRs. A list that long may be truncated, and
+# could hide the PR that adds the entry, so the advice would be wrong (#165).
+OPEN_PR_LIMIT = 500
+
 
 class Malformed(Exception):
     """bootstrap-static read, but not in the shape this project depends on."""
@@ -307,6 +311,13 @@ def main(predictions_dir, prs_file=None, now=None, fake_hours=None, fake_gamewee
         )
         return 0
     prs = load_prs(prs_file)
+    if len(prs) >= OPEN_PR_LIMIT:
+        report(
+            FAIL,
+            f"{len(prs)} open PRs listed: the list may be truncated, and could hide the "
+            "entry's PR. Close the stale ones, or raise OPEN_PR_LIMIT and deadline.yml's --limit.",
+        )
+        return 1
     status, message = check(
         bootstrap,
         lambda gw, deadline: classify_entries(

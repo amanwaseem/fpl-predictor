@@ -9,9 +9,11 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read   # whether a deploy is running
   contents: read
 
-# Never beside the ingest's load or a deploy's migration: one at a time.
+# Never beside the ingest's load: one at a time. A deploy has its own group,
+# so this waits for one on its way instead, as the ingest does (#165).
 concurrency:
   group: ingest
   cancel-in-progress: false
@@ -26,6 +28,23 @@ jobs:
     timeout-minutes: 30
     environment: production
     steps:
+      - name: Wait for any deploy in progress
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 40); do
+            ci=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch main \
+                   --event push --limit 10 --json status \
+                   --jq '[.[] | select(.status != "completed")] | length') || ci=unknown
+            deploy=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --limit 10 \
+                   --json status --jq '[.[] | select(.status != "completed")] | length') || deploy=unknown
+            [ "$ci" = "0" ] && [ "$deploy" = "0" ] && exit 0
+            echo "CI on main: $ci running, deploys: $deploy running; waiting ($i/40)."
+            sleep 30
+          done
+          echo "::error::A deploy has been on its way for 20 minutes. Not loading beside it."
+          exit 1
+
       - uses: actions/checkout@v7
         with:
           ref: main

@@ -60,7 +60,7 @@ jobs:
           FAKE_HOURS: ${{ inputs.fake_deadline_hours }}
           FAKE_GW: ${{ inputs.fake_gameweek }}
         run: |
-          gh pr list --state open --limit 200 --json number,state,headRefName,files > "$RUNNER_TEMP/prs.json"
+          gh pr list --state open --limit 500 --json number,state,headRefName,files > "$RUNNER_TEMP/prs.json"
           if [ -n "$FAKE_HOURS" ]; then
             python tools/check_deadline.py --prs "$RUNNER_TEMP/prs.json" \
               --fake-deadline-hours "$FAKE_HOURS" --fake-gameweek "$FAKE_GW"
