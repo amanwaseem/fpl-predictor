@@ -51,7 +51,12 @@ export function Optimise() {
 
   const advice = useQuery({
     queryKey: ["advice", team, model, free],
-    enabled: team !== null,
+    // With no model in the link, wait for the models list to name the main
+    // one, rather than ask once for the API's default and again for main.
+    enabled: team !== null && (params.has("model") || !models.isPending),
+    // Asking costs an FPL API call and a solve: not again just because the
+    // reader came back to the tab. "Get advice" asks again.
+    refetchOnWindowFocus: false,
     // A failure here may be the FPL API's; asking it again at once rarely helps.
     retry: false,
     queryFn: () =>
@@ -76,7 +81,11 @@ export function Optimise() {
     next.set("team", form.team.trim());
     if (chosen) next.set("model", chosen);
     if (form.free !== "") next.set("free", form.free);
-    setParams(next);
+    // The same request again is asked again: the squad may have changed on
+    // FPL since, and the answer is cached for five minutes. No new history
+    // entry for it either.
+    if (next.toString() === params.toString()) void advice.refetch();
+    else setParams(next);
   };
 
   return (

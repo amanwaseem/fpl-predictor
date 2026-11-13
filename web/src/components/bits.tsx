@@ -74,13 +74,20 @@ export function StatusPill({ status }: { status: string | null | undefined }) {
 }
 
 // "3d 14h", "5h 20m", "12m": the time left, ticking each half minute.
-export function Countdown({ to }: { to: string }) {
+// `onPassed` runs once the time is up, so a page can move on to the next one.
+export function Countdown({ to, onPassed }: { to: string; onPassed?: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
   const left = new Date(to).getTime() - now;
+  const passed = left <= 0;
+  useEffect(() => {
+    if (passed) onPassed?.();
+    // Once per deadline: not again for a new onPassed on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passed, to]);
   if (Number.isNaN(left)) return null;
   if (left <= 0) return <>passed</>;
   const minutes = Math.floor(left / 60_000);

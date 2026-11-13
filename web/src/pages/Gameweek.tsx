@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Link,
   Navigate,
@@ -35,6 +35,15 @@ const COLUMNS: { key: SortKey; label: string; numeric: boolean; className?: stri
 ];
 
 const error = (r: Row) => (r.actual_points === null ? null : r.predicted_points - r.actual_points);
+
+// The rows a page was expanded to earlier in this tab, or null.
+function stored(key: string): number | null {
+  try {
+    return Number(sessionStorage.getItem(key)) || null;
+  } catch {
+    return null;
+  }
+}
 
 function sortValue(r: Row, key: SortKey): number | string | null {
   return key === "error" ? error(r) : r[key];
@@ -96,38 +105,37 @@ function Entry({ gameweek }: { gameweek: number }) {
     setParams(next, { replace: true });
   };
 
-  const position = params.get("position");
-  const team = params.get("team");
+  const items = entry.data?.items ?? [];
+  // A value a shared or hand-typed link may carry that no control can show
+  // (a club from another season, a position or column that does not exist)
+  // is ignored rather than silently filtering out every row.
+  const asked_position = params.get("position");
+  const position = POSITIONS.some((p) => p === asked_position) ? asked_position : null;
+  const asked_team = params.get("team");
+  const team = entry.data && !items.some((r) => r.team === asked_team) ? null : asked_team;
   const query = (params.get("q") ?? "").trim().toLowerCase();
-  const sort = (params.get("sort") as SortKey | null) ?? "predicted_points";
+  const asked_sort = params.get("sort");
+  const sort = COLUMNS.find((c) => c.key === asked_sort)?.key ?? "predicted_points";
   const ascending = params.get("dir") === "asc";
 
-  // How far the reader has expanded the list, kept per history entry so Back
-  // from a player returns to the same rows. A new filter or sort starts again.
-  const { key } = useLocation();
-  const remembered = `shown:${key}`;
-  const [shown, setShown] = useState(() => {
+  // How far the reader has expanded the list, kept per page as its address
+  // names it, so Back from a player returns to the same rows, and a filter or
+  // sort, which changes the address, starts again. Not by history key: every
+  // page loaded directly has the key "default", so one would inherit
+  // another's, and the model resolving after the page loads would reset it.
+  const { pathname, search } = useLocation();
+  const remembered = `shown:${pathname}${search}`;
+  const [expanded, setExpanded] = useState<Record<string, number>>({});
+  const shown = expanded[remembered] ?? stored(remembered) ?? PAGE;
+  const setShown = (count: number) => {
+    setExpanded((all) => ({ ...all, [remembered]: count }));
     try {
-      return Number(sessionStorage.getItem(remembered)) || PAGE;
-    } catch {
-      return PAGE;
-    }
-  });
-  const filters = [gameweek, model, position, team, query, sort, ascending].join("|");
-  const [lastFilters, setLastFilters] = useState(filters);
-  if (filters !== lastFilters) {
-    setLastFilters(filters);
-    setShown(PAGE);
-  }
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(remembered, String(shown));
+      sessionStorage.setItem(remembered, String(count));
     } catch {
       // Storage may be unavailable; the list just starts at the top again.
     }
-  }, [remembered, shown]);
+  };
 
-  const items = entry.data?.items ?? [];
   const rows = items
     .filter((r) => !position || r.position === position)
     .filter((r) => !team || r.team === team)
@@ -339,11 +347,9 @@ function Entry({ gameweek }: { gameweek: number }) {
                         </span>
                       </td>
                       <td className={scored ? "num" : "num hide-sm"}>{r.actual_points ?? "–"}</td>
-                      <td
-                        className={`num hide-sm ${e === null ? "" : e > 0 ? "worse" : e < 0 ? "better" : ""}`}
-                      >
-                        {e === null ? "–" : signed(e, 2)}
-                      </td>
+                      {/* Uncoloured: the sign says over or under, not better or worse,
+                          which is what the scorecard's colours mean. */}
+                      <td className="num hide-sm">{e === null ? "–" : signed(e, 2)}</td>
                     </tr>
                   );
                 })}
