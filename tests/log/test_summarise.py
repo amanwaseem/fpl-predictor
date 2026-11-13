@@ -123,6 +123,17 @@ class TestSections(DigestCase):
         self.assertIn("REAL", value)
         self.assertNotIn("NOISE", value)
 
+    def test_value_ties_go_to_the_lower_id_as_a_number(self):
+        """As text, 100 sorts before 20 (#169)."""
+        text = self.digest(
+            [
+                row(100, predicted=6.0, price=6.0, name="HUNDRED"),
+                row(20, predicted=6.0, price=6.0, name="TWENTY"),
+            ]
+        )
+        value = text.split("Best value")[1]
+        self.assertLess(value.index("TWENTY"), value.index("HUNDRED"))
+
     def test_availability_counts_are_spelled_out(self):
         text = self.digest([row(1, predicted=5.0, status="a"), row(2, predicted=0.0, status="i")])
         self.assertIn("available", text)

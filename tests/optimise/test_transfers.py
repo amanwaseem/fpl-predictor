@@ -199,7 +199,12 @@ class TestRefusals(unittest.TestCase):
         swapped = {k: v for k, v in current.items() if k != 1} | {100: 5.0}
         self.assertRefused(swapped, "1 GKP", "6 MID")
         self.assertRefused(current | {1: 0.0}, "above zero")
-        self.assertRefused(current, "below zero", bank=-0.1)
+        self.assertRefused(current, "from zero up", bank=-0.1)
+        # nan passes `<= 0` and `< 0`; inf breaks the arithmetic later (#169).
+        for bad in (float("nan"), float("inf")):
+            with self.subTest(bad=bad):
+                self.assertRefused(current | {1: bad}, "above zero")
+                self.assertRefused(current, "from zero up", bank=bad)
         for free in (-1, 6, 1.5):
             with self.subTest(free=free):
                 self.assertRefused(current, "free transfers", free=free)

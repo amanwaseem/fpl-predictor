@@ -147,7 +147,8 @@ def summarise(rows):
 
     value = sorted(
         (r for r in rows if r["predicted_points"] >= VALUE_FLOOR),
-        key=lambda r: (-(r["predicted_points"] / r["price"]), r["player_id"]),
+        # By id as a number, as the main order is: as text, 100 sorts before 20 (#169).
+        key=lambda r: (-(r["predicted_points"] / r["price"]), int(r["player_id"])),
     )[:VALUE_N]
     if value:
         parts += ["", f"## Best value (predicted points per £m, {VALUE_FLOOR:.1f}+ predicted)", ""]
