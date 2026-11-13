@@ -345,7 +345,7 @@ def cmd_decide(args, now=None):
 
 def snapshot_problem(snapshot_id, gameweek, now, max_age_minutes):
     """Why the snapshot cannot be used for `gameweek`, or None if it can."""
-    if not SNAPSHOT_ID.match(snapshot_id or ""):
+    if not SNAPSHOT_ID.fullmatch(snapshot_id or ""):
         return f"{snapshot_id!r} is not a snapshot id."
     taken = datetime.strptime(snapshot_id, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
     age = (now - taken).total_seconds() / 60
