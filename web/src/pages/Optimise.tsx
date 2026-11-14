@@ -49,11 +49,12 @@ export function Optimise() {
   const offered = live.map((m) => m.model_version);
   if (chosen && !offered.includes(chosen)) offered.push(chosen);
 
+  const asking = team !== null && (params.has("model") || !models.isPending);
   const advice = useQuery({
     queryKey: ["advice", team, model, free],
     // With no model in the link, wait for the models list to name the main
     // one, rather than ask once for the API's default and again for main.
-    enabled: team !== null && (params.has("model") || !models.isPending),
+    enabled: asking,
     // Asking costs an FPL API call and a solve: not again just because the
     // reader came back to the tab. "Get advice" asks again.
     refetchOnWindowFocus: false,
@@ -83,8 +84,14 @@ export function Optimise() {
     if (form.free !== "") next.set("free", form.free);
     // The same request again is asked again: the squad may have changed on
     // FPL since, and the answer is cached for five minutes. No new history
-    // entry for it either.
-    if (next.toString() === params.toString()) void advice.refetch();
+    // entry for it either. Compared as the request it makes, whatever the
+    // link's order or whether it named the model; and only once it can be
+    // made, as refetch ignores `enabled`.
+    const same =
+      positiveInt(next.get("team") ?? undefined) === team &&
+      (next.get("model") ?? main?.model_version) === model &&
+      (next.get("free") ?? null) === (free === undefined ? null : String(free));
+    if (same && asking) void advice.refetch();
     else setParams(next);
   };
 

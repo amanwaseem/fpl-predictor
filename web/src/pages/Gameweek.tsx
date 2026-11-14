@@ -99,7 +99,7 @@ function Entry({ gameweek }: { gameweek: number }) {
   const entry = useEntry(gameweek, model);
 
   const update = (key: string, value: string | null) => {
-    const next = new URLSearchParams(params);
+    const next = kept();
     if (value) next.set(key, value);
     else next.delete(key);
     setParams(next, { replace: true });
@@ -118,13 +118,25 @@ function Entry({ gameweek }: { gameweek: number }) {
   const sort = COLUMNS.find((c) => c.key === asked_sort)?.key ?? "predicted_points";
   const ascending = params.get("dir") === "asc";
 
-  // How far the reader has expanded the list, kept per page as its address
-  // names it, so Back from a player returns to the same rows, and a filter or
-  // sort, which changes the address, starts again. Not by history key: every
-  // page loaded directly has the key "default", so one would inherit
+  // The link's parameters without those ignored above, so a control's change
+  // does not carry them on to apply later, when they might match.
+  const kept = () => {
+    const next = new URLSearchParams(params);
+    if (position === null) next.delete("position");
+    if (team === null) next.delete("team");
+    if (asked_sort !== null && asked_sort !== sort) next.delete("sort");
+    return next;
+  };
+
+  // How far the reader has expanded the list, kept per history entry and
+  // address, so Back from a player returns to the same rows, and a filter or
+  // sort, which changes the address, starts again. Not by history key alone:
+  // every page loaded directly has the key "default", so one would inherit
   // another's, and the model resolving after the page loads would reset it.
-  const { pathname, search } = useLocation();
-  const remembered = `shown:${pathname}${search}`;
+  // The history key as well: a new visit to the same address starts again,
+  // and Back returns to the entry's own count.
+  const { key, pathname, search } = useLocation();
+  const remembered = `shown:${key}:${pathname}${search}`;
   const [expanded, setExpanded] = useState<Record<string, number>>({});
   const shown = expanded[remembered] ?? stored(remembered) ?? PAGE;
   const setShown = (count: number) => {
@@ -165,7 +177,7 @@ function Entry({ gameweek }: { gameweek: number }) {
   const top = Math.max(1, ...items.map((r) => r.predicted_points));
 
   const sortBy = (key: SortKey) => {
-    const next = new URLSearchParams(params);
+    const next = kept();
     next.set("sort", key);
     // A second click on the same column reverses it; names start A to Z.
     const flip = sort === key ? !ascending : key === "web_name";
