@@ -105,6 +105,15 @@ def unscored(log_dir, scores_dir):
     return found, strays
 
 
+def hours_open(pr, now):
+    """How long `pr` has been open, from gh's createdAt; 0 if gh gave none it can read."""
+    try:
+        opened = datetime.fromisoformat(str(pr.get("createdAt")).replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    return (now - opened).total_seconds() / 3600
+
+
 def entry_gameweeks(paths, log_dir):
     """The gameweeks of the entries among `paths` in `log_dir`."""
     found = []
@@ -169,10 +178,7 @@ def decide(bootstrap, prs, branches, now, root="."):
             continue
         paths = [f.get("path", "") for f in pr.get("files") or []]
         if str(pr.get("headRefName", "")).startswith("score-bot/"):
-            opened = pr.get("createdAt")
-            age = (
-                (now - parse_timestamp(opened, "createdAt")).total_seconds() / 3600 if opened else 0
-            )
+            age = hours_open(pr, now)
             if age > STUCK_HOURS:
                 return result(
                     FAIL,
@@ -292,15 +298,21 @@ def cumulative_problems(before, after, gameweeks):
     return problems
 
 
-def comparable(text, rescored):
-    """A score file as compared before and after: without its actuals id, and,
-    for a gameweek being rescored, without its head-to-head against the
-    baseline, which a late baseline entry adds."""
-    data = json.loads(text)
-    data.pop("actuals_snapshot_id", None)
+def comparable(before, after, rescored):
+    """A score file before and after, as compared: without its actuals id, and,
+    for a gameweek being rescored, without what a rescore adds. A late baseline
+    entry adds the head-to-head, and comparators missing before arrive with the
+    gameweek's entry snapshots, now fetched (#165)."""
+    old, new = json.loads(before), json.loads(after)
+    dropped = ["actuals_snapshot_id"]
     if rescored:
-        data.pop("head_to_head", None)
-    return data
+        dropped.append("head_to_head")
+        if not old.get("comparators", {}).get("available"):
+            dropped.append("comparators")
+    for key in dropped:
+        old.pop(key, None)
+        new.pop(key, None)
+    return old, new
 
 
 def change_problems(lines, gameweeks, scores_dir, show):
@@ -340,7 +352,8 @@ def change_problems(lines, gameweeks, scores_dir, show):
                 problems += comparator_problems([json.loads(Path(path).read_text())])
         elif status == "M" and name.endswith(".json"):
             rescored = name.startswith(new_names)
-            if comparable(show(path), rescored) != comparable(Path(path).read_text(), rescored):
+            old, new = comparable(show(path), Path(path).read_text(), rescored)
+            if old != new:
                 problems.append(f"M {path}: changed beyond its actuals_snapshot_id")
         else:
             problems.append(f"{status} {path}: a score file already there changed")

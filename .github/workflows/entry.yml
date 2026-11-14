@@ -101,8 +101,7 @@ jobs:
           # Every open PR, with its files; closed and merged ones newest first,
           # without, since only this gameweek's branches matter among them (#165).
           gh pr list --state open --limit 500 --json number,state,headRefName,files,createdAt > "$RUNNER_TEMP/open.json"
-          gh pr list --state all --limit 300 --json number,state,headRefName \
-            -q '[.[] | select(.state != "OPEN")]' > "$RUNNER_TEMP/closed.json"
+          gh pr list --state closed --limit 300 --json number,state,headRefName > "$RUNNER_TEMP/closed.json"
           jq -s 'add' "$RUNNER_TEMP/open.json" "$RUNNER_TEMP/closed.json" > "$RUNNER_TEMP/prs.json"
           gh api --paginate "repos/$GITHUB_REPOSITORY/branches" -q '.[].name' > "$RUNNER_TEMP/branches.txt"
           args=(--prs "$RUNNER_TEMP/prs.json" --branches "$RUNNER_TEMP/branches.txt")
@@ -248,7 +247,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
-        run: gh release delete "$TAG" --cleanup-tag --yes
+          BRANCH: ${{ steps.plan.outputs.branch }}
+        # A run cancelled between the push and recording it: the branch is
+        # there and its commit names the release, so the release stays.
+        run: |
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            echo "$BRANCH was pushed; keeping $TAG, which its commit names."
+          else
+            gh release delete "$TAG" --cleanup-tag --yes
+          fi
 
       # ---- Resuming a run that pushed but did not open its PR ------------
 
