@@ -137,14 +137,15 @@ class TestBacktestGuard(unittest.TestCase):
         with self.assertRaises(SystemExit):
             resolve_target_gw(events, None)
 
-    def test_without_is_next_the_default_takes_the_same_fallback(self):
-        """Before the API flips is_next, the default and an explicit request agree (#167)."""
+    def test_without_is_next_only_an_explicit_request_takes_the_fallback(self):
+        """A default has no deadline to check the fallback against, so it refuses (#167)."""
         events = [
             {"id": i, "finished": i < 3, "is_current": i == 2, "deadline_time": f"d{i}"}
             for i in range(1, 5)
         ]
-        self.assertEqual(resolve_target_gw(events, None), (3, "d3"))
         self.assertEqual(resolve_target_gw(events, 3), (3, "d3"))
+        with self.assertRaises(SystemExit):
+            resolve_target_gw(events, None)
 
     def test_unknown_gameweek_refused(self):
         with self.assertRaises(SystemExit):

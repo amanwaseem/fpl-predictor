@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Numeric, delete, func, select
+from sqlalchemy import Numeric, delete, func, select, update
 from sqlalchemy.dialects.postgresql import Range, insert
 
 from fpl.db.models import (
@@ -319,15 +319,38 @@ def load(engine, snap, bootstrap, fixtures, players_dir):
         # Spells are derived whole from one snapshot's histories, so the newest
         # snapshot replaces them rather than merging with an older derivation:
         # for the players it lists. One FPL has since removed keeps the spells
-        # its stats were loaded with (#167). An older snapshot only adds spells
-        # for players who have none.
+        # his stats were loaded with, the last ending where he left (#167). An
+        # older snapshot only adds spells for players who have none.
         if report.newest:
+            listed = [e["id"] for e in elements]
             connection.execute(
                 delete(PlayerClub).where(
-                    PlayerClub.season == season,
-                    PlayerClub.element_id.in_([e["id"] for e in elements]),
+                    PlayerClub.season == season, PlayerClub.element_id.in_(listed)
                 )
             )
+            # A player no longer listed is no one's from the next gameweek: his
+            # last spell ends there, or the features would keep him at his club
+            # to GW38, and a spell that would only have started then goes.
+            if next_gameweek is not None:
+                gone = (
+                    PlayerClub.season == season,
+                    PlayerClub.element_id.not_in(listed),
+                )
+                connection.execute(
+                    delete(PlayerClub).where(
+                        *gone, func.lower(PlayerClub.gameweeks) >= next_gameweek
+                    )
+                )
+                connection.execute(
+                    update(PlayerClub)
+                    .where(
+                        *gone,
+                        func.upper_inf(PlayerClub.gameweeks),
+                    )
+                    .values(
+                        gameweeks=func.int4range(func.lower(PlayerClub.gameweeks), next_gameweek)
+                    )
+                )
         else:
             have_spells = set(
                 connection.scalars(select(PlayerClub.element_id).where(PlayerClub.season == season))

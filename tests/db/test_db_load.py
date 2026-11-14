@@ -278,7 +278,8 @@ class TestLoad(TempCwd):
 
     def test_a_player_fpl_removes_keeps_his_spells(self):
         """The newest snapshot replaces spells only for the players it lists; one
-        removed since keeps those his stats were loaded with (#167)."""
+        removed since keeps those his stats were loaded with, ending at the next
+        gameweek (#167)."""
         self.write(FIRST)
         self.load(FIRST)
         without_3 = [
@@ -292,7 +293,9 @@ class TestLoad(TempCwd):
             .where(PlayerClub.element_id == 3)
             .order_by(PlayerClub.gameweeks)
         )
-        self.assertEqual(spells, [(2, Range(1, 3)), (1, Range(3, 39))])
+        # His spell at club 2 ends at GW3, the next; the move to club 1 that
+        # would only have started then is gone with him.
+        self.assertEqual(spells, [(2, Range(1, 3))])
 
     def test_elements_that_are_not_players_are_skipped_and_reported(self):
         self.write(FIRST)

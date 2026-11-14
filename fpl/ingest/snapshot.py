@@ -237,8 +237,10 @@ def resolve_target_gw(events, requested):
                 f"Take a snapshot closer to the GW{requested} deadline."
             )
     else:
-        # The same boundary as an explicit request, so the two never disagree.
-        event = upcoming
+        # Only a flagged next gameweek, not the fallback: without a deadline
+        # to hand, a default must not risk naming one that has passed. An
+        # explicit request can take the fallback, for the boundary checks above.
+        event = next((e for e in events if e.get("is_next")), None)
         if event is None:
             raise SystemExit("No upcoming gameweek found — season may be over.")
     return event["id"], event["deadline_time"]
