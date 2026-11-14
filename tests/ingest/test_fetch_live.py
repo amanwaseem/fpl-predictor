@@ -11,6 +11,8 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
+import requests
+
 from fpl.ingest import fetch
 from fpl.ingest.snapshot import load_live
 from tests.support import fixtures
@@ -177,17 +179,11 @@ class TestLoadLive(StubbedAPI):
         self.assertIn("API shape has changed", str(cm.exception))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestRetries(unittest.TestCase):
-    """A client error answers the same again; a server error or rate limit may not (#167)."""
+    """Not there answers the same again; a server error, 403 or 429 may not (#167)."""
 
     @staticmethod
     def failing(status):
-        import requests
-
         response = requests.Response()
         response.status_code = status
         return patch.object(
@@ -197,8 +193,6 @@ class TestRetries(unittest.TestCase):
         )
 
     def attempts(self, status):
-        import requests
-
         with self.failing(status) as get, patch.object(fetch.time, "sleep"):
             with redirect_stdout(io.StringIO()), self.assertRaises(requests.HTTPError):
                 fetch.get("element-summary/612/")
@@ -207,7 +201,11 @@ class TestRetries(unittest.TestCase):
     def test_a_404_is_not_retried(self):
         self.assertEqual(self.attempts(404), 1)
 
-    def test_a_server_error_and_a_rate_limit_are(self):
-        for status in (503, 429):
+    def test_a_server_error_a_block_and_a_rate_limit_are(self):
+        for status in (503, 403, 429):
             with self.subTest(status=status):
                 self.assertEqual(self.attempts(status), fetch.RETRIES)
+
+
+if __name__ == "__main__":
+    unittest.main()

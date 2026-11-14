@@ -23,7 +23,7 @@ import hashlib
 import sys
 from collections import defaultdict
 
-from sqlalchemy import Text, cast, delete, func, literal_column, select
+from sqlalchemy import Text, cast, delete, func, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
 
 from fpl.db.load import LAST_GAMEWEEK, LOAD_LOCK
@@ -167,11 +167,12 @@ def _digest(connection, model, columns, where):
     another changes it: a bonus point moving between two players leaves every
     column's sum the same, and the sums this replaced missed that (#167).
     """
-    cells = [func.coalesce(cast(c, Text), "~") for c in columns]
-    row = func.concat_ws("|", *cells)
+    # As JSON: each value quoted and escaped, and null as null, so no two
+    # different sets of rows can read the same.
+    row = func.json_build_array(*[cast(c, Text) for c in columns])
     keys = [c for c in model.__table__.primary_key.columns]
     return connection.scalar(
-        select(func.md5(func.string_agg(row, aggregate_order_by(literal_column("','"), *keys))))
+        select(func.md5(cast(func.json_agg(aggregate_order_by(row, *keys)), Text)))
         .select_from(model)
         .where(where)
     )
@@ -225,12 +226,15 @@ def fingerprint(connection, season):
             Fixture.season == season,
         )
     )
+    # The settled rounds, which is all the build reads of gameweeks: a round
+    # finishing before its data is checked changes no row.
     parts.append(
-        _digest(
-            connection,
-            Gameweek,
-            [Gameweek.gameweek, Gameweek.finished, Gameweek.data_checked],
-            Gameweek.season == season,
+        sorted(
+            connection.scalars(
+                select(Gameweek.gameweek).where(
+                    Gameweek.season == season, Gameweek.finished, Gameweek.data_checked
+                )
+            )
         )
     )
     parts.append(

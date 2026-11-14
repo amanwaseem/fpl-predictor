@@ -38,6 +38,7 @@ BASE = "https://fantasy.premierleague.com/api"
 DELAY = 0.5  # be polite; this is an undocumented public API
 TIMEOUT = 20
 RETRIES = 3
+GONE = (404, 410)
 
 
 def get(path):
@@ -49,10 +50,11 @@ def get(path):
             r.raise_for_status()
             return r.json()
         except requests.RequestException as e:
-            # A client error other than rate limiting will answer the same
-            # again: fail now rather than after the backoff (#167).
+            # Not there will answer the same again: fail now rather than after
+            # the backoff (#167). Other client errors are retried: FPL's CDN
+            # answers 403 or 429 when it throttles for a moment.
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if attempt == RETRIES or (status is not None and 400 <= status < 500 and status != 429):
+            if attempt == RETRIES or status in GONE:
                 raise
             wait = 2**attempt
             print(f"  retry {attempt}/{RETRIES} for {path} after {wait}s ({e})")
