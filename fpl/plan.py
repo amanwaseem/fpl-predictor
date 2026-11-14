@@ -197,9 +197,15 @@ def best_plan(
         + [p for p in first if p["player_id"] in owned],
         key=lambda p: p["player_id"],
     )
-    # Owned players who could not be bought: kept while held, never bought
-    # back once sold, as fpl.optimise allows them only to be kept (#169).
-    keep_only = owned - buyable
+    # Who cannot be bought, week by week, from each week's own statuses: one
+    # injured in a later week may be kept then, but not bought, as fpl.optimise
+    # allows (#169). An owned player who cannot be bought now is kept while
+    # held and never bought back once sold.
+    unbuyable = []
+    for gw in gameweeks:
+        allowed = {p["player_id"] for p in eligible(by_week[gw], include_unavailable)}
+        listed = {p["player_id"] for p in by_week[gw]}
+        unbuyable.append({p["player_id"] for p in pool if p["player_id"] in listed - allowed})
     if current is None:
         reasons = shortfalls(pool, budget)
         if reasons:
@@ -224,7 +230,7 @@ def best_plan(
         bench_weight,
         free_transfers if current is not None else None,
         deadline=deadline_in(time_limit),
-        keep_only=keep_only,
+        unbuyable=unbuyable,
     )
 
     # Free transfers and hits as FPL counts them, from the transfers made.
@@ -351,14 +357,15 @@ def _solve(
     bench_weight,
     free_transfers,
     deadline=None,
-    keep_only=frozenset(),
+    unbuyable=None,
 ):
     """One model over every week: [(squad, starters, captain)], one a week.
 
     `price` and `selling` map player ids to tenths of a million; `selling`
     holds the owned squad's selling prices, and `free_transfers` is None for
-    a first squad chosen from scratch. A player in `keep_only` may be in a
-    squad only while he is still held. Each week is fpl.optimise.add_squad;
+    a first squad chosen from scratch. A player in `unbuyable[k]` may be in
+    week k's squad only if he was in it already: held from the start if owned,
+    in last week's squad if bought since. Each week is fpl.optimise.add_squad;
     the weeks are joined by what each costs, the transfers between them and
     the free transfers carried. Solved as fpl.optimise._solve is: points
     first with a zero gap, then ties broken toward fewer transfers and lower
@@ -389,8 +396,15 @@ def _solve(
                 last = weeks[-1]["held"][i]
                 model.addConstr(held[i] <= last)
                 model.addConstr(held[i] >= last + squad[i] - 1)
-            if pool[i]["player_id"] in keep_only:
+        for i in range(n):
+            if pool[i]["player_id"] not in (unbuyable[k] if unbuyable else ()):
+                continue
+            if i in held:
                 model.addConstr(squad[i] <= held[i])
+            elif k == 0:
+                model.addConstr(squad[i] <= 0)
+            else:
+                model.addConstr(squad[i] <= weeks[-1]["squad"][i])
         spend = model.qsum(
             price[pool[i]["player_id"]] * squad[i] for i in range(n) if i not in held
         ) + model.qsum(

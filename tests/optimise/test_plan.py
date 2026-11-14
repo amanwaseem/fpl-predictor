@@ -189,6 +189,29 @@ class TestAcrossWeeks(unittest.TestCase):
         )
         self.assertIn(8, bought(allowed.weeks[1]))
 
+    def test_a_player_injured_in_a_later_week_is_not_bought_that_week(self):
+        """Available in week 1 and injured in week 2: buyable only in week 1 (#169)."""
+        squad = even_squad()
+        for p in squad[8:12]:
+            p["predicted_points"] = 8.0
+        pool = squad + [player(200, "MID", 0.0, price=3.0)]
+        weeks = weeks_of(pool, {1: {200: 0.0}, 2: {200: 10.0}})
+        for row in weeks[2]:
+            if row["player_id"] == 200:
+                row["status"] = "i"
+        result = best_plan(weeks, owned(squad), 20.0, 2, discount=1.0, bench_weight=0.0)
+        self.assertNotIn(200, bought(result.weeks[1]))
+        # Healthy in week 2, he is bought then.
+        healthy = best_plan(
+            weeks_of(pool, {1: {200: 0.0}, 2: {200: 10.0}}),
+            owned(squad),
+            20.0,
+            2,
+            discount=1.0,
+            bench_weight=0.0,
+        )
+        self.assertIn(200, bought(healthy.weeks[1]))
+
     def test_the_bank_after_each_week_adds_up(self):
         self.pool[-2]["price"], self.pool[-1]["price"] = 6.0, 7.0
         result = self.plan({1: {100: 6.0}, 2: {101: 6.0}})

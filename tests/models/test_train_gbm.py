@@ -34,6 +34,13 @@ class TestUndefinedStatistics(unittest.TestCase):
         low, high = out["sometimes"]
         self.assertLessEqual(low, high)
 
+    def test_mostly_no_value_is_no_interval(self):
+        """An interval from a handful of draws would be called 95% and mean little."""
+        out = train_gbm.bootstrap(
+            {1: [1.0], 2: [2.0]}, {"rarely": lambda s: sum(s) if s == [1.0, 2.0] else None}
+        )
+        self.assertEqual(out["rarely"], (None, None))
+
     def test_never_a_value_is_no_interval(self):
         out = train_gbm.bootstrap({1: [1.0]}, {"never": lambda s: None}, draws=10)
         self.assertEqual(out["never"], (None, None))
