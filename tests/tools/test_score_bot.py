@@ -191,6 +191,16 @@ class TestDecide(Repo):
         fresh = {**stuck, "createdAt": "2026-11-12T08:00:00Z"}
         self.assertEqual(self.decide(prs=[fresh])["action"], score_bot.SKIP)
 
+    def test_a_created_at_gh_writes_otherwise_is_read_or_ignored(self):
+        for created, hours in (
+            ("2026-11-11T08:00:00.123Z", 28.0),
+            ("not a time", 0),
+            (None, 0),
+        ):
+            with self.subTest(created=created):
+                age = score_bot.hours_open({"createdAt": created}, NOW)
+                self.assertAlmostEqual(age, hours, places=2)
+
     def test_a_file_in_the_log_that_is_not_an_entry_fails(self):
         Path("predictions/notes.csv").write_text("x\n")
         out = self.decide()
@@ -305,6 +315,20 @@ class TestChangeProblems(Repo):
             self.before.__getitem__,
         )
         self.assertEqual(len(problems), 1)
+
+    def test_comparators_arriving_on_a_rescore_are_accepted(self):
+        """GW9's gbm-v1 had none; the rescore fetches its snapshot, and now has them."""
+        old = json.loads(self.before["scores/gw09_gbm-v1.json"])
+        old["comparators"] = {"available": False}
+        self.before["scores/gw09_gbm-v1.json"] = json.dumps(old)
+        self.scored(9, "baseline-v1")
+        problems = score_bot.change_problems(
+            ["M\tscores/gw09_gbm-v1.json", "A\tscores/gw09_baseline-v1.json"],
+            {9},
+            "scores",
+            self.before.__getitem__,
+        )
+        self.assertEqual(problems, [])
 
     def test_an_old_file_without_comparators_does_not_block_a_rescore(self):
         """Only new score files must have comparators (#165)."""

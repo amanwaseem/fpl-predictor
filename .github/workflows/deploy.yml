@@ -21,6 +21,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read   # newer commits' CI runs
   contents: read
 
 # One deploy at a time, and never cancelled part-way: a cancelled deploy can
@@ -40,7 +41,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40  # up to 20 waiting on a newer commit's CI, then the deploy
     environment: production
     steps:
       # The commit CI tested, not whatever main has moved to since.
@@ -49,20 +50,43 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # CI runs on two pushes can finish out of order, and this run may have
-      # queued behind a newer deploy. Main's newest commit has its own CI run,
-      # and its own deploy, so an older one stands down rather than overwrite
-      # it (#165).
-      - name: This is still main's newest commit
+      # queued behind a newer deploy. A newer commit on main whose CI passed
+      # deploys itself (or already has), so this one stands down rather than
+      # put older code back. If every newer commit's CI failed, this is the
+      # newest green one, and it deploys. While a newer one's CI is still
+      # running, it waits to see (#165). Only commits with a CI run count: a
+      # rebase merge pushes several, and CI runs on the last.
+      - name: No newer commit on main has passed CI
         id: newest
         env:
+          GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          git fetch -q origin main
-          tip=$(git rev-parse origin/main)
-          if [ "$tip" != "$SHA" ]; then
-            echo "Main has moved on to $tip; its own CI run deploys it. Not deploying $SHA."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
+          ci() {
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event push --commit "$1" \
+              --limit 1 --json status,conclusion -q '.[0] | "\(.status) \(.conclusion)"'
+          }
+          for i in $(seq 1 40); do
+            tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" -q .sha)
+            [ "$tip" = "$SHA" ] && { echo "$SHA is main's newest commit."; exit 0; }
+            pending=0
+            for c in $(gh api "repos/$GITHUB_REPOSITORY/compare/$SHA...$tip" -q '.commits[].sha'); do
+              state=$(ci "$c")
+              case "$state" in
+                "completed success")
+                  echo "$c, newer, passed CI and deploys itself. Not deploying $SHA."
+                  echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0 ;;
+                "completed "*) ;;
+                "") [ "$c" = "$tip" ] && pending=1 ;;  # main's head: its run is on its way
+                *) pending=1 ;;
+              esac
+            done
+            [ "$pending" = "0" ] && { echo "Every newer commit failed CI: $SHA is the newest green one."; exit 0; }
+            echo "A newer commit's CI is still running; waiting ($i/40)."
+            sleep 30
+          done
+          echo "::error::A newer commit's CI has run for 20 minutes. Not deploying $SHA over it; re-run this deploy if it fails."
+          exit 1
 
       - name: Check the deploy is configured
         if: steps.newest.outputs.skip != 'true'
