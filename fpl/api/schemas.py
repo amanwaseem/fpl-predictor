@@ -7,7 +7,7 @@ log writes at most two decimal places, which a float carries exactly enough.
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictBool
 
 from fpl.evaluation.score import BASELINE_MODEL
 
@@ -212,29 +212,36 @@ class Readiness(BaseModel):
 # --- The optimiser (#83) -----------------------------------------------------
 
 
-# Strict, so a request means what its schema says: lax mode reads a JSON
-# true or false as 1 or 0, and "5" as 5, which the schema does not allow (a
-# fuzzed {"bank": false} was answered 200). A whole number is still a float.
-STRICT = ConfigDict(extra="forbid", strict=True)
+def _a_json_number(value):
+    """A request's numbers must be JSON numbers. Lax mode read true or false as 1
+    or 0 and "5" as 5, which the schema does not allow: a fuzzed {"bank": false}
+    was answered 200 (#173). Not strict mode, which would refuse 2.0 for an
+    integer, as JSON Schema does not."""
+    if isinstance(value, (bool, str)):
+        raise ValueError("must be a JSON number")
+    return value
+
+
+Number = BeforeValidator(_a_json_number)
 
 
 class OwnedPlayer(BaseModel):
-    model_config = STRICT
+    model_config = ConfigDict(extra="forbid")
 
-    player_id: Annotated[int, Field(ge=1, le=100_000, examples=[411])]
+    player_id: Annotated[int, Field(ge=1, le=100_000, examples=[411]), Number]
     # What FPL pays for him: purchase price plus half of any rise, rounded
     # down. On the transfers page, or GET /v1/entries/{id}/advice estimates it.
-    selling_price: Annotated[float, Field(gt=0, le=20, examples=[7.6], description="£m")]
+    selling_price: Annotated[float, Field(gt=0, le=20, examples=[7.6], description="£m"), Number]
 
 
 class OptimiseRequest(BaseModel):
     """A squad to plan transfers from, or none for the best squad from scratch."""
 
-    model_config = STRICT
+    model_config = ConfigDict(extra="forbid")
 
     season: Annotated[str | None, Field(pattern=r"^\d{4}/\d{2}$", examples=["2026/27"])] = None
     gameweek: Annotated[
-        int | None, Field(ge=1, le=38, description="Defaults to the model's latest entry.")
+        int | None, Field(ge=1, le=38, description="Defaults to the model's latest entry."), Number
     ] = None
     model: Annotated[str, Field(pattern=r"^[A-Za-z0-9.-]{1,40}$", examples=["baseline-v1"])] = (
         BASELINE_MODEL
@@ -247,12 +254,14 @@ class OptimiseRequest(BaseModel):
             description="The fifteen owned. Without it, the best squad from scratch.",
         ),
     ] = None
-    bank: Annotated[float, Field(ge=0, le=100, description="£m; with a squad")] = 0.0
-    free_transfers: Annotated[int, Field(ge=0, le=5)] = 1
-    budget: Annotated[float, Field(ge=50, le=200, description="£m; without a squad")] = 100.0
-    include_unavailable: bool = False
+    bank: Annotated[float, Field(ge=0, le=100, description="£m; with a squad"), Number] = 0.0
+    free_transfers: Annotated[int, Field(ge=0, le=5), Number] = 1
+    budget: Annotated[float, Field(ge=50, le=200, description="£m; without a squad"), Number] = (
+        100.0
+    )
+    include_unavailable: StrictBool = False
     horizon: Annotated[
-        int, Field(ge=1, le=1, description="Gameweeks to plan over. One, until #55.")
+        int, Field(ge=1, le=1, description="Gameweeks to plan over. One, until #55."), Number
     ] = 1
 
 
