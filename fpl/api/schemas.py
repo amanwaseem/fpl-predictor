@@ -212,8 +212,14 @@ class Readiness(BaseModel):
 # --- The optimiser (#83) -----------------------------------------------------
 
 
+# Strict, so a request means what its schema says: lax mode reads a JSON
+# true or false as 1 or 0, and "5" as 5, which the schema does not allow (a
+# fuzzed {"bank": false} was answered 200). A whole number is still a float.
+STRICT = ConfigDict(extra="forbid", strict=True)
+
+
 class OwnedPlayer(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = STRICT
 
     player_id: Annotated[int, Field(ge=1, le=100_000, examples=[411])]
     # What FPL pays for him: purchase price plus half of any rise, rounded
@@ -224,7 +230,7 @@ class OwnedPlayer(BaseModel):
 class OptimiseRequest(BaseModel):
     """A squad to plan transfers from, or none for the best squad from scratch."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = STRICT
 
     season: Annotated[str | None, Field(pattern=r"^\d{4}/\d{2}$", examples=["2026/27"])] = None
     gameweek: Annotated[

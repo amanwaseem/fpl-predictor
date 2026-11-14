@@ -62,9 +62,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
+          # Nothing at all for a commit with no run: `.[0]` would print
+          # "null null", which reads as a run still going.
           ci() {
             gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event push --commit "$1" \
-              --limit 1 --json status,conclusion -q '.[0] | "\(.status) \(.conclusion)"'
+              --limit 1 --json status,conclusion -q '.[] | "\(.status) \(.conclusion)"'
           }
           for i in $(seq 1 40); do
             tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" -q .sha)

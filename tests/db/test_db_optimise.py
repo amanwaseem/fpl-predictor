@@ -131,6 +131,13 @@ class TestOptimise(OptimiseCase):
         body = self.post({"squad": self.owned(ids)}, 422)
         self.assertIn("GKP in the squad", body["detail"])
 
+    def test_a_value_of_the_wrong_json_type_is_422(self):
+        """Lax mode read false as 0.0 and "1" as 1; the schema allows neither."""
+        for body in ({"bank": False}, {"free_transfers": "1"}, {"budget": True}):
+            with self.subTest(body=body):
+                self.post(body, 422)
+        self.post({"budget": 100})  # a whole number is still a float
+
     def test_the_same_player_twice_is_422(self):
         squad = self.owned()
         squad[-1] = squad[0]
