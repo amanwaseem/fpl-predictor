@@ -62,22 +62,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
+          # Nothing at all for a commit with no run: `.[0]` would print
+          # "null null", which reads as a run still going.
           ci() {
             gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event push --commit "$1" \
-              --limit 1 --json status,conclusion -q '.[0] | "\(.status) \(.conclusion)"'
+              --limit 1 --json status,conclusion -q '.[] | "\(.status) \(.conclusion)"'
           }
           for i in $(seq 1 40); do
-            tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" -q .sha)
+            tip=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" -q .sha) || { sleep 30; continue; }
             [ "$tip" = "$SHA" ] && { echo "$SHA is main's newest commit."; exit 0; }
             pending=0
             for c in $(gh api "repos/$GITHUB_REPOSITORY/compare/$SHA...$tip" -q '.commits[].sha'); do
-              state=$(ci "$c")
+              # A failed lookup is asked again next pass, not the end of the gate.
+              state=$(ci "$c") || state="unknown"
               case "$state" in
                 "completed success")
                   echo "$c, newer, passed CI and deploys itself. Not deploying $SHA."
                   echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0 ;;
                 "completed "*) ;;
-                "") [ "$c" = "$tip" ] && pending=1 ;;  # main's head: its run is on its way
+                # Main's head with no run yet: its run is on its way, for five
+                # minutes. After that it has none coming ([skip ci]).
+                "") [ "$c" = "$tip" ] && [ "$i" -le 10 ] && pending=1 ;;
                 *) pending=1 ;;
               esac
             done
