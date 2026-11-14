@@ -506,8 +506,10 @@ def check_current(players, current, bank, free_transfers):
     # through, and inf passes too, then breaks the arithmetic in tenths (#169).
     if any(not math.isfinite(price) or price <= 0 for price in current.values()):
         found.append("every selling price must be a number above zero")
-    if not math.isfinite(bank) or bank < 0:
-        found.append(f"the bank is {bank}, not a number of millions from zero up")
+    if not math.isfinite(bank):
+        found.append(f"the bank is {bank}, not a number")
+    elif bank < 0:
+        found.append(f"the bank is £{bank:.1f}m, below zero")
     # bool is an int in Python, so a JSON true would otherwise pass as 1.
     if (
         isinstance(free_transfers, bool)

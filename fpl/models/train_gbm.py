@@ -188,9 +188,10 @@ def bootstrap(by_gameweek, statistics, draws=BOOTSTRAP, seed=SEED):
 def _interval(values):
     """The middle 95% of `values`, leaving out draws the statistic had no value for:
     Spearman's rho is None on a resample where one side is constant, and None does
-    not sort with numbers (#169). (None, None) if no draw had one."""
+    not sort with numbers (#169). (None, None) unless most draws had one: an
+    interval from a handful would be called 95% and mean little."""
     known = sorted(v for v in values if v is not None)
-    if not known:
+    if len(known) * 2 < len(values):
         return (None, None)
     tail = int(0.025 * len(known))
     return (known[tail], known[len(known) - 1 - tail])
@@ -255,6 +256,10 @@ def report(folds, live=None):
     def ci(pair):
         return "n/a" if pair[0] is None else f"{pair[0]:.3f} to {pair[1]:.3f}"
 
+    def three(x):
+        # Spearman's rho is None where one side is constant (#169).
+        return "n/a" if x is None else f"{x:.3f}"
+
     lines = [
         f"# {MODEL_VERSION}: held-out report",
         "",
@@ -275,7 +280,7 @@ def report(folds, live=None):
         lines.append(
             f"| {season} | {f['n']} | {g['mae']:.3f} | {ci(g['mae_ci'])} | "
             f"{f['naive']['mae']:.3f} | {f['mae_gain']:+.3f} | {ci(f['mae_gain_ci'])} | "
-            f"{g['spearman']:.3f} | {ci(g['spearman_ci'])} |"
+            f"{three(g['spearman'])} | {ci(g['spearman_ci'])} |"
         )
     return "\n".join(lines) + "\n"
 

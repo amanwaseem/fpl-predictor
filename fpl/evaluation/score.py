@@ -409,11 +409,7 @@ def pooled_comparators(results):
     for name in COMPARATORS:
         # Each block by its own count: a carried block was computed against
         # an earlier actuals snapshot, whose join may have matched other rows (#169).
-        blocks = [
-            (b, b.get("n", r["metrics"]["all"]["n"]))
-            for r in with_comparators
-            for b in [r["comparators"][name]]
-        ]
+        blocks = [(b, b["n"]) for r in with_comparators for b in [r["comparators"][name]]]
         n = sum(count for _, count in blocks)
         pooled = {"n": n, "mae": sum(b["mae"] * count for b, count in blocks) / n}
         xis = [b["xi_actual"] for b, _ in blocks if b.get("xi_actual") is not None]
@@ -594,9 +590,10 @@ def main(actuals_id, out_dir=None, log_dir=None):
         if gw not in settled:
             print(f"pending:   GW{gw} {model} — results not final")
             # Said now, not when the week settles and scoring fails on it (#169).
-            _, faults = read_entry(path)
-            if faults:
-                print(f"WARNING:   {path} does not read as an entry: {faults[0]}")
+            pending_rows, faults = read_entry(path)
+            if faults or not pending_rows:
+                why = faults[0] if faults else "it has no rows"
+                print(f"WARNING:   {path} does not read as an entry: {why}")
             continue
         rows, faults = read_entry(path)
         if faults:
