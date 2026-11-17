@@ -2,6 +2,7 @@
 // automatically. Not the whole of accessibility, but the part a test can hold.
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { PLAYER, stubPlayer } from "./fixtures";
 
 const PAGES = ["/", "/gameweeks", "/optimise", "/about", "/no-such-page"];
 
@@ -16,20 +17,9 @@ for (const path of PAGES) {
   });
 }
 
-test("a player page has no automatically detectable accessibility problems", async ({
-  page,
-  request,
-}) => {
-  const { gameweeks } = await (await request.get("/v1/gameweeks")).json();
-  const logged = gameweeks
-    .filter((g: { models_logged: string[] }) => g.models_logged.length)
-    .at(-1);
-  const rows = await (
-    await request.get(
-      `/v1/gameweeks/${logged.gameweek}/predictions?model=${logged.models_logged[0]}&limit=1`,
-    )
-  ).json();
-  await page.goto(`/players/${rows.items[0].player_id}`);
+test("a player page has no automatically detectable accessibility problems", async ({ page }) => {
+  await stubPlayer(page);
+  await page.goto(`/players/${PLAYER.player_id}`);
   await page.getByRole("heading", { level: 1 }).waitFor();
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
