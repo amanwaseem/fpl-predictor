@@ -23,6 +23,11 @@ const MODELS: Record<string, { name: string; about: string }> = {
   },
 };
 
+// The models logged now: those with a role that is not retired.
+export function liveModels(models: Schemas["Model"][] | undefined): Schemas["Model"][] {
+  return (models ?? []).filter((m) => m.role && m.role !== "retired");
+}
+
 export function modelName(version: string): string {
   return MODELS[version]?.name ?? version;
 }

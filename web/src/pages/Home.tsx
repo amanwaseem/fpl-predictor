@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { type Schemas } from "../api/client";
 import {
@@ -26,6 +27,8 @@ const pickable = (r: Row) => r.status === "a" || r.status === "d";
 
 export function Home() {
   useTitle(null);
+  // Read once: the button names the reader's own team if one is remembered.
+  const [hasTeam] = useState(() => savedTeam() !== null);
   const status = useStatus();
   const models = useModels();
   const scorecard = useScorecard();
@@ -53,7 +56,7 @@ export function Home() {
                 {latest ? `See GW${latest} predictions` : "See predictions"}
               </Link>
               <Link className="button button-on-ink" to="/optimise">
-                {savedTeam() ? "Advice for your team" : "Optimise my team"}
+                {hasTeam ? "Advice for your team" : "Optimise my team"}
               </Link>
             </div>
           </div>

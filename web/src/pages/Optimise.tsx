@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, api, unwrap, type Schemas } from "../api/client";
@@ -8,7 +8,7 @@ import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
 import { SquadView } from "../components/SquadView";
 import { fixed, formatLocal, positiveInt, signed } from "../format";
-import { modelName } from "../models";
+import { liveModels, modelName } from "../models";
 import { forgetTeam, saveTeam, savedTeam, type MyTeam } from "../remember";
 
 type Plan = Schemas["Plan"];
@@ -17,7 +17,7 @@ export function Optimise() {
   useTitle("My team");
   const [params, setParams] = useSearchParams();
   const models = useModels();
-  const live = (models.data?.models ?? []).filter((m) => m.role && m.role !== "retired");
+  const live = liveModels(models.data?.models);
   const main = live.find((m) => m.role === "main") ?? live[0];
 
   // What is on screen comes from the URL alone; the form is applied on submit.
@@ -50,26 +50,35 @@ export function Optimise() {
   const offered = live.map((m) => m.model_version);
   if (chosen && !offered.includes(chosen)) offered.push(chosen);
 
-  // The reader's own team, remembered in this browser (#176). Opening My team
-  // with no team in the link shows it; a link with a team shows that one and
-  // leaves the remembered one alone. Only a team the reader asked for here is
-  // remembered, once advice for it has come back.
+  // The reader's own team, remembered in this browser (#176). My team with no
+  // team in the link shows it, however it was reached; a link with a team
+  // shows that one and leaves the remembered one alone. Only a team the reader
+  // asked for here is remembered, once advice for it has come back.
   const [saved, setSaved] = useState<MyTeam | null>(savedTeam);
-  const restored = useRef(false);
   useEffect(() => {
-    if (restored.current) return;
-    restored.current = true;
     if (params.has("team") || saved === null) return;
     const next = new URLSearchParams(params);
     next.set("team", String(saved.team));
-    if (saved.free !== undefined && !params.has("free")) next.set("free", String(saved.free));
     setParams(next, { replace: true });
   }, [params, saved, setParams]);
+  // A team asked for on the form, remembered once advice for it comes back.
   const toRemember = useRef<number | null>(null);
+  // Only said to be remembered if it was: storage may refuse.
+  const remember = (id: number) => {
+    if (saveTeam({ team: id })) setSaved({ team: id });
+  };
+  const queryClient = useQueryClient();
+  // Forgetting takes the team off the page only if it is the remembered one,
+  // and in place: Back must not bring it straight back.
   const forget = () => {
     forgetTeam();
     setSaved(null);
-    setParams(new URLSearchParams());
+    if (saved !== null && team === saved.team) {
+      const next = new URLSearchParams(params);
+      next.delete("team");
+      next.delete("free");
+      setParams(next, { replace: true });
+    }
   };
 
   const asking = team !== null && (params.has("model") || !models.isPending);
@@ -90,10 +99,8 @@ export function Optimise() {
         }),
       );
       if (toRemember.current === team) {
-        const mine: MyTeam = free === undefined ? { team: team! } : { team: team!, free };
-        // Only said to be remembered if it was: storage may refuse.
-        if (saveTeam(mine)) setSaved(mine);
         toRemember.current = null;
+        remember(team!);
       }
       return data;
     },
@@ -109,7 +116,17 @@ export function Optimise() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    toRemember.current = positiveInt(form.team.trim());
+    // Advice already cached for this request is shown without a fetch, so the
+    // team is remembered now; otherwise once the fetch succeeds.
+    const asked = positiveInt(form.team.trim());
+    const cachedKey = [
+      "advice",
+      asked,
+      chosen || main?.model_version,
+      form.free === "" ? undefined : Number(form.free),
+    ];
+    if (asked !== null && queryClient.getQueryData(cachedKey) !== undefined) remember(asked);
+    else toRemember.current = asked;
     const next = new URLSearchParams();
     next.set("team", form.team.trim());
     if (chosen) next.set("model", chosen);
@@ -381,7 +398,8 @@ function sentence(text: string) {
 function TeamProblem({ error, team }: { error: Error; team: number | null }) {
   if (error instanceof ApiError) {
     const unknownTeam =
-      (error.status === 404 && (error.problem.detail ?? "").includes("entry/")) ||
+      // Only the team's own record: a 404 for its picks or history is not this.
+      (error.status === 404 && (error.problem.detail ?? "").endsWith(`entry/${team}/.`)) ||
       (error.status === 422 &&
         (error.problem.errors ?? []).some((e) => JSON.stringify(e.loc).includes("fpl_team_id")));
     if (unknownTeam) {

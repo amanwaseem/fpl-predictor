@@ -2,11 +2,15 @@
 // account, nothing sent anywhere. Storage can be missing or refuse (a private
 // window, blocked site data), so every access is guarded and the site works
 // exactly as before without it.
+//
+// The team ID alone: free transfers change every gameweek, so a count given
+// once would be wrong the next week, and the API estimates them anyway.
 
 const KEY = "fpl-predictor:my-team";
+// The advice route's own limit on a team ID (fpl/api/routes.py, get_advice).
 const MAX_TEAM_ID = 100_000_000;
 
-export type MyTeam = { team: number; free?: number };
+export type MyTeam = { team: number };
 
 export function savedTeam(): MyTeam | null {
   try {
@@ -14,12 +18,11 @@ export function savedTeam(): MyTeam | null {
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
     if (typeof value !== "object" || value === null) return null;
-    const { team, free } = value as Record<string, unknown>;
-    if (!Number.isInteger(team) || (team as number) < 1 || (team as number) > MAX_TEAM_ID) {
+    const { team } = value as Record<string, unknown>;
+    if (typeof team !== "number" || !Number.isInteger(team) || team < 1 || team > MAX_TEAM_ID) {
       return null;
     }
-    const ok = Number.isInteger(free) && (free as number) >= 0 && (free as number) <= 5;
-    return ok ? { team: team as number, free: free as number } : { team: team as number };
+    return { team };
   } catch {
     return null;
   }

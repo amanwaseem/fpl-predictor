@@ -150,6 +150,58 @@ test("a shared link shows its own team, and leaves mine remembered", async ({ pa
   await expect(page).toHaveURL(/team=321/);
 });
 
+test("a team asked for again after forgetting is remembered, though its advice is cached", async ({
+  page,
+}) => {
+  await stubAdvice(page, 321);
+  await page.goto("/optimise");
+  await page.getByLabel("FPL team ID").fill("321");
+  await page.getByRole("button", { name: "Get advice" }).click();
+  await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
+  await page.getByRole("button", { name: "Forget my team" }).click();
+  await page.goBack();
+  await expect(page).not.toHaveURL(/team=321/);
+
+  await page.getByLabel("FPL team ID").fill("321");
+  await page.getByRole("button", { name: "Get advice" }).click();
+  await expect(page.getByText("Remembered in this browser: team 321.")).toBeVisible();
+});
+
+test("My team in the header brings the remembered team back from a shared link", async ({
+  page,
+}) => {
+  await stubAdvice(page, 321);
+  await stubAdvice(page, 654);
+  await page.goto("/optimise");
+  await page.getByLabel("FPL team ID").fill("321");
+  await page.getByRole("button", { name: "Get advice" }).click();
+  await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
+  await page.goto("/optimise?team=654");
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "My team" })
+    .click();
+  await expect(page).toHaveURL(/team=321/);
+});
+
+test("a 404 for an existing team's picks is not called an unknown team", async ({ page }) => {
+  await page.route("**/v1/entries/8/advice*", (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/problem+json",
+      json: {
+        type: "about:blank",
+        title: "Not Found",
+        status: 404,
+        detail: "The FPL API has nothing at entry/8/event/10/picks/.",
+      },
+    }),
+  );
+  await page.goto("/optimise?team=8");
+  await expect(page.getByRole("alert")).toContainText("entry/8/event/10/picks/");
+  await expect(page.getByRole("alert")).not.toContainText("No FPL team has the ID");
+});
+
 test("with storage blocked, My team works as before", async ({ page }) => {
   await page.addInitScript(() => {
     for (const name of ["getItem", "setItem", "removeItem"] as const) {
