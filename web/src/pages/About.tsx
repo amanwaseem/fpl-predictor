@@ -1,14 +1,16 @@
 import { Link } from "react-router-dom";
 import { useModels } from "../api/queries";
 import { REPOSITORY } from "../log";
-import { modelAbout, modelName, roleName } from "../models";
+import { liveModels, modelAbout, modelName, roleName } from "../models";
+import { Loading } from "../components/bits";
+import { Problem } from "../components/Problem";
 import { useTitle } from "../useTitle";
 
 // How the site works, for FPL managers rather than developers (#176).
 export function About() {
   useTitle("How it works");
   const models = useModels();
-  const logged = (models.data?.models ?? []).filter((m) => m.role && m.role !== "retired");
+  const logged = liveModels(models.data?.models);
 
   return (
     <div className="wrap page prose">
@@ -54,6 +56,8 @@ export function About() {
 
       <section className="section" aria-labelledby="models">
         <h2 id="models">The models</h2>
+        {models.isPending && <Loading what="Reading the models" />}
+        {models.isError && <Problem error={models.error} />}
         <ul>
           {logged.map((m) => (
             <li key={m.model_version}>
