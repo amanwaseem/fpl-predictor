@@ -27,7 +27,7 @@ const PAGE = 50;
 
 const COLUMNS: { key: SortKey; label: string; numeric: boolean; className?: string }[] = [
   { key: "web_name", label: "Player", numeric: false },
-  { key: "price", label: "Price", numeric: true },
+  { key: "price", label: "Price", numeric: true, className: "hide-xs" },
   { key: "expected_minutes", label: "Minutes", numeric: true, className: "hide-sm" },
   { key: "predicted_points", label: "Predicted", numeric: true },
   { key: "actual_points", label: "Actual", numeric: true },
@@ -346,7 +346,7 @@ function Entry({ gameweek }: { gameweek: number }) {
                           </span>
                         </span>
                       </th>
-                      <td className="num price">£{r.price.toFixed(1)}m</td>
+                      <td className="num price hide-xs">£{r.price.toFixed(1)}m</td>
                       <td className="num hide-sm">{r.expected_minutes.toFixed(0)}′</td>
                       <td className="num">
                         <span className="points">

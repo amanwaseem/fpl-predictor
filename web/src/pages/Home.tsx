@@ -10,6 +10,7 @@ import {
   useStatus,
 } from "../api/queries";
 import { ClubBadge, Countdown, Loading, PlayerPhoto, StatusPill } from "../components/bits";
+import { savedTeam } from "../remember";
 import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
 import { ScorecardTables } from "../components/ScorecardTables";
@@ -52,7 +53,7 @@ export function Home() {
                 {latest ? `See GW${latest} predictions` : "See predictions"}
               </Link>
               <Link className="button button-on-ink" to="/optimise">
-                Optimise my team
+                {savedTeam() ? "Advice for your team" : "Optimise my team"}
               </Link>
             </div>
           </div>

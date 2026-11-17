@@ -12,6 +12,7 @@ test("the API is for developers: in the footer, not the main navigation", async 
     "Home",
     "Predictions",
     "My team",
+    "How it works",
   ]);
   await expect(page.getByRole("contentinfo").getByRole("link", { name: /API/ })).toHaveAttribute(
     "href",
@@ -37,4 +38,22 @@ test("the API stays the API", async ({ request }) => {
   const response = await request.get("/v1/no-such-route");
   expect(response.status()).toBe(404);
   expect(response.headers()["content-type"]).toContain("application/problem+json");
+});
+
+test("How it works names every logged model", async ({ page, request }) => {
+  const { models } = await (await request.get("/v1/models")).json();
+  await page.goto("/about");
+  await expect(page.getByRole("heading", { name: "Predictions you can check" })).toBeVisible();
+  const logged = models.filter((m: { role: string | null }) => m.role && m.role !== "retired");
+  await expect(page.getByRole("region", { name: "The models" }).getByRole("listitem")).toHaveCount(
+    logged.length,
+  );
+});
+
+test("the favicon and robots.txt are files, not the app", async ({ request }) => {
+  const icon = await request.get("/favicon.svg");
+  expect(icon.headers()["content-type"]).toContain("image/svg+xml");
+  const robots = await request.get("/robots.txt");
+  expect(robots.headers()["content-type"]).toContain("text/plain");
+  expect(await robots.text()).toContain("User-agent");
 });
