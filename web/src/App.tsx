@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useNavigationType } from "react-router-dom";
 import { SITE_NAME } from "./brand";
 import { REPOSITORY } from "./log";
+import { About } from "./pages/About";
 import { Gameweek, LatestGameweek } from "./pages/Gameweek";
 import { Home } from "./pages/Home";
 import { NotFound } from "./pages/NotFound";
@@ -31,6 +32,7 @@ export function App() {
             </NavLink>
             <NavLink to="/gameweeks">Predictions</NavLink>
             <NavLink to="/optimise">My team</NavLink>
+            <NavLink to="/about">How it works</NavLink>
           </nav>
         </div>
       </header>
@@ -41,6 +43,7 @@ export function App() {
           <Route path="/gameweeks/:gameweek" element={<Gameweek />} />
           <Route path="/players/:playerId" element={<Player />} />
           <Route path="/optimise" element={<Optimise />} />
+          <Route path="/about" element={<About />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -52,6 +55,7 @@ export function App() {
             Premier League or Fantasy Premier League.
           </p>
           <nav className="footer-links" aria-label="More">
+            <Link to="/about">How it works</Link>
             <a href={REPOSITORY}>Prediction log on GitHub</a>
             <a href="/docs">API for developers</a>
           </nav>

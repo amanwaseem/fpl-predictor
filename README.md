@@ -20,8 +20,14 @@ what the history shows.
 
 On top of the log sit a squad optimiser, a public API and a website:
 
-- **Website:** [fpl-predictor-aman.fly.dev](https://fpl-predictor-aman.fly.dev): this week's
-  top picks, every player's predictions, the track record, and "optimise my team"
+- **Website:** [fpl-predictor-aman.fly.dev](https://fpl-predictor-aman.fly.dev), free and with
+  no sign-up:
+  - **Predictions:** every player's expected points and minutes for the gameweek, with actual
+    points beside them once it is scored.
+  - **My team:** enter your FPL team ID for the best transfers, starting XI and captain. The ID
+    is remembered in your browser only, so next time it opens with your advice.
+  - **[How it works](https://fpl-predictor-aman.fly.dev/about):** how to read a prediction, the
+    models, why the track record can be trusted, and what the predictions can't do.
 - **API:** [interactive docs](https://fpl-predictor-aman.fly.dev/docs), read-only over the log
 
 ```bash

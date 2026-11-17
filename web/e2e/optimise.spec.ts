@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 test("the best squad from scratch is fifteen players, solved from the log", async ({ page }) => {
   await page.goto("/optimise");
@@ -71,7 +71,99 @@ test("an upstream failure is shown as the API words it", async ({ page }) => {
     }),
   );
   await page.goto("/optimise?team=77");
-  await expect(page.getByRole("alert")).toContainText("The FPL API did not answer.");
+  await expect(page.getByRole("alert")).toContainText("FPL isn’t answering right now");
+});
+
+test("a team FPL doesn't know is named, in a manager's words", async ({ page }) => {
+  await page.route("**/v1/entries/5/advice*", (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/problem+json",
+      json: {
+        type: "about:blank",
+        title: "Not Found",
+        status: 404,
+        detail: "The FPL API has nothing at entry/5/.",
+      },
+    }),
+  );
+  await page.goto("/optimise?team=5");
+  await expect(page.getByRole("alert")).toContainText("No FPL team has the ID 5");
+});
+
+// Remembering the reader's own team, in this browser only (#176). A small
+// stubbed answer is enough: what is tested is what is remembered, and when.
+async function stubAdvice(page: Page, id: number) {
+  const real = await (
+    await page.request.post("/v1/optimise", { data: { model: "baseline-v1" } })
+  ).json();
+  await page.route(`**/v1/entries/${id}/advice*`, (route) =>
+    route.fulfill({
+      json: {
+        fpl_team_id: id,
+        season: real.season,
+        gameweek: real.gameweek,
+        model_version: real.model_version,
+        deadline_utc: real.deadline_utc,
+        deadline_passed: false,
+        picks_gameweek: real.gameweek - 1,
+        cached: false,
+        estimates: { selling_prices: "estimated", free_transfers: "given" },
+        squad: real.squad,
+        plan: null,
+      },
+    }),
+  );
+}
+
+test("my team is remembered after asking, and can be forgotten", async ({ page }) => {
+  await stubAdvice(page, 321);
+  await page.goto("/optimise");
+  await page.getByLabel("FPL team ID").fill("321");
+  await page.getByRole("button", { name: "Get advice" }).click();
+  await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
+
+  await page.goto("/");
+  await expect(page.getByRole("link", { name: "Advice for your team" })).toBeVisible();
+  await page.goto("/optimise");
+  await expect(page).toHaveURL(/team=321/);
+  await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Forget my team" }).click();
+  await expect(page).not.toHaveURL(/team=/);
+  await page.goto("/optimise");
+  await expect(page.getByLabel("FPL team ID")).toHaveValue("");
+});
+
+test("a shared link shows its own team, and leaves mine remembered", async ({ page }) => {
+  await stubAdvice(page, 321);
+  await stubAdvice(page, 654);
+  await page.goto("/optimise");
+  await page.getByLabel("FPL team ID").fill("321");
+  await page.getByRole("button", { name: "Get advice" }).click();
+  await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
+
+  await page.goto("/optimise?team=654");
+  await expect(page.getByLabel("FPL team ID")).toHaveValue("654");
+  await expect(page.getByText("Remembered in this browser: team 321.")).toBeVisible();
+  await page.goto("/optimise");
+  await expect(page).toHaveURL(/team=321/);
+});
+
+test("with storage blocked, My team works as before", async ({ page }) => {
+  await page.addInitScript(() => {
+    for (const name of ["getItem", "setItem", "removeItem"] as const) {
+      Storage.prototype[name] = () => {
+        throw new DOMException("blocked", "SecurityError");
+      };
+    }
+  });
+  await stubAdvice(page, 321);
+  await page.goto("/optimise");
+  await page.getByLabel("FPL team ID").fill("321");
+  await page.getByRole("button", { name: "Get advice" }).click();
+  await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
+  await expect(page.getByText(/Remembered in this browser/)).toHaveCount(0);
 });
 
 test("the form follows the URL, back and forward included", async ({ page }) => {

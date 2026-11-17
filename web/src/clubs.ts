@@ -20,7 +20,7 @@ const CLUBS: Record<string, { bg: string; fg: string; name: string }> = {
   MUN: { bg: "#da291c", fg: "#ffffff", name: "Man Utd" },
   NEW: { bg: "#241f20", fg: "#ffffff", name: "Newcastle" },
   NFO: { bg: "#dd0000", fg: "#ffffff", name: "Nott'm Forest" },
-  SUN: { bg: "#eb172b", fg: "#ffffff", name: "Sunderland" },
+  SUN: { bg: "#d91528", fg: "#ffffff", name: "Sunderland" },
   TOT: { bg: "#132257", fg: "#ffffff", name: "Spurs" },
   WHU: { bg: "#7a263a", fg: "#ffffff", name: "West Ham" },
   WOL: { bg: "#fdb913", fg: "#111111", name: "Wolves" },

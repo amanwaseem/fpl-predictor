@@ -26,7 +26,8 @@ export function ScorecardTables({ season, models }: { season: string; models: Mo
         average error (MAE) is the headline: lower is better. A model is compared with the baseline
         only on the gameweeks both were scored, so the comparison is between models, not weeks.
       </p>
-      <div className="card card-flush table-scroll">
+      {/* Focusable, so a keyboard can scroll it on a phone: it has no links of its own. */}
+      <div className="card card-flush table-scroll" tabIndex={0} role="region" aria-label="Pooled">
         <table aria-label="Pooled">
           <thead>
             <tr>

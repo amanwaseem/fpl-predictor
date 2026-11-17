@@ -1,4 +1,4 @@
-// The site's name, in one place: a rename is this line, index.html's <title>
+// The site's name, in one place: a rename is this line, index.html's <title> and og: tags
 // and the README. Kept as the repository's name until a real one is chosen.
 export const SITE_NAME = "fpl-predictor";
 

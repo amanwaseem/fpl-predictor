@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, unwrap, type Schemas } from "../api/client";
+import { ApiError, api, unwrap, type Schemas } from "../api/client";
 import { useModels, usePhotoCodes } from "../api/queries";
 import { ClubBadge, Loading, PlayerPhoto } from "../components/bits";
 import { useTitle } from "../useTitle";
@@ -9,6 +9,7 @@ import { Problem } from "../components/Problem";
 import { SquadView } from "../components/SquadView";
 import { fixed, formatLocal, positiveInt, signed } from "../format";
 import { modelName } from "../models";
+import { forgetTeam, saveTeam, savedTeam, type MyTeam } from "../remember";
 
 type Plan = Schemas["Plan"];
 
@@ -49,6 +50,28 @@ export function Optimise() {
   const offered = live.map((m) => m.model_version);
   if (chosen && !offered.includes(chosen)) offered.push(chosen);
 
+  // The reader's own team, remembered in this browser (#176). Opening My team
+  // with no team in the link shows it; a link with a team shows that one and
+  // leaves the remembered one alone. Only a team the reader asked for here is
+  // remembered, once advice for it has come back.
+  const [saved, setSaved] = useState<MyTeam | null>(savedTeam);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    if (params.has("team") || saved === null) return;
+    const next = new URLSearchParams(params);
+    next.set("team", String(saved.team));
+    if (saved.free !== undefined && !params.has("free")) next.set("free", String(saved.free));
+    setParams(next, { replace: true });
+  }, [params, saved, setParams]);
+  const toRemember = useRef<number | null>(null);
+  const forget = () => {
+    forgetTeam();
+    setSaved(null);
+    setParams(new URLSearchParams());
+  };
+
   const asking = team !== null && (params.has("model") || !models.isPending);
   const advice = useQuery({
     queryKey: ["advice", team, model, free],
@@ -60,12 +83,20 @@ export function Optimise() {
     refetchOnWindowFocus: false,
     // A failure here may be the FPL API's; asking it again at once rarely helps.
     retry: false,
-    queryFn: () =>
-      unwrap(
+    queryFn: async () => {
+      const data = await unwrap(
         api.GET("/v1/entries/{fpl_team_id}/advice", {
           params: { path: { fpl_team_id: team! }, query: { model, free_transfers: free } },
         }),
-      ),
+      );
+      if (toRemember.current === team) {
+        const mine: MyTeam = free === undefined ? { team: team! } : { team: team!, free };
+        // Only said to be remembered if it was: storage may refuse.
+        if (saveTeam(mine)) setSaved(mine);
+        toRemember.current = null;
+      }
+      return data;
+    },
   });
 
   const fresh = useMutation({
@@ -78,6 +109,7 @@ export function Optimise() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    toRemember.current = positiveInt(form.team.trim());
     const next = new URLSearchParams();
     next.set("team", form.team.trim());
     if (chosen) next.set("model", chosen);
@@ -149,6 +181,14 @@ export function Optimise() {
             Get advice
           </button>
         </div>
+        {saved && (
+          <p className="muted small remembered">
+            Remembered in this browser: team {saved.team}.{" "}
+            <button type="button" className="link-button" onClick={forget}>
+              Forget my team
+            </button>
+          </p>
+        )}
         <details className="help">
           <summary>Where do I find my team ID?</summary>
           <ol>
@@ -157,14 +197,17 @@ export function Optimise() {
               The address ends like <code>/entry/1234567/event/9</code>: the number after{" "}
               <code>entry</code> is your team ID.
             </li>
-            <li>Nothing is saved, and no sign-in is needed here: your squad is public on FPL.</li>
+            <li>
+              No sign-in is needed: your squad is public on FPL. Your team ID is remembered in this
+              browser only, so My team opens with your advice next time.
+            </li>
           </ol>
         </details>
       </form>
 
       {models.isError && <Problem error={models.error} />}
       {advice.isFetching && <Loading what="Reading your team and working out the best moves" />}
-      {advice.isError && <Problem error={advice.error} />}
+      {advice.isError && <TeamProblem error={advice.error} team={team} />}
       {advice.data && (
         <section className="section" aria-labelledby="advice">
           <div className="section-head">
@@ -183,12 +226,21 @@ export function Optimise() {
           {advice.data.plan && <PlanView plan={advice.data.plan} codes={adviceCodes} />}
           <h3 className="section">Your best XI</h3>
           <SquadView squad={advice.data.squad} label="Advised squad" codes={adviceCodes} />
-          <p className="note small after">
-            Based on your squad as of gameweek {advice.data.picks_gameweek}. FPL keeps selling
-            prices and free transfers private, so unless you gave them they were estimated. Selling
-            prices: {advice.data.estimates.selling_prices} Free transfers:{" "}
-            {advice.data.estimates.free_transfers}
-          </p>
+          <div className="note small after">
+            <p>
+              Based on your squad as of gameweek {advice.data.picks_gameweek}. FPL keeps selling
+              prices and free transfers private, so unless you gave them they were estimated:
+            </p>
+            <ul>
+              <li>Selling prices: {sentence(advice.data.estimates.selling_prices)}</li>
+              <li>
+                Free transfers:{" "}
+                {advice.data.estimates.free_transfers === "given"
+                  ? "as you gave them."
+                  : sentence(advice.data.estimates.free_transfers)}
+              </li>
+            </ul>
+          </div>
         </section>
       )}
 
@@ -317,4 +369,43 @@ function PlanView({ plan, codes }: { plan: Plan; codes: Map<number, number | nul
       )}
     </>
   );
+}
+
+// The API's estimate notes are fragments ("purchase price from ..."): as a sentence.
+function sentence(text: string) {
+  return text.endsWith(".") ? text : `${text}.`;
+}
+
+// The ways asking for advice usually fails, in a manager's words rather than
+// the API's: a mistyped team ID, or FPL not answering. Anything else as it is.
+function TeamProblem({ error, team }: { error: Error; team: number | null }) {
+  if (error instanceof ApiError) {
+    const unknownTeam =
+      (error.status === 404 && (error.problem.detail ?? "").includes("entry/")) ||
+      (error.status === 422 &&
+        (error.problem.errors ?? []).some((e) => JSON.stringify(e.loc).includes("fpl_team_id")));
+    if (unknownTeam) {
+      return (
+        <div role="alert" className="problem">
+          <strong>No FPL team has the ID {team ?? "given"}</strong>
+          <p>
+            Check the number after <code>/entry/</code> in the address of your FPL Points page: see
+            &ldquo;Where do I find my team ID?&rdquo; above.
+          </p>
+        </div>
+      );
+    }
+    if (error.status === 502 || error.status === 504) {
+      return (
+        <div role="alert" className="problem">
+          <strong>FPL isn&rsquo;t answering right now</strong>
+          <p>
+            Your squad is read from FPL, which is sometimes down around deadlines and while it
+            updates between gameweeks. Try again in a few minutes.
+          </p>
+        </div>
+      );
+    }
+  }
+  return <Problem error={error} />;
 }
