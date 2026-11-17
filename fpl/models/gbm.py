@@ -1,7 +1,8 @@
-"""gbm-v1: gradient-boosted trees on the feature table (#85, ADR 0019).
+"""gbm-v1 and gbm-v2: gradient-boosted trees on the feature table (#85, ADR 0019).
 
-    fpl-predict-gbm                  # predict the next gameweek, into predictions/
+    fpl-predict-gbm                  # gbm-v1, the next gameweek, into predictions/
     fpl-predict-gbm --out scratch/   # exploratory, never the log
+    fpl-predict-gbm --model gbm-v2   # gbm-v2
 
 Four LightGBM models, trained on 2016/17-2025/26 by fpl.models.train_gbm and
 evaluated here in plain Python (fpl.models.trees), so a prediction still needs
@@ -20,6 +21,11 @@ includes the ordinary chance of missing a game. The snapshot's flag adds what
 it knows about this player this week: its chance of playing scales points and
 minutes, as it does for every logged model and as fpl-verify checks. A player
 flagged available is unchanged, and one who cannot play is zeroed.
+
+gbm-v2 (#174) is gbm-v1 with the defensive-contribution columns as inputs too.
+Those points began in 2025/26, so nine of gbm-v1's ten training seasons have
+none, and it under-predicts the regular starters who score them
+(reports/bias-2026-27.md). Each version's inputs are fixed here, by name.
 
 The trained models are one JSON file, a GitHub release asset named in
 fpl/models/registry.json with its SHA-256; it is fetched once into data/models/
@@ -44,7 +50,7 @@ from fpl.ingest.snapshot import (
     usable_rounds,
 )
 from fpl.log.contract import write_entry
-from fpl.models.feature_table import FEATURE_VERSION, SeasonData, build_gameweek, season_after
+from fpl.models.feature_table import BUILDS, SeasonData, build_gameweek, season_after
 from fpl.models.features import previous_season
 from fpl.models.trees import Model
 from fpl.paths import require_project_root
@@ -91,40 +97,52 @@ FEATURES = [
     "expected_goals_against",
     "expected_clean_sheets",
 ] + [f"is_{p.lower()}" for p in POSITIONS]
+FEATURES_V2 = FEATURES + [
+    "defensive_rule",
+    "defensive_per90_5",
+    "defensive_per90_season",
+    "defensive_hits_last5",
+]
+# Each version's inputs. A version is fixed from its first entry (ADR 0005).
+VERSIONS = {"gbm-v1": FEATURES, "gbm-v2": FEATURES_V2}
 PARTS = ("sixty", "minutes_long", "minutes_short", "points")
 
 
-def vector(row):
+def vector(row, features=FEATURES):
     """A feature-table row as the models' input list. None is missing."""
     values = dict(row)
     for position in POSITIONS:
         values[f"is_{position.lower()}"] = 1.0 if row["position"] == position else 0.0
-    return [None if values.get(name) is None else float(values[name]) for name in FEATURES]
+    return [None if values.get(name) is None else float(values[name]) for name in features]
 
 
 class Bundle:
     """The four trained models, and what they were trained on."""
 
     def __init__(self, artifact):
-        if artifact["features"] != FEATURES:
-            raise ValueError("the artifact was trained on different inputs than this code builds")
+        version = artifact.get("version")
+        if version not in VERSIONS:
+            raise ValueError(f"the artifact is {version!r}, which this code does not know")
+        self.features = VERSIONS[version]
+        if artifact["features"] != self.features:
+            raise ValueError(f"the artifact was trained on other inputs than {version} reads")
         # The same columns can change what they mean; the version says when.
-        if artifact.get("feature_version") != FEATURE_VERSION:
+        if artifact.get("feature_version") not in BUILDS:
             raise ValueError(
                 f"the artifact was trained on {artifact.get('feature_version')} features, and "
-                f"this code builds {FEATURE_VERSION}: a new feature version is a new model"
+                f"this code builds {', '.join(BUILDS)}: a new feature version is a new model"
             )
         self.meta = {k: v for k, v in artifact.items() if k != "models"}
         # Set by load(), from the registry: the artifact's identity.
         self.sha256 = None
         self.models = {part: Model(artifact["models"][part]) for part in PARTS}
         for part, model in self.models.items():
-            if model.feature_names != FEATURES:
+            if model.feature_names != self.features:
                 raise ValueError(f"the {part} model was trained on other inputs")
 
     def predict(self, row):
         """(points, minutes) for one feature-table row, before the snapshot's availability."""
-        x = vector(row)
+        x = vector(row, self.features)
         p = self.models["sixty"].predict(x)
         long, short = (self.models[k].predict(x) for k in ("minutes_long", "minutes_short"))
         cap = FULL_MATCH * row["n_fixtures"]
@@ -168,6 +186,8 @@ def load(version=MODEL_VERSION, registry=REGISTRY, cache=CACHE):
         partial.write_bytes(body)
         partial.replace(path)
     bundle = Bundle(json.loads(body))
+    if bundle.meta.get("version") != version:
+        raise SystemExit(f"{where} is {bundle.meta.get('version')}, registered as {version}.")
     bundle.sha256 = found
     return bundle
 
@@ -242,7 +262,7 @@ def predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, bundl
     return rows
 
 
-def main(requested_gw, out_dir, snapshot_id=None):
+def main(requested_gw, out_dir, snapshot_id=None, version=MODEL_VERSION):
     snap, bootstrap, fixtures, players_dir = load_snapshot(snapshot_id)
     target_gw, deadline = resolve_target_gw(bootstrap["events"], requested_gw)
     usable, excluded = usable_rounds(bootstrap["events"], target_gw)
@@ -254,11 +274,11 @@ def main(requested_gw, out_dir, snapshot_id=None):
     if not usable:
         raise SystemExit(f"\nNo settled rounds before GW{target_gw}. Nothing was written.")
     # After the refusals above, so a run that will not predict fetches nothing.
-    bundle = load()
-    print(f"model:     {MODEL_VERSION}, artifact {(bundle.sha256 or 'unregistered')[:12]}")
+    bundle = load(version)
+    print(f"model:     {version}, artifact {(bundle.sha256 or 'unregistered')[:12]}")
     histories, pasts = player_summaries(bootstrap, players_dir)
     rows = predict_rows(bootstrap, fixtures, histories, pasts, target_gw, usable, bundle)
-    outpath = write_entry(rows, out_dir, target_gw, MODEL_VERSION, snap.name, deadline)
+    outpath = write_entry(rows, out_dir, target_gw, version, snap.name, deadline)
     print(f"\nwrote {len(rows)} predictions -> {outpath}\n")
     for r in rows[:20]:
         print(
@@ -272,6 +292,7 @@ def cli(argv=None):
     """`fpl-predict-gbm`, or `python -m fpl.models.gbm`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--gw", type=int, default=None, help="target gameweek (default: next)")
+    ap.add_argument("--model", default=MODEL_VERSION, choices=sorted(VERSIONS))
     ap.add_argument(
         "--out",
         default=None,
@@ -287,7 +308,7 @@ def cli(argv=None):
     )
     args = ap.parse_args(argv)
     require_project_root()
-    return main(args.gw, args.out, args.snapshot)
+    return main(args.gw, args.out, args.snapshot, args.model)
 
 
 if __name__ == "__main__":

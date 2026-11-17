@@ -124,7 +124,7 @@ class TestSyntheticSeason(FeaturesCase):
         features.build_season(self.engine, "2016/17")
         with self.engine.connect() as c:
             self.assertEqual(features.stale_seasons(c, ["2016/17"]), [])
-            with unittest.mock.patch.object(features, "FEATURE_VERSION", "features-v2"):
+            with unittest.mock.patch.object(features, "FEATURE_VERSION", "features-next"):
                 self.assertEqual(features.stale_seasons(c, ["2016/17"]), ["2016/17"])
 
     def test_a_change_to_the_season_before_rebuilds_the_one_after(self):

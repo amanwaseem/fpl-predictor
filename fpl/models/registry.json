@@ -33,5 +33,40 @@
       "2025/26"
     ],
     "url": "https://github.com/amanwaseem/fpl-predictor/releases/download/model-gbm-v1/gbm-v1.json"
+  },
+  "gbm-v2": {
+    "feature_version": "features-v2",
+    "git_sha": "ac028171f11ec3e356915f1cda28613b3196e12f",
+    "held_out": {
+      "2023/24": {
+        "mae": 0.9569603036889412,
+        "mae_gain": 0.06813840791358106
+      },
+      "2024/25": {
+        "mae": 0.994786849945525,
+        "mae_gain": 0.06528537407696611
+      },
+      "2025/26": {
+        "mae": 0.9645321743761479,
+        "mae_gain": 0.09590608562873082
+      }
+    },
+    "lightgbm": "4.7.0",
+    "release": "model-gbm-v2",
+    "sha256": "29d92f0cf723c8a6aab8c834cf9985cd49a74b2534fe81a7528cca2ceb29c15d",
+    "trained_at_utc": "2026-11-17T17:28:11Z",
+    "trained_on": [
+      "2016/17",
+      "2017/18",
+      "2018/19",
+      "2019/20",
+      "2020/21",
+      "2021/22",
+      "2022/23",
+      "2023/24",
+      "2024/25",
+      "2025/26"
+    ],
+    "url": "https://github.com/amanwaseem/fpl-predictor/releases/download/model-gbm-v2/gbm-v2.json"
   }
 }

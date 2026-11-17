@@ -59,6 +59,7 @@ def season(seed=7, with_xg=True):
                         "value": 50 + f["event"],
                         "expected_goals": f"{rng.random():.2f}" if with_xg else None,
                         "expected_assists": f"{rng.random():.2f}" if with_xg else None,
+                        "defensive_contribution": rng.randint(0, 15),
                     }
                 )
     return SeasonData(
@@ -86,6 +87,7 @@ def poison_from(data, cut):
                     value=999,
                     expected_goals="9.00",
                     expected_assists="9.00",
+                    defensive_contribution=40,
                 )
     for f in data.fixtures:
         if f["event"] >= cut:
@@ -177,6 +179,37 @@ class TestRows(unittest.TestCase):
     def test_a_player_whose_club_does_not_play_has_no_row(self):
         self.data.clubs[1] = [(9, 1, 38)]
         self.assertNotIn(1, self.rows(3))
+
+    def test_defensive_columns_come_from_the_last_five_rounds(self):
+        row = self.rows(5)[2]  # a defender
+        history = [h for h in self.data.histories[2] if h["round"] < 5]
+        minutes = sum(h["minutes"] for h in history)
+        count = sum(h["defensive_contribution"] for h in history)
+        self.assertEqual(row["defensive_rule"], 1)
+        self.assertAlmostEqual(row["defensive_per90_5"], count / minutes * 90)
+        self.assertEqual(
+            row["defensive_hits_last5"], sum(h["defensive_contribution"] >= 10 for h in history)
+        )
+
+    def test_the_threshold_is_a_match_s_not_a_double_gameweek_s(self):
+        # A defender's two fixtures in one round, six each: twelve in the round,
+        # but neither match reached ten, so neither scored.
+        first = {"round": 1, "was_home": False, "minutes": 90, "defensive_contribution": 6}
+        self.data.histories[2] = [first | {"fixture": 10}, first | {"fixture": 11}]
+        row = self.rows(2)[2]
+        self.assertEqual(row["defensive_hits_last5"], 0)
+        self.assertAlmostEqual(row["defensive_per90_5"], 6.0)
+
+    def test_a_season_before_the_rule_has_no_defensive_columns(self):
+        self.data.season = "2024/25"
+        for rows in self.data.histories.values():
+            for h in rows:
+                h["defensive_contribution"] = None
+        row = self.rows(4)[2]
+        self.assertEqual(row["defensive_rule"], 0)
+        self.assertIsNone(row["defensive_per90_5"])
+        self.assertIsNone(row["defensive_per90_season"])
+        self.assertIsNone(row["defensive_hits_last5"])
 
     def test_the_version_is_on_every_row(self):
         self.assertTrue(

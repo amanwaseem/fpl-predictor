@@ -34,17 +34,29 @@ Windows are a player's most recent rounds with a row before the gameweek,
 1, 3 or 5 of them, or the season to date; per-90 rates are over the window's
 minutes, and missing when it has none. Expected goals and assists are missing
 for seasons before FPL published them (2022/23).
+
+The defensive-contribution columns (features-v2, #174) are missing for seasons
+the database has no counts for, which are those before the rule (2025/26):
+`defensive_rule` says whether the season scored them at all. Before it, a
+defensive contribution was worth nothing, so a model trained across seasons
+needs to know which side of the rule a row is on.
 """
 
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from fpl.models.features import settled_before
+from fpl.models.features import defensive_points, settled_before
 from fpl.models.teams import Ratings, clean_sheet_probability, team_matches
 
-FEATURE_VERSION = "features-v1"
+FEATURE_VERSION = "features-v2"
+# Every version this code builds the columns of, unchanged: features-v2 adds the
+# defensive-contribution columns and builds every features-v1 column as v1 did,
+# so a model trained on v1 reads v2 rows the same (gbm-v1 does).
+BUILDS = ("features-v1", "features-v2")
 WINDOWS = (3, 5)
+# The first season whose points include defensive contributions.
+DEFENSIVE_RULE_FROM = "2025/26"
 
 
 @dataclass
@@ -54,7 +66,8 @@ class SeasonData:
     fixtures: the fixtures endpoint's dicts (id, event, team_h, team_a,
     team_h_score, team_a_score, finished). histories: element-summary history
     rows per element (round, fixture, was_home, minutes, total_points,
-    expected_goals, expected_assists, bonus, value). settled: gameweeks whose
+    expected_goals, expected_assists, bonus, value, and defensive_contribution
+    where the season records it). settled: gameweeks whose
     results are final. clubs: per element, [(team, first gameweek, last
     gameweek)]. players: per element, position and FPL's code. previous: the
     season before, per code, {"minutes", "points"}. status: per (gameweek,
@@ -104,8 +117,9 @@ def ratings_before(data, gameweek, usable):
     return Ratings(matches, source=source)
 
 
-def _rounds(rows):
-    """Per round, most recent first: minutes, points, xG, xA, bonus, fixtures, a 60."""
+def _rounds(rows, position=None):
+    """Per round, most recent first: minutes, points, xG, xA, bonus, a 60, and the
+    defensive-contribution count and points (None where the rows have no count)."""
     by_round: defaultdict[int, dict[str, Any]] = defaultdict(
         lambda: {
             "minutes": 0,
@@ -115,6 +129,8 @@ def _rounds(rows):
             "bonus": 0,
             "sixty": False,
             "value": None,
+            "defensive": None,
+            "defensive_points": None,
         }
     )
     for row in sorted(rows, key=lambda r: r["round"]):
@@ -129,6 +145,13 @@ def _rounds(rows):
                 entry[key] = (entry[key] or 0.0) + float(row[source])
         if row.get("value") is not None:
             entry["value"] = row["value"]
+        if row.get("defensive_contribution") is not None:
+            # Per fixture, then summed: the threshold is a match's, so a double
+            # gameweek's two counts are not added before it is applied.
+            entry["defensive"] = (entry["defensive"] or 0) + row["defensive_contribution"]
+            entry["defensive_points"] = (entry["defensive_points"] or 0) + defensive_points(
+                row, position
+            )
     return [by_round[r] for r in sorted(by_round, reverse=True)]
 
 
@@ -166,6 +189,18 @@ def player_features(rounds):
     return row
 
 
+def defensive_features(rounds, season):
+    """The defensive-contribution columns, from the same rounds as player_features."""
+    last5 = [r for r in rounds[:5] if r["defensive_points"] is not None]
+    return {
+        "defensive_rule": 1 if season >= DEFENSIVE_RULE_FROM else 0,
+        "defensive_per90_5": _per90(rounds[:5], "defensive"),
+        "defensive_per90_season": _per90(rounds, "defensive"),
+        # Rounds of the last five that scored them; missing with no counts.
+        "defensive_hits_last5": sum(r["defensive_points"] > 0 for r in last5) if last5 else None,
+    }
+
+
 def _xgi(rounds):
     xg, xa = _per90(rounds, "xg"), _per90(rounds, "xa")
     return None if xg is None and xa is None else (xg or 0.0) + (xa or 0.0)
@@ -188,7 +223,7 @@ def build_gameweek(data, gameweek):
             continue
         # The logged models' boundary: fpl.models.features.settled_before.
         before = [h for h in data.histories.get(element, []) if settled_before(h, gameweek, usable)]
-        rounds = _rounds(before)
+        rounds = _rounds(before, player["position"])
         previous = data.previous.get(player["code"])
         prices = [r["value"] for r in rounds if r["value"] is not None]
         row = {
@@ -211,6 +246,7 @@ def build_gameweek(data, gameweek):
             "feature_version": FEATURE_VERSION,
         }
         row |= player_features(rounds)
+        row |= defensive_features(rounds, data.season)
         row |= _team_features(ratings, team, by_team[team])
         rows.append(row)
     return rows

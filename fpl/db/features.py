@@ -76,6 +76,7 @@ def read_season(connection, season):
             stats.value,
             stats.expected_goals,
             stats.expected_assists,
+            stats.defensive_contribution,
         )
         .join(Fixture, (Fixture.season == stats.season) & (Fixture.fixture_id == stats.fixture_id))
         .where(stats.season == season)
@@ -92,6 +93,7 @@ def read_season(connection, season):
                 "value": r.value,
                 "expected_goals": r.expected_goals,
                 "expected_assists": r.expected_assists,
+                "defensive_contribution": r.defensive_contribution,
             }
         )
     settled = set(
@@ -198,6 +200,7 @@ def fingerprint(connection, season):
                     stats.value,
                     stats.expected_goals,
                     stats.expected_assists,
+                    stats.defensive_contribution,
                 ],
                 stats.season == s,
             )

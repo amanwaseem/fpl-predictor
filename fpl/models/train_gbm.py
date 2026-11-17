@@ -1,7 +1,11 @@
-"""Train gbm-v1 on the past seasons, and say how well it does held out (#85).
+"""Train a gbm version on the past seasons, and say how well it does held out (#85).
 
-    fpl-train-gbm                     # cross-validate, train, write the artifact
+    fpl-train-gbm                     # gbm-v2: cross-validate, train, write the artifact
     fpl-train-gbm --cv-only           # the held-out report alone
+    fpl-train-gbm --model gbm-v1      # cross-validation only: gbm-v1 is registered
+
+A registered version is fixed from its first entry (ADR 0005), so training
+refuses to replace one; --cv-only still reports on it.
 
 Reads `player_gameweek_features` (#84) and each gameweek's actual points and
 minutes from the database, for 2016/17-2025/26 only: the live season is held
@@ -18,8 +22,8 @@ together), and beside a naive comparator on the same rows: recent points per
 
 ## Output
 
-- reports/gbm-v1.md: the held-out report.
-- dist/gbm-v1.json: the four trained models, for the release asset.
+- reports/<version>.md: the held-out report.
+- dist/<version>.json: the four trained models, for the release asset.
 - fpl/models/registry.json: its SHA-256, URL, training range and git SHA.
 
 Needs the `ml` group (LightGBM) and DATABASE_URL. Run from the repository root.
@@ -39,13 +43,10 @@ from typing import Any
 from fpl.evaluation import metrics
 from fpl.ingest.history import SEASONS
 from fpl.models.feature_table import season_after
-from fpl.models.gbm import FEATURES, MODEL_VERSION, REGISTRY, Bundle, vector
+from fpl.models.gbm import REGISTRY, VERSIONS, Bundle, vector
 from fpl.paths import require_project_root
 
-RELEASE = "model-gbm-v1"
-URL = f"https://github.com/amanwaseem/fpl-predictor/releases/download/{RELEASE}/gbm-v1.json"
-ARTIFACT = Path("dist/gbm-v1.json")
-REPORT = Path("reports/gbm-v1.md")
+NEWEST = "gbm-v2"
 CV_SEASONS = SEASONS[-3:]
 BOOTSTRAP = 500
 SEED = 85
@@ -119,17 +120,26 @@ def training_rows(engine, seasons):
     return rows
 
 
-def fit(rows, rounds=ROUNDS):
+def release(version):
+    """(release tag, asset URL, artifact path, report path) for `version`."""
+    tag = f"model-{version}"
+    url = f"https://github.com/amanwaseem/fpl-predictor/releases/download/{tag}/{version}.json"
+    return tag, url, Path(f"dist/{version}.json"), Path(f"reports/{version}.md")
+
+
+def fit(rows, rounds=ROUNDS, features=VERSIONS[NEWEST]):
     """The four models, trained on `rows`, as model_to_string() texts."""
     import lightgbm
     import numpy
 
     def train(part, subset, label):
-        x = numpy.array([[numpy.nan if v is None else v for v in vector(r)] for r, _ in subset])
+        x = numpy.array(
+            [[numpy.nan if v is None else v for v in vector(r, features)] for r, _ in subset]
+        )
         y = numpy.array([label(lab) for _, lab in subset], dtype=float)
         booster = lightgbm.train(
             PARAMS | OBJECTIVES[part],
-            lightgbm.Dataset(x, label=y, feature_name=FEATURES, free_raw_data=True),
+            lightgbm.Dataset(x, label=y, feature_name=features, free_raw_data=True),
             num_boost_round=rounds,
         )
         return booster.model_to_string()
@@ -146,14 +156,14 @@ def fit(rows, rounds=ROUNDS):
     }
 
 
-def artifact(models, seasons):
+def artifact(models, seasons, version=NEWEST):
     import lightgbm
 
     from fpl.models.feature_table import FEATURE_VERSION
 
     return {
-        "version": MODEL_VERSION,
-        "features": FEATURES,
+        "version": version,
+        "features": VERSIONS[version],
         "feature_version": FEATURE_VERSION,
         "trained_on": seasons,
         "lightgbm": lightgbm.__version__,
@@ -207,6 +217,7 @@ def evaluate(bundle, rows):
     for row, label in rows:
         points, _ = bundle.predict(row)
         by_gw[row["gameweek"]].append((points, naive(row), label["points"]))
+    every = [s for v in by_gw.values() for s in v]
 
     def mae(sample, i):
         return sum(abs(s[i] - s[2]) for s in sample) / len(sample)
@@ -214,7 +225,6 @@ def evaluate(bundle, rows):
     def rho(sample, i):
         return metrics.summary([(s[i], s[2]) for s in sample])["spearman"]
 
-    every = [s for v in by_gw.values() for s in v]
     ci = bootstrap(
         by_gw,
         {
@@ -231,6 +241,8 @@ def evaluate(bundle, rows):
             "mae_ci": ci["mae"],
             "spearman": rho(every, 0),
             "spearman_ci": ci["spearman"],
+            # Mean predicted minus actual: below zero is under-predicting (#174).
+            "bias": sum(s[0] - s[2] for s in every) / len(every),
         },
         "naive": {"mae": mae(every, 1), "spearman": rho(every, 1)},
         "mae_gain": mae(every, 1) - mae(every, 0),
@@ -238,12 +250,13 @@ def evaluate(bundle, rows):
     }
 
 
-def cross_validate(rows):
+def cross_validate(rows, version=NEWEST):
     folds = {}
     for season in CV_SEASONS:
         train = [r for r in rows if r[0]["season"] < season]
         test = [r for r in rows if r[0]["season"] == season]
-        bundle = Bundle(artifact(fit(train), sorted({r[0]["season"] for r in train})))
+        seasons = sorted({r[0]["season"] for r in train})
+        bundle = Bundle(artifact(fit(train, features=VERSIONS[version]), seasons, version))
         folds[season] = evaluate(bundle, test)
         print(
             f"{season}: MAE {folds[season]['gbm']['mae']:.3f} "
@@ -252,7 +265,7 @@ def cross_validate(rows):
     return folds
 
 
-def report(folds, live=None):
+def report(folds, live=None, version=NEWEST):
     def ci(pair):
         return "n/a" if pair[0] is None else f"{pair[0]:.3f} to {pair[1]:.3f}"
 
@@ -261,26 +274,27 @@ def report(folds, live=None):
         return "n/a" if x is None else f"{x:.3f}"
 
     lines = [
-        f"# {MODEL_VERSION}: held-out report",
+        f"# {version}: held-out report",
         "",
         "Rolling-origin cross-validation by season: each season predicted by a model trained "
         "on the seasons before it alone. 95% intervals from a bootstrap over gameweeks. "
         '"Naive" is recent points per 90 times recent minutes, on the same rows. Lower MAE '
-        "is better; a gain above zero is gbm-v1 ahead.",
+        f"is better; a gain above zero is {version} ahead. Bias is mean predicted minus "
+        "actual points: below zero is under-predicting.",
         "",
-        "Not evidence of how gbm-v1 predicts: that is the log, from its first entry. "
+        f"Not evidence of how {version} predicts: that is the log, from its first entry. "
         "This decides whether to log it (SPEC section 6).",
         "",
         "| Held out | Rows | MAE | MAE 95% | Naive MAE | Gain | Gain 95% "
-        "| Spearman | Spearman 95% |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Spearman | Spearman 95% | Bias |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for season, f in list(folds.items()) + ([("2026/27 so far", live)] if live else []):
         g = f["gbm"]
         lines.append(
             f"| {season} | {f['n']} | {g['mae']:.3f} | {ci(g['mae_ci'])} | "
             f"{f['naive']['mae']:.3f} | {f['mae_gain']:+.3f} | {ci(f['mae_gain_ci'])} | "
-            f"{three(g['spearman'])} | {ci(g['spearman_ci'])} |"
+            f"{three(g['spearman'])} | {ci(g['spearman_ci'])} | {g['bias']:+.3f} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -291,8 +305,16 @@ def git_sha():
     ).stdout.strip()
 
 
-def main(cv_only=False):
+def main(cv_only=False, version=NEWEST):
     from fpl.db.session import make_engine
+
+    registered = json.loads(REGISTRY.read_text()) if REGISTRY.exists() else {}
+    if version in registered and not cv_only:
+        raise SystemExit(
+            f"{version} is registered, and a version is fixed from its first entry "
+            "(ADR 0005). Run with --cv-only for its report, or train a new version."
+        )
+    tag, url, artifact_path, report_path = release(version)
 
     engine = make_engine()
     try:
@@ -305,25 +327,25 @@ def main(cv_only=False):
         f"{len(rows)} training rows, {len(SEASONS)} seasons; {len(live)} rows of "
         f"{live_season} held out"
     )
-    folds = cross_validate(rows)
+    folds = cross_validate(rows, version)
     if cv_only:
-        print(report(folds))
+        print(report(folds, version=version))
         return 0
 
-    models = fit(rows)
-    bundle_data = artifact(models, SEASONS)
+    models = fit(rows, features=VERSIONS[version])
+    bundle_data = artifact(models, SEASONS, version)
     live_figures = evaluate(Bundle(bundle_data), live) if live else None
-    REPORT.parent.mkdir(exist_ok=True)
-    REPORT.write_text(report(folds, live_figures))
-    ARTIFACT.parent.mkdir(exist_ok=True)
+    report_path.parent.mkdir(exist_ok=True)
+    report_path.write_text(report(folds, live_figures, version))
+    artifact_path.parent.mkdir(exist_ok=True)
     body = json.dumps(bundle_data, sort_keys=True).encode()
-    ARTIFACT.write_bytes(body)
+    artifact_path.write_bytes(body)
     digest = hashlib.sha256(body).hexdigest()
-    registry = json.loads(REGISTRY.read_text()) if REGISTRY.exists() else {}
-    registry[MODEL_VERSION] = {
+    registry = registered
+    registry[version] = {
         "sha256": digest,
-        "url": URL,
-        "release": RELEASE,
+        "url": url,
+        "release": tag,
         "trained_on": SEASONS,
         "feature_version": bundle_data["feature_version"],
         "lightgbm": bundle_data["lightgbm"],
@@ -335,8 +357,8 @@ def main(cv_only=False):
     }
     REGISTRY.parent.mkdir(exist_ok=True)
     REGISTRY.write_text(json.dumps(registry, indent=2, sort_keys=True) + "\n")
-    print(f"\nwrote {ARTIFACT} (sha256 {digest}), {REPORT}, {REGISTRY}")
-    print(f"publish: gh release create {RELEASE} {ARTIFACT}")
+    print(f"\nwrote {artifact_path} (sha256 {digest}), {report_path}, {REGISTRY}")
+    print(f"publish: gh release create {tag} {artifact_path}")
     return 0
 
 
@@ -344,9 +366,10 @@ def cli(argv=None):
     """`fpl-train-gbm`, or `python -m fpl.models.train_gbm`."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--cv-only", action="store_true", help="the held-out report, no artifact")
+    ap.add_argument("--model", default=NEWEST, choices=sorted(VERSIONS))
     args = ap.parse_args(argv)
     require_project_root()
-    return main(args.cv_only)
+    return main(args.cv_only, args.model)
 
 
 if __name__ == "__main__":

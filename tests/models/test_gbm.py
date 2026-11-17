@@ -1,4 +1,4 @@
-"""gbm-v1's prediction side, fpl.models.gbm (#85): no LightGBM needed."""
+"""gbm-v1's and gbm-v2's prediction side, fpl.models.gbm (#85, #174): no LightGBM needed."""
 
 import hashlib
 import json
@@ -12,7 +12,7 @@ from tests.support.gbm_fixture import tiny_artifact, tiny_bundle
 
 
 def feature_row(**values):
-    row = dict.fromkeys(gbm.FEATURES)
+    row = dict.fromkeys(gbm.FEATURES_V2)
     row |= {"position": "MID", "n_fixtures": 1, "gameweek": 5}
     return row | values
 
@@ -33,6 +33,18 @@ class TestVector(unittest.TestCase):
     def test_an_artifact_for_other_inputs_is_refused(self):
         with self.assertRaises(ValueError):
             gbm.Bundle({"features": gbm.FEATURES[:-1], "models": {}})
+        with self.assertRaises(ValueError):
+            gbm.Bundle(tiny_artifact("gbm-v2") | {"features": gbm.FEATURES})
+
+    def test_gbm_v1_trained_on_features_v1_still_loads(self):
+        # features-v2 only adds columns (#174): gbm-v1's artifact names v1.
+        bundle = gbm.Bundle(tiny_artifact() | {"feature_version": "features-v1"})
+        self.assertEqual(bundle.features, gbm.FEATURES)
+
+    def test_gbm_v2_reads_the_defensive_columns(self):
+        x = gbm.vector(feature_row(defensive_per90_5=11.0), gbm.FEATURES_V2)
+        self.assertEqual(x[gbm.FEATURES_V2.index("defensive_per90_5")], 11.0)
+        self.assertEqual(gbm.FEATURES_V2[: len(gbm.FEATURES)], gbm.FEATURES)
 
 
 class TestBundle(unittest.TestCase):
@@ -47,6 +59,12 @@ class TestBundle(unittest.TestCase):
         bundle = tiny_bundle()
         low, _ = bundle.predict(feature_row(points_per90_5=2.0))
         high, _ = bundle.predict(feature_row(points_per90_5=6.0))
+        self.assertGreater(high, low)
+
+    def test_gbm_v2_predicts_from_its_defensive_inputs(self):
+        bundle = tiny_bundle("gbm-v2")
+        low, _ = bundle.predict(feature_row(defensive_per90_5=4.0))
+        high, _ = bundle.predict(feature_row(defensive_per90_5=12.0))
         self.assertGreater(high, low)
 
 
@@ -195,6 +213,16 @@ class TestLoad(unittest.TestCase):
             gbm.load(registry=self.registry, cache=self.dir / "cache")
             gbm.load(registry=self.registry, cache=self.dir / "cache")
         self.assertEqual(get.call_count, 1)
+
+    def test_an_artifact_of_another_version_is_refused(self):
+        self.body = json.dumps(tiny_artifact("gbm-v2")).encode()
+        self.register(hashlib.sha256(self.body).hexdigest())
+        response = mock.Mock(content=self.body, raise_for_status=mock.Mock())
+        with (
+            mock.patch.object(gbm.requests, "get", return_value=response),
+            self.assertRaises(SystemExit),
+        ):
+            gbm.load("gbm-v1", registry=self.registry, cache=self.dir / "cache")
 
     def test_an_artifact_whose_hash_differs_is_refused_and_not_cached(self):
         self.register("0" * 64)

@@ -222,17 +222,17 @@ def _form_fixture(bootstrap, fixtures, histories, target_gw, pasts=None, **setti
     )
 
 
-def _gbm(bootstrap, fixtures, histories, target_gw, pasts=None):
+def _gbm(bootstrap, fixtures, histories, target_gw, pasts=None, version=gbm.MODEL_VERSION):
     usable, _ = usable_rounds(bootstrap["events"], target_gw)
     return gbm.predict_rows(
-        bootstrap, fixtures, histories, pasts or {}, target_gw, usable, _gbm_bundle()
+        bootstrap, fixtures, histories, pasts or {}, target_gw, usable, _gbm_bundle(version)
     )
 
 
 @functools.cache
-def _gbm_bundle():
-    """gbm-v1's registered artifact, read once a run."""
-    return gbm.load()
+def _gbm_bundle(version=gbm.MODEL_VERSION):
+    """A gbm version's registered artifact, read once a run."""
+    return gbm.load(version)
 
 
 # Every model the backtest can replay: name -> f(bootstrap, fixtures,
@@ -249,6 +249,9 @@ MODELS: dict[str, Callable[..., Any]] = {
     # The learned model (#85), trained on 2016/17-2025/26 only, so every
     # gameweek of this season is held out from it already.
     "gbm-v1": _gbm,
+    # gbm-v1 with the defensive-contribution inputs (#174). Trained on the same
+    # seasons, so this season is held out from it too.
+    "gbm-v2": lambda *view, **kw: _gbm(*view, version="gbm-v2", **kw),
     # The candidate for form-fixture-v2 (#48): v1 with goals conceded and
     # saves priced from the fixture. Not logged until it passes its gates.
     "form-fixture-v2": lambda *view, **kw: _form_fixture(*view, goalkeeping=True, **kw),

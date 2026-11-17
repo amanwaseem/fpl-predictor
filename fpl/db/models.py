@@ -489,6 +489,11 @@ class PlayerGameweekFeatures(Base):
     expected_goals_for: Mapped[float | None] = mapped_column(Float)
     expected_goals_against: Mapped[float | None] = mapped_column(Float)
     expected_clean_sheets: Mapped[float | None] = mapped_column(Float)
+    # features-v2 (#174): missing for seasons with no defensive-contribution counts.
+    defensive_rule: Mapped[int | None] = mapped_column(SmallInteger)
+    defensive_per90_5: Mapped[float | None] = mapped_column(Float)
+    defensive_per90_season: Mapped[float | None] = mapped_column(Float)
+    defensive_hits_last5: Mapped[int | None] = mapped_column(SmallInteger)
 
 
 class FeatureBuild(Base):
