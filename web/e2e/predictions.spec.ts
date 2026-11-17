@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import { stubPlayer } from "./fixtures";
 
 // The newest gameweek of the newest season in the committed log, read from git
 // rather than written in: every new entry moves it, and a test pinned to one
@@ -99,46 +100,7 @@ test("a filter a link carries that no control can show is ignored", async ({ pag
 
 test("a player's page shows each model's prediction beside what happened", async ({ page }) => {
   // The database in CI holds the log only, not football data: the player is stubbed.
-  await page.route("**/v1/players/42", (route) =>
-    route.fulfill({
-      json: {
-        season: "2026/27",
-        player_id: 42,
-        player_code: 1042,
-        web_name: "Tester",
-        first_name: "Ada",
-        second_name: "Tester",
-        position: "MID",
-        clubs: [{ team: "ARS", first_gameweek: 1, last_gameweek: null }],
-        history: [
-          {
-            fixture_id: 1,
-            gameweek: 8,
-            opponent: "CHE",
-            was_home: true,
-            minutes: 90,
-            total_points: 9,
-            goals_scored: 1,
-            assists: 1,
-            clean_sheets: 0,
-            bonus: 2,
-            expected_goals: 0.6,
-            expected_assists: 0.3,
-          },
-        ],
-        predictions: [
-          {
-            gameweek: 8,
-            model_version: "baseline-v1",
-            predicted_points: 5.1,
-            expected_minutes: 85,
-            actual_points: 9,
-            actual_minutes: 90,
-          },
-        ],
-      },
-    }),
-  );
+  await stubPlayer(page);
   await page.goto("/players/42");
   await expect(page.getByRole("heading", { name: "Ada Tester" })).toBeVisible();
   const gw8 = page.getByRole("row", { name: /GW8/ });
