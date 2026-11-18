@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 
-from fpl.api import observability, problems, site
+from fpl.api import observability, problems, security, site
 from fpl.api.routes import health, optimiser, v1
 from fpl.db.session import make_engine
 
@@ -109,8 +109,10 @@ def create_app(engine=None, web=None):
     if web is not None:
         site.install(app, web)
     app.middleware("http")(http_caching)
-    # Outermost, so its line covers the whole request, caching included.
+    # Around everything else, so its line covers the whole request, caching included.
     app.middleware("http")(observability.request_logging)
+    # Outermost, so the 500 that request_logging answers gets the headers too.
+    app.middleware("http")(security.security_headers)
     # Replacing the method is FastAPI's documented way to extend the schema.
     app.openapi = openapi_with_problems(app)  # type: ignore[method-assign]
     return app
