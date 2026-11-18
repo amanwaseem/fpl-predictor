@@ -48,7 +48,7 @@ dev = [
     {include-group = "api"},
     {include-group = "ml"},
     "coverage>=7.16,<8",
-    "ruff==0.17.3",
+    "ruff==0.17.5",
     "mypy==2.4.1",
     "pre-commit>=4.6,<5",
     "pytest>=9.1,<10",
