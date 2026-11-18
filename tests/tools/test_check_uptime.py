@@ -1,8 +1,11 @@
 """tools/check_uptime.py: what it fails on, and what it passes (#86)."""
 
+import contextlib
+import io
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
@@ -63,3 +66,12 @@ class TestCheck(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestURL(unittest.TestCase):
+    def test_a_url_that_is_not_http_is_refused_before_it_is_opened(self):
+        for url in ("file:///etc/passwd", "ftp://example.com", "fpl-predictor-aman.fly.dev"):
+            with self.subTest(url=url), mock.patch.object(check_uptime, "main") as main:
+                with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                    check_uptime.cli(["--url", url])
+                main.assert_not_called()
