@@ -114,8 +114,8 @@ jobs:
           app=$(sed -n 's/^app = "\(.*\)"$/\1/p' fly.toml)
           echo "APP_URL=https://$app.fly.dev" >> "$GITHUB_ENV"
 
-      # 1.6, pinned by commit rather than by a tag that can be moved.
-      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1
+      # Pinned by commit rather than by a tag that can be moved (#180).
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6
         if: steps.newest.outputs.skip != 'true'
 
       - name: Deploy, migrating first
