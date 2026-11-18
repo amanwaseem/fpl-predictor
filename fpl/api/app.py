@@ -7,6 +7,7 @@ so importing the app (to export its OpenAPI, say) needs no database.
 """
 
 import hashlib
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
@@ -14,7 +15,7 @@ from fastapi.openapi.utils import get_openapi
 
 from fpl.api import observability, problems, security, site
 from fpl.api.routes import health, optimiser, v1
-from fpl.db.session import make_engine
+from fpl.db.session import hosted, make_engine
 
 API_VERSION = "1"
 # The data changes about once a week, when an entry is committed or scored.
@@ -101,6 +102,8 @@ def create_app(engine=None, web=None):
         "RFC 9457 problem details.",
         lifespan=lifespan,
         redoc_url=None,
+        # No online validator badge: it sends the document's URL to swagger.io (#178).
+        swagger_ui_parameters={"validatorUrl": None},
     )
     app.include_router(v1, prefix="/v1")
     app.include_router(optimiser, prefix="/v1")
@@ -112,7 +115,8 @@ def create_app(engine=None, web=None):
     # Around everything else, so its line covers the whole request, caching included.
     app.middleware("http")(observability.request_logging)
     # Outermost, so the 500 that request_logging answers gets the headers too.
-    app.middleware("http")(security.security_headers)
+    docs_paths = tuple(p for p in (app.docs_url, app.swagger_ui_oauth2_redirect_url) if p)
+    app.add_middleware(security.SecurityHeaders, docs_paths=docs_paths, hosted=hosted(os.environ))
     # Replacing the method is FastAPI's documented way to extend the schema.
     app.openapi = openapi_with_problems(app)  # type: ignore[method-assign]
     return app
