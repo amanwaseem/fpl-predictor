@@ -43,9 +43,10 @@ STALE_HOURS = 30
 
 def fetch_json(url, timeout=TIMEOUT):
     """(status, body or None) for a GET of `url`; status 0 if it did not answer."""
-    request = urllib.request.Request(url, headers={"User-Agent": "fpl-predictor uptime check"})
+    # The URL is URL above or --url, given by whoever runs the check.
+    request = urllib.request.Request(url, headers={"User-Agent": "fpl-predictor uptime check"})  # noqa: S310
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
             return response.status, json.loads(response.read() or b"null")
     except urllib.error.HTTPError as e:
         return e.code, None
