@@ -43,7 +43,7 @@ STALE_HOURS = 30
 
 def fetch_json(url, timeout=TIMEOUT):
     """(status, body or None) for a GET of `url`; status 0 if it did not answer."""
-    # The URL is URL above or --url, given by whoever runs the check.
+    # The URL is URL above or --url, which cli() limits to http(s).
     request = urllib.request.Request(url, headers={"User-Agent": "fpl-predictor uptime check"})  # noqa: S310
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
@@ -113,6 +113,9 @@ def cli(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--url", default=URL, help=f"the API's base URL (default: {URL})")
     args = ap.parse_args(argv)
+    # urlopen would read file: and other schemes too: only http(s) is a check of an API.
+    if not args.url.startswith(("https://", "http://")):
+        ap.error(f"--url must be an http(s) URL, not {args.url}")
     return main(args.url.rstrip("/"))
 
 

@@ -115,17 +115,19 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S"]
-# Bandit's checks that only ever flag what this code does on purpose:
-# S311, `random`, which seeds training and test data and never makes a secret;
-# S603 and S607, subprocess with an argument list and no shell, to run git.
-ignore = ["S311", "S603", "S607"]
 
 # Migrations are generated, then formatted, and long constraint expressions
 # stay on one line rather than being split by hand.
 [tool.ruff.lint.per-file-ignores]
 "fpl/db/migrations/versions/*" = ["E501"]
-# unittest-style tests use assert for helpers' preconditions.
-"tests/*" = ["S101"]
+# Bandit's checks, ignored only where they flag what the code does on purpose,
+# so the package itself (the API above all) is checked in full:
+# S311, `random`, which seeds training data and test data and never makes a secret;
+# S603 and S607, subprocess with an argument list and no shell, running git or
+# this Python; S101, asserts that narrow a type for mypy in the tests.
+"fpl/models/train_gbm.py" = ["S311", "S607"]
+"tools/*" = ["S603", "S607"]
+"tests/*" = ["S101", "S311", "S603", "S607"]
 
 # Coverage is reported in CI's job summary, not gated on: a threshold invites
 # tests written for the number.
