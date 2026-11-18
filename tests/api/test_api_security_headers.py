@@ -19,7 +19,8 @@ class TestSecurityHeaders(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.web = built_site()
-        app = create_app(engine=object(), web=cls.web)
+        with mock.patch.dict("os.environ", {"FPL_HOSTED": ""}):
+            app = create_app(engine=object(), web=cls.web)
 
         def broken():
             raise RuntimeError("induced, to test the error path")
@@ -56,7 +57,7 @@ class TestSecurityHeaders(unittest.TestCase):
         response = self.client.get("/docs")
         self.assertEqual(response.status_code, 200)
         self.assertHeaders(response, security.DOCS_POLICY)
-        self.assertIn(security.SWAGGER_CDN, response.text)
+        self.assertIn(security.SWAGGER_DIST, response.text)
 
     def test_the_site_allows_the_player_photos_and_no_other_origin(self):
         self.assertIn(f"img-src 'self' data: {security.PLAYER_PHOTOS}", security.SITE_POLICY)
@@ -66,5 +67,11 @@ class TestSecurityHeaders(unittest.TestCase):
     def test_hsts_only_when_hosted(self):
         self.assertNotIn("strict-transport-security", self.client.get("/healthz").headers)
         with mock.patch.dict("os.environ", {"FPL_HOSTED": "1"}):
-            response = self.client.get("/healthz")
+            app = create_app(engine=object())
+        with TestClient(app) as client:
+            response = client.get("/healthz")
         self.assertEqual(response.headers["strict-transport-security"], security.HSTS)
+        self.assertEqual(response.headers["content-security-policy"], security.SITE_POLICY)
+
+    def test_swagger_s_validator_badge_is_off(self):
+        self.assertIn('"validatorUrl": null', self.client.get("/docs").text)

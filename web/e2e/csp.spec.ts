@@ -29,5 +29,6 @@ test("the API docs load under their own policy", async ({ page }) => {
   const seen = violations(page);
   await page.goto("/docs");
   await expect(page.locator(".swagger-ui .title")).toContainText("fpl-predictor");
+  await page.waitForLoadState("networkidle");
   expect(seen).toEqual([]);
 });
