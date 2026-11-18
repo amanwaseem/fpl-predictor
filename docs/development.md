@@ -87,6 +87,21 @@ uv run coverage run -m pytest    # [tool.coverage] measures subprocesses too
 uv run coverage combine && uv run coverage report
 ```
 
+Security checks (#179). ruff's `S` rules (flake8-bandit) run with the rest of
+`make lint`; the few it is told to ignore are listed with their reasons in
+`pyproject.toml`. The rest are settings in the repository's Settings, so no
+file in the checkout shows them:
+
+- **CodeQL**, GitHub's default setup (Settings → Code security): Python,
+  JavaScript/TypeScript and the workflows themselves, on each pull request,
+  each push to `main` and weekly. Alerts are under Security → Code scanning.
+  It is advisory, outside the required `ci` check (ADR 0012), so a scanner's
+  bad day never holds up an entry. Because default setup is on, a `codeql.yml`
+  workflow added beside it would conflict with it.
+- **Secret scanning** with push protection, which refuses a push that
+  contains a recognised token.
+- **Dependabot security updates** (see `.github/dependabot.yml`).
+
 ## Database
 
 The schema lives in `fpl/db/models.py`, with Alembic migrations in

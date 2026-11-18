@@ -288,7 +288,7 @@ def _events(fixtures):
             deadlines[gw] = deadlines[before] + timedelta(weeks=gw - before)
         else:
             # deadlines is not empty, so a gameweek has a neighbour on one side.
-            assert after is not None
+            assert after is not None  # noqa: S101 - an invariant, for mypy; guards nothing
             deadlines[gw] = deadlines[after] - timedelta(weeks=after - gw)
     return [
         {
