@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/uv
       # GitHub format annotates the offending lines on the PR diff.
       - run: ruff check --output-format=github .
@@ -49,7 +49,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # LightGBM's wheel on macOS needs the OpenMP runtime (#85).
       - if: runner.os == 'macOS'
         run: brew install libomp
@@ -84,10 +84,10 @@ jobs:
     steps:
       # Full history: the check reads the committed log at a reference commit,
       # not just the working tree.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
 
@@ -140,7 +140,7 @@ jobs:
       TEST_DATABASE_URL: postgresql+psycopg://fpl:fpl@localhost:5432/fpl_test
       FPL_REQUIRE_DB: "1"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/uv
       # The past seasons (#79), pinned by commit and hash, so the backfill is
       # tested against all ten seasons' real files and their pinned counts.
@@ -149,7 +149,7 @@ jobs:
       - name: The archive's pinned commit
         id: archive
         run: echo "commit=$(sed -n 's/^COMMIT = "\(.*\)"$/\1/p' fpl/ingest/history.py)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: data/raw/history/${{ steps.archive.outputs.commit }}
           key: history-${{ steps.archive.outputs.commit }}
@@ -191,7 +191,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build -t fpl-api:ci .
       - name: The image runs the deploy's commands, unprivileged
         run: |
@@ -226,9 +226,9 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/uv
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: web/.nvmrc
           cache: npm
@@ -282,7 +282,7 @@ jobs:
       # is minutes away. Here, not in log-immutable: this job runs last, and
       # again whenever any job is re-run, so no earlier pass can carry a late
       # entry through.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'pull_request'
         with:
           fetch-depth: 0

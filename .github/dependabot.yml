@@ -37,7 +37,10 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
-  # The workflows and the composite action they share.
+  # The workflows and the composite action they share. Every action is pinned
+  # by commit, with its version in a comment (#180): a tag can be moved to
+  # other code, and the entry and score workflows hold write tokens.
+  # Dependabot updates the commit and the comment together.
   - package-ecosystem: github-actions
     directories: ["/", "/.github/actions/*"]
     schedule:
