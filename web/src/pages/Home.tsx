@@ -52,7 +52,7 @@ export function Home() {
               never edited, and scored against what really happened.
             </p>
             <div className="hero-actions">
-              <Link className="button button-lime" to="/gameweeks">
+              <Link className="button" to="/gameweeks">
                 {latest ? `See GW${latest} predictions` : "See predictions"}
               </Link>
               <Link className="button button-on-ink" to="/optimise">
