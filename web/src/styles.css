@@ -1,71 +1,49 @@
 /* One stylesheet, in sections: tokens, base, layout, components, pages.
-   Colours are tokens on :root, redefined for dark mode; the header and the
-   hero are dark in both. */
+   The Night Match look (#193): one dark palette, with no light mode. Colour
+   always means something: blue is something to tap, mint is points and good
+   news, coral is a miss or something live, amber is a doubt. */
 
 /* ---------- Tokens ---------- */
 :root {
-  --bg: #f4f6f3;
-  --surface: #ffffff;
-  --surface-2: #f8faf7;
-  --fg: #11181d;
-  --muted: #5b6670;
-  --line: #e1e6e0;
-  /* Dark enough for 4.5:1 (WCAG AA) on every light surface, and under white text. */
-  --accent: #097a43;
-  --accent-strong: #065f34;
-  --accent-soft: #e2f5ea;
+  --bg: #0b0e2a;
+  --surface: #171c47;
+  --surface-2: #1e2457;
+  --fg: #f2f4ff;
+  --muted: #a3a9d6;
+  --line: #2a3170;
+  /* Links, focus rings and selected text: at least 4.5:1 on every surface. */
+  --accent: #5b8cff;
+  --accent-strong: #8aaeff;
+  --accent-soft: rgba(91, 140, 255, 0.16);
+  /* Filled buttons: deeper than --accent, so white text on them passes AA. */
+  --action: #3a63f0;
+  --action-strong: #2f55dc;
   --on-accent: #ffffff;
-  --lime: #c8f53c;
-  --ink: #0b1a22;
-  --ink-2: #12303a;
-  --on-ink: #eef4f2;
-  --on-ink-muted: #a9bcc0;
-  --good: #097a43;
-  --bad: #c2362c;
-  --bad-soft: #fde8e6;
-  --warn: #9a5b00;
-  --warn-soft: #fff2d9;
+  --ink: #0b0e2a;
+  --on-ink: #f2f4ff;
+  --on-ink-muted: #a3a9d6;
+  --good: #3ddc97;
+  --good-soft: rgba(61, 220, 151, 0.15);
+  --bad: #ff5d73;
+  --bad-soft: rgba(255, 93, 115, 0.15);
+  --warn: #ffc542;
+  --warn-soft: rgba(255, 197, 66, 0.15);
   --pitch: #127a43;
   --pitch-line: rgba(255, 255, 255, 0.28);
-  --selected: var(--ink);
-  --on-selected: var(--on-ink);
-  --shadow: 0 1px 2px rgba(16, 24, 29, 0.06), 0 4px 16px rgba(16, 24, 29, 0.05);
+  --selected: var(--action);
+  --on-selected: #ffffff;
+  /* Cards sit on colour and a border, not a shadow. */
+  --shadow: none;
   --radius: 14px;
   --radius-sm: 8px;
-  color-scheme: light;
-  font-family:
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  --font-body:
+    "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Headlines and big numbers: bold and condensed, italic for headlines. */
+  --font-display: "Barlow Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+  font-family: var(--font-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b1115;
-    --surface: #131b20;
-    --surface-2: #172127;
-    --fg: #e8eef0;
-    --muted: #97a5ac;
-    --line: #233038;
-    --accent: #38d47f;
-    --accent-strong: #5ee39a;
-    --accent-soft: #10301f;
-    --on-accent: #06200f;
-    --good: #4fdc8e;
-    --bad: #ff8478;
-    --bad-soft: #3a1714;
-    --warn: #ffc163;
-    --warn-soft: #362812;
-    --pitch: #0f5f35;
-    --selected: var(--lime);
-    --on-selected: var(--ink);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
-    color-scheme: dark;
-  }
 }
 
 /* ---------- Base ---------- */
@@ -77,7 +55,10 @@ html {
 }
 body {
   margin: 0;
-  background: var(--bg);
+  /* One soft glow at the top of every page. */
+  background:
+    radial-gradient(70rem 26rem at 85% -8rem, rgba(91, 140, 255, 0.16), transparent 70%) no-repeat,
+    var(--bg);
   color: var(--fg);
 }
 a {
@@ -91,18 +72,28 @@ h1,
 h2,
 h3 {
   line-height: 1.2;
-  letter-spacing: -0.015em;
+}
+/* Headlines in the display face: bold italic capitals. */
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.005em;
+  line-height: 1;
 }
 h1 {
-  font-size: clamp(1.7rem, 4vw, 2.3rem);
-  margin: 0 0 0.5rem;
+  font-size: clamp(2.1rem, 5vw, 2.9rem);
+  margin: 0 0 0.6rem;
 }
 h2 {
-  font-size: 1.35rem;
+  font-size: 1.65rem;
   margin: 0 0 0.75rem;
 }
 h3 {
   font-size: 1.05rem;
+  letter-spacing: -0.01em;
   margin: 0 0 0.5rem;
 }
 p {
@@ -188,6 +179,7 @@ main {
 .site-header {
   background: var(--ink);
   color: var(--on-ink);
+  border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -219,12 +211,17 @@ main {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--lime);
-  box-shadow: 0 0 0 4px rgba(200, 245, 60, 0.18);
+  background: linear-gradient(135deg, var(--accent), var(--good));
+  box-shadow: 0 0 0 4px rgba(91, 140, 255, 0.18);
 }
+/* One row of links: on the narrowest phones it scrolls sideways rather than
+   breaking "My team" over two lines. */
 .site-nav {
   display: flex;
   gap: 0.25rem;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 .site-nav a {
   color: var(--on-ink-muted);
@@ -233,14 +230,19 @@ main {
   font-size: 0.95rem;
   padding: 0.45rem 0.8rem;
   border-radius: 999px;
+  white-space: nowrap;
+}
+/* Inside the link: the scrolling row would clip an outline drawn outside it. */
+.site-nav a:focus-visible {
+  outline-offset: -2px;
 }
 .site-nav a:hover {
   color: var(--on-ink);
   background: rgba(255, 255, 255, 0.07);
 }
 .site-nav a.active {
-  color: var(--ink);
-  background: var(--lime);
+  color: var(--on-ink);
+  background: var(--surface-2);
 }
 .site-footer {
   border-top: 1px solid var(--line);
@@ -291,11 +293,11 @@ main {
   margin: 0 0 0.35rem;
 }
 .big {
-  font-size: 1.9rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .button {
@@ -308,16 +310,16 @@ main {
   font-size: 0.95rem;
   padding: 0.6rem 1.1rem;
   border-radius: 999px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
+  border: 1px solid var(--action);
+  background: var(--action);
   color: var(--on-accent);
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
 }
 .button:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
+  background: var(--action-strong);
+  border-color: var(--action-strong);
   color: var(--on-accent);
 }
 .button:disabled {
@@ -333,16 +335,6 @@ main {
   background: var(--surface-2);
   color: var(--fg);
   border-color: var(--line);
-}
-.button-lime {
-  background: var(--lime);
-  border-color: var(--lime);
-  color: var(--ink);
-}
-.button-lime:hover {
-  background: #b6e52a;
-  border-color: #b6e52a;
-  color: var(--ink);
 }
 .button-on-ink {
   background: transparent;
@@ -381,7 +373,8 @@ main {
   padding: 0.12rem 0.4rem;
   border-radius: 5px;
   line-height: 1.3;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  /* An edge, so a dark club colour (Spurs, Newcastle) still shows on a dark panel. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 .pos {
   font-size: 0.72rem;
@@ -406,8 +399,8 @@ main {
   color: var(--bad);
 }
 .pill-good {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--good-soft);
+  color: var(--good);
 }
 .pill-neutral {
   background: var(--surface-2);
@@ -588,9 +581,9 @@ details.help ol {
   background:
     linear-gradient(to right, var(--surface) 30%, transparent) left / 2rem 100% no-repeat local,
     linear-gradient(to left, var(--surface) 30%, transparent) right / 2rem 100% no-repeat local,
-    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.18), transparent) left / 0.75rem 100%
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.5), transparent) left / 0.75rem 100%
       no-repeat scroll,
-    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.18), transparent) right / 0.75rem 100%
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.5), transparent) right / 0.75rem 100%
       no-repeat scroll,
     var(--surface);
 }
@@ -701,6 +694,10 @@ a.player-name:hover {
 .points strong {
   min-width: 2.6rem;
   text-align: right;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
 }
 .bar {
   width: 56px;
@@ -712,7 +709,7 @@ a.player-name:hover {
 .bar span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: linear-gradient(90deg, var(--accent), var(--good));
   border-radius: 3px;
 }
 
@@ -726,18 +723,21 @@ a.player-name:hover {
 /* ---------- Pages ---------- */
 /* Front page hero */
 .hero {
-  background: radial-gradient(120% 140% at 85% 0%, #1d5a45 0%, var(--ink-2) 40%, var(--ink) 75%);
+  background:
+    radial-gradient(60rem 22rem at 85% -10%, rgba(91, 140, 255, 0.35), transparent 60%),
+    radial-gradient(45rem 18rem at 0% 110%, rgba(61, 220, 151, 0.16), transparent 60%), var(--ink);
   color: var(--on-ink);
   padding: 3rem 0 3.25rem;
+  border-bottom: 1px solid var(--line);
 }
 .hero h1 {
-  font-size: clamp(2rem, 5vw, 3.1rem);
-  max-width: 40rem;
-  letter-spacing: -0.03em;
+  font-size: clamp(2.6rem, 6.5vw, 4.2rem);
+  max-width: 44rem;
+  line-height: 0.95;
 }
 .hero h1 em {
-  font-style: normal;
-  color: var(--lime);
+  font-style: italic;
+  color: var(--good);
 }
 .hero .lede {
   color: var(--on-ink-muted);
@@ -757,8 +757,8 @@ a.player-name:hover {
   align-items: center;
 }
 .deadline-card {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(23, 28, 71, 0.85);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 1.25rem 1.4rem;
   backdrop-filter: blur(4px);
@@ -767,8 +767,9 @@ a.player-name:hover {
   color: var(--on-ink-muted);
 }
 .deadline-card .big {
-  color: var(--lime);
-  font-size: 2.6rem;
+  color: var(--good);
+  font-size: 3.2rem;
+  font-style: italic;
 }
 .deadline-card dl {
   display: grid;
@@ -816,11 +817,14 @@ a.player-name:hover {
   border-top: none;
 }
 .pick-points {
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  font-size: 1.05rem;
+  font-size: 1.5rem;
+  line-height: 1;
 }
 .pick-points small {
+  font-family: var(--font-body);
   font-weight: 600;
   color: var(--muted);
   font-size: 0.72rem;
@@ -852,9 +856,12 @@ a.player-name:hover {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--ink);
-  color: var(--lime);
-  font-weight: 800;
+  background: var(--surface-2);
+  color: var(--good);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.25rem;
 }
 
 /* Page header band for inner pages */
@@ -930,10 +937,12 @@ a.player-name:hover {
   letter-spacing: 0.05em;
 }
 .stat dd {
-  margin: 0.1rem 0 0;
-  font-size: 1.3rem;
-  font-weight: 800;
+  margin: 0.2rem 0 0;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 /* Optimise: transfers and the pitch */
@@ -1064,10 +1073,10 @@ a.player-name:hover {
   text-decoration: none;
 }
 a.shirt-name:hover {
-  color: var(--lime);
+  color: var(--good);
 }
 .shirt-points {
-  background: var(--lime);
+  background: var(--good);
   color: var(--ink);
   font-size: 0.74rem;
   font-weight: 800;
@@ -1087,7 +1096,7 @@ a.shirt-name:hover {
   place-items: center;
   font-size: 0.7rem;
   font-weight: 900;
-  background: var(--lime);
+  background: var(--good);
   color: var(--ink);
   border: 2px solid var(--ink);
   z-index: 2;
@@ -1122,8 +1131,8 @@ a.shirt-name:hover {
     display: none;
   }
   .site-nav a {
-    padding: 0.4rem 0.6rem;
-    font-size: 0.9rem;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.88rem;
   }
   .segmented {
     flex-wrap: nowrap;
