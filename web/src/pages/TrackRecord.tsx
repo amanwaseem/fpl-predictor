@@ -10,9 +10,14 @@ import {
   againstBaseline,
   gameweekList,
   missedGameweeks,
+  ourMissedGameweeks,
+  ourWeeks,
   percentBetter,
+  pooledMae,
   retiredNote,
+  weeksAgainstBaseline,
   type Model,
+  type Week,
 } from "../scorecard";
 import { useTitle } from "../useTitle";
 
@@ -36,28 +41,37 @@ export function TrackRecord() {
 }
 
 function Record({ season, models }: { season: string; models: Model[] }) {
-  // Our predictions are the main model's (#194). Going by form is the
-  // baseline, the yardstick every model has to beat (ADR 0020).
+  // Our predictions are what users were shown (#194): each week, the model
+  // that was main then. Going by form is the baseline, the yardstick every
+  // model has to beat (ADR 0020).
   const form = models.find((m) => m.role === "baseline");
-  const ours = models.find((m) => m.role === "main") ?? form;
-  const missed = missedGameweeks(models);
+  const ours = ourWeeks(models);
+  // The first week a main model logged, for before any is scored.
+  const firstOurs = Math.min(
+    ...models
+      .filter((m) => m.role === "main" || m.retired_from === "main")
+      .map((m) => m.first_gameweek),
+  );
+  // Nothing published at all, and weeks only our main model missed.
+  const nothing = missedGameweeks(models);
+  const oursOnly = ourMissedGameweeks(models).filter((gw) => !nothing.includes(gw));
+  const missed = [...nothing, ...oursOnly].sort((a, b) => a - b);
   const series: Series[] = [];
-  if (ours) series.push({ name: "Our predictions", className: "ours", weeks: ours.per_gameweek });
-  if (form && form !== ours)
-    series.push({ name: "Going by form", className: "form", weeks: form.per_gameweek });
+  if (ours.length) series.push({ name: "Our predictions", className: "ours", weeks: ours });
+  if (form) series.push({ name: "Going by form", className: "form", weeks: form.per_gameweek });
   const directory = logDirectory(season);
 
   return (
     <>
-      <Answer ours={ours} form={form} />
+      <Answer ours={ours} form={form} first={Number.isFinite(firstOurs) ? firstOurs : null} />
 
-      {ours && ours.per_gameweek.length > 0 && (
+      {ours.length > 0 && (
         <section className="section" aria-labelledby="by-week">
           <h2 id="by-week">Week by week</h2>
           <p className="note">
             The average miss per player in each gameweek, so lower is better. Going by form is a
-            simple prediction from each player&rsquo;s recent minutes and points, and nothing else.
-            Choose a week to see its predictions.
+            simple prediction from each player&rsquo;s recent minutes and points, adjusted for
+            injuries and suspensions. Choose a week to see its predictions.
           </p>
           <div className="card">
             <MissChart series={series} missed={missed} />
@@ -88,17 +102,22 @@ function Record({ season, models }: { season: string; models: Model[] }) {
           <article className="card">
             <h3>Misses included</h3>
             <p className="muted small">
-              {missed.length ? (
+              {nothing.length > 0 && (
                 <>
                   Nothing was published before the deadline for{" "}
-                  <span className="missed">
-                    {missed.length > 1 ? "gameweeks" : "gameweek"} {andList(missed)}
-                  </span>
-                  , so {missed.length > 1 ? "those weeks stay" : "that week stays"} missed.
+                  <span className="missed">{weeksNamed(nothing)}</span>, so{" "}
+                  {nothing.length > 1 ? "those weeks stay" : "that week stays"} missed.{" "}
                 </>
-              ) : (
-                "We haven't missed a deadline yet. If we ever do, that week stays missed."
-              )}{" "}
+              )}
+              {oursOnly.length > 0 && (
+                <>
+                  Our main model missed the deadline for{" "}
+                  <span className="missed">{weeksNamed(oursOnly)}</span>, so our predictions are
+                  missing there.{" "}
+                </>
+              )}
+              {missed.length === 0 &&
+                "We haven't missed a deadline yet. If we ever do, that week stays missed. "}
               A prediction made after a deadline can&rsquo;t be told apart from one made knowing the
               results. <a href={WHY_MISSED}>Why we never fill a gap</a>
             </p>
@@ -124,20 +143,34 @@ function Record({ season, models }: { season: string; models: Model[] }) {
   );
 }
 
+const weeksNamed = (weeks: number[]) =>
+  `${weeks.length > 1 ? "gameweeks" : "gameweek"} ${andList(weeks)}`;
+
 // The answer in one line: how far off our predictions are on average, and how
 // that compares with going by form on the same gameweeks.
-function Answer({ ours, form }: { ours: Model | undefined; form: Model | undefined }) {
-  const mae = ours?.pooled.all?.mae;
-  if (!ours || mae === undefined || mae === null)
+function Answer({
+  ours,
+  form,
+  first,
+}: {
+  ours: Week[];
+  form: Model | undefined;
+  first: number | null;
+}) {
+  const mae = pooledMae(ours);
+  if (mae === null)
     return (
       <p className="lede">
-        {ours?.gameweeks_logged.length
-          ? `Our first predictions are scored once gameweek ${Math.min(...ours.gameweeks_logged)} is over.`
+        {first !== null
+          ? `Our first predictions are scored once gameweek ${first} is over.`
           : "Nothing has been published yet."}
       </p>
     );
-  const better = form && form !== ours ? percentBetter(againstBaseline(ours, form)) : null;
-  const weeks = ours.gameweeks_scored;
+  const vs = weeksAgainstBaseline(ours, form);
+  const better = percentBetter(vs);
+  const weeks = ours.map((w) => w.gameweek);
+  // Weeks going by form has no score for are left out of the comparison.
+  const unshared = vs ? weeks.filter((gw) => !vs.shared.includes(gw)) : [];
   return (
     <>
       <p className="lede answer">
@@ -157,8 +190,11 @@ function Answer({ ours, form }: { ours: Model | undefined; form: Model | undefin
         )}
       </p>
       <p className="note small">
-        Over every player in {weeks.length > 1 ? "gameweeks" : "gameweek"} {andList(weeks)}, the
-        ones scored so far.
+        Over every player in {weeksNamed(weeks)}, the ones scored so far
+        {unshared.length > 0 && better !== null
+          ? `. The comparison with going by form leaves out ${weeksNamed(unshared)}, which it has no score for`
+          : ""}
+        .
       </p>
     </>
   );

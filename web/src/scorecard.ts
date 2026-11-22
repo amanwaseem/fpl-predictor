@@ -1,6 +1,7 @@
 // The scorecard's arithmetic, kept out of the page so it can be read on its own.
 import type { Schemas } from "./api/client";
 import { signed } from "./format";
+import { mainIn } from "./models";
 
 // A difference from the baseline, as shown: to three places, and a tie when it
 // rounds to zero, so a tie is never shown as a win.
@@ -53,7 +54,7 @@ export function gameweeks(models: Model[]): number[] {
 }
 
 // MAE pooled over player rows, for the gameweeks given.
-function pooledMae(weeks: Week[]): number | null {
+export function pooledMae(weeks: Week[]): number | null {
   const n = weeks.reduce((sum, w) => sum + w.n, 0);
   return n ? weeks.reduce((sum, w) => sum + w.mae * w.n, 0) / n : null;
 }
@@ -62,12 +63,39 @@ function pooledMae(weeks: Week[]): number | null {
 // figures over different gameweeks would compare different weeks, not models.
 export function againstBaseline(model: Model, baseline: Model | undefined) {
   if (!baseline || baseline === model) return null;
+  return weeksAgainstBaseline(model.per_gameweek, baseline);
+}
+
+// The same, for weeks that may come from more than one model: ours.
+export function weeksAgainstBaseline(weeks: Week[], baseline: Model | undefined) {
+  if (!baseline) return null;
   const baselineWeeks = new Map(baseline.per_gameweek.map((w) => [w.gameweek, w]));
-  const shared = model.per_gameweek.filter((w) => baselineWeeks.has(w.gameweek));
+  const shared = weeks.filter((w) => baselineWeeks.has(w.gameweek));
   const mine = pooledMae(shared);
   const base = pooledMae(shared.map((w) => baselineWeeks.get(w.gameweek)!));
   if (mine === null || base === null) return null;
-  return { gameweeks: shared.length, mae: mine, baselineMae: base, difference: mine - base };
+  return {
+    gameweeks: shared.length,
+    shared: shared.map((w) => w.gameweek),
+    mae: mine,
+    baselineMae: base,
+    difference: mine - base,
+  };
+}
+
+// Our predictions' scored weeks (#194): each gameweek's from the model that
+// was main then, so a promotion doesn't rewrite the weeks before it.
+export function ourWeeks(models: Model[]): Week[] {
+  return gameweeks(models)
+    .flatMap((gw) => mainIn(models, gw)?.per_gameweek.filter((w) => w.gameweek === gw) ?? [])
+    .sort((a, b) => a.gameweek - b.gameweek);
+}
+
+// Gameweeks the model that was main then missed, whatever the others did.
+export function ourMissedGameweeks(models: Model[]): number[] {
+  return gameweeks(models)
+    .filter((gw) => mainIn(models, gw)?.gameweeks_missed.includes(gw))
+    .sort((a, b) => a - b);
 }
 
 // How much more accurate than the baseline, as a percentage of the baseline's

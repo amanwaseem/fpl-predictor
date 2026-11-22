@@ -48,7 +48,10 @@ test("the track record leads with how far off our predictions are, against going
 }) => {
   await page.goto("/track-record");
   const answer = page.getByText(/^On average our predictions are/);
-  await expect(answer).toContainText(`${main.pooled.all!.mae.toFixed(2)} points off per player`);
+  // Pooled from the weeks, as a promotion makes ours more than one model's.
+  await expect(answer).toContainText(
+    `${pooled(main.per_gameweek).toFixed(2)} points off per player`,
+  );
   await expect(answer).toContainText(
     Math.abs(better) < 0.05
       ? "level with going by form"
@@ -63,6 +66,21 @@ test("each week on the chart gives both figures and links to its predictions", a
     name: `GW${week.gameweek}: our predictions ${week.mae.toFixed(2)}, going by form ${formOn(week.gameweek).mae.toFixed(2)} points off per player`,
   });
   await expect(link).toHaveAttribute("href", `/gameweeks/${week.gameweek}`);
+});
+
+test.describe("on a touch screen", () => {
+  test.use({ hasTouch: true });
+
+  test("the first tap on a week shows its figures, and the second opens it", async ({ page }) => {
+    await page.goto("/track-record");
+    const gameweek = shared.at(-1)!.gameweek;
+    const link = page.getByRole("link", { name: new RegExp(`^GW${gameweek}:`) });
+    await link.tap();
+    await expect(page.locator(".chart-tip")).toContainText(`GW${gameweek}`);
+    await expect(page).toHaveURL(/\/track-record$/);
+    await link.tap();
+    await expect(page).toHaveURL(new RegExp(`/gameweeks/${gameweek}$`));
+  });
 });
 
 test("missed gameweeks are listed, not left out", async ({ page }) => {
@@ -114,7 +132,9 @@ test("the home page leaves the record to Track record, in the menu", async ({ pa
   await expect(page.getByRole("table")).toHaveCount(0);
   await expect(page.getByText(/average miss per player/)).toHaveCount(0);
   // Models are named on Track record only (#194): no model code or statistic here.
-  await expect(page.getByRole("main")).not.toContainText(/baseline-v1|form-fixture-v1|gbm-v1|RMSE/);
+  await expect(page.getByRole("main")).not.toContainText(
+    /baseline-v1|form-fixture-v1|gbm-v1|RMSE|Form & fixtures|Machine learning|Baseline/,
+  );
   await page
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Track record" })

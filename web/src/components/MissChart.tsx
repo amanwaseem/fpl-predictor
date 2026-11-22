@@ -1,6 +1,6 @@
 // The Track record chart (#195): the average miss per player in each
 // gameweek, our predictions against going by form, as inline SVG with no
-// chart library. A gameweek with nothing published breaks the lines and is
+// chart library. A gameweek our predictions missed breaks the line and is
 // marked missed, as the scorecard marks it (ADR 0004). The scorecard tables
 // on the same page are its table view, and each scored week is a link to its
 // predictions, so a keyboard reaches every figure the pointer does.
@@ -19,6 +19,9 @@ export function MissChart({ series, missed }: { series: Series[]; missed: number
   const box = useRef<HTMLDivElement>(null);
   const width = useWidth(box);
   const [active, setActive] = useState<number | null>(null);
+  // On a touch screen the first tap on a week shows its figures and the second
+  // opens it; a tap has no hover to show them first.
+  const firstTap = useRef(false);
 
   const scored = series.flatMap((s) => s.weeks);
   const all = [...scored.map((w) => w.gameweek), ...missed];
@@ -62,11 +65,16 @@ export function MissChart({ series, missed }: { series: Series[]; missed: number
         {missed.length > 0 && (
           <li>
             <i className="key key-missed" />
-            Missed: nothing published
+            Missed deadline
           </li>
         )}
       </ul>
-      <div className="chart" ref={box} onPointerLeave={() => setActive(null)}>
+      <div
+        className="chart"
+        ref={box}
+        // A touch's pointer leaves as the finger lifts: the readout stays.
+        onPointerLeave={(e) => e.pointerType !== "touch" && setActive(null)}
+      >
         {width > 0 && (
           <svg
             width={width}
@@ -151,6 +159,22 @@ export function MissChart({ series, missed }: { series: Series[]; missed: number
                   </text>
                 ))}
             </g>
+            {/* A week with no figures clears the readout, rather than leaving
+                the week before's up beside it. */}
+            {gameweeks
+              .filter((gw) => values(gw).length === 0)
+              .map((gw) => (
+                <rect
+                  key={gw}
+                  className="hit"
+                  aria-hidden="true"
+                  x={x(gw) - band / 2}
+                  y={MARGIN.top}
+                  width={band}
+                  height={plotHeight + MARGIN.bottom}
+                  onPointerEnter={() => setActive(null)}
+                />
+              ))}
             {gameweeks
               .filter((gw) => values(gw).length > 0)
               .map((gw) => (
@@ -158,7 +182,16 @@ export function MissChart({ series, missed }: { series: Series[]; missed: number
                   key={gw}
                   to={`/gameweeks/${gw}`}
                   aria-label={describe(gw)}
-                  onPointerEnter={() => setActive(gw)}
+                  onPointerEnter={(e) => e.pointerType !== "touch" && setActive(gw)}
+                  onPointerDown={(e) => {
+                    firstTap.current = e.pointerType === "touch" && active !== gw;
+                  }}
+                  onClick={(e) => {
+                    if (!firstTap.current) return;
+                    firstTap.current = false;
+                    e.preventDefault();
+                    setActive(gw);
+                  }}
                   onFocus={() => setActive(gw)}
                   onBlur={() => setActive(null)}
                 >

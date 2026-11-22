@@ -207,9 +207,10 @@ npm --prefix web run screenshots
 gh release upload site-screenshots scratch/screenshots/*.png --clobber
 ```
 
-The pages: Home (`/`: the next deadline, this gameweek's top picks, the track
-record and the full scorecard), Predictions (`/gameweeks/N`), player pages
-(`/players/ID`) and My team (`/optimise`). The styles are one stylesheet of
+The pages: Home (`/`: the next deadline and this gameweek's top picks),
+Predictions (`/gameweeks/N`), player pages (`/players/ID`), My team
+(`/optimise`) and Track record (`/track-record`: how far off our predictions
+are, week by week, with every model and the full scorecard folded away). The styles are one stylesheet of
 tokens and components, `web/src/styles.css`. Club colours are in
 `web/src/clubs.ts`, and the models' display names in `web/src/models.ts`. The
 site's name is `SITE_NAME` in `web/src/brand.ts`. Player photos come from
