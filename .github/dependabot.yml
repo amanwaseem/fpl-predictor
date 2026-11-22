@@ -19,7 +19,7 @@ updates:
       # 1.16 prints a banner to stdout that breaks --json (#189). Held in
       # pyproject.toml too. Try again on the next minor release.
       - dependency-name: "highspy"
-        versions: ["1.16.x"]
+        versions: [">=1.16, <1.17"]
     groups:
       python:
         patterns: ["*"]
