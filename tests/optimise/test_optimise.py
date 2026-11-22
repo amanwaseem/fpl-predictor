@@ -340,6 +340,21 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(len(squad["bench"]), 4)
         self.assertLessEqual(squad["cost"], 100.0)
 
+    def test_json_output_is_only_json_in_a_fresh_process(self):
+        """#189: highspy 1.16 prints a banner from C++ on its first Highs() in a
+        process. redirect_stdout can't see that, and earlier tests have already
+        printed it, so this runs the command alone and parses all of stdout.
+        fpl-plan makes its solver with the same new_model(), so this covers its
+        --json too."""
+        proc = subprocess.run(
+            [sys.executable, "-m", "fpl.optimise", str(ENTRIES[-1]), "--json"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(len(json.loads(proc.stdout)["xi"]), 11)
+
     def test_text_output_marks_the_captain_and_the_bench(self):
         _, out = self.run_cli()
         self.assertIn("(C)", out)

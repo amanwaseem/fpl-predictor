@@ -36,8 +36,10 @@ dependencies = ["requests>=2.34,<3"]
 [dependency-groups]
 # The database layer (#77).
 db = ["sqlalchemy>=2.1,<2.2", "alembic>=1.20,<2", "psycopg[binary]>=3.3,<4"]
-# The squad optimiser (#53).
-optimise = ["highspy>=1.15,<2"]
+# The squad optimiser (#53). Held below 1.16 (#189): 1.16 prints a licence
+# banner to stdout from C++ on the first Highs() in a process, which breaks
+# `fpl-optimise --json` and `fpl-plan --json`, and `silent()` can't stop it.
+optimise = ["highspy>=1.15,<1.16"]
 # The API (#81), with the solver /v1/optimise runs (#83).
 api = [{include-group = "db"}, {include-group = "optimise"},
        "fastapi>=0.159,<1", "uvicorn>=0.54,<1"]
