@@ -324,6 +324,15 @@ def check(
             f"{when}, and main has no gw{gameweek:02d}_*.csv. {status_line} "
             f"Read and merge {numbers} before the deadline.{notes}"
         )
+    if hours > late_alarm_hours:
+        # The previous gameweek may have settled only hours ago, with no
+        # entry run since: a hand-made branch now would stop the one coming.
+        return FAIL, (
+            f"{when}, main has no gw{gameweek:02d}_*.csv, and no open PR adds one "
+            "yet. The entry workflow acts on its next run; if a run failed, its "
+            "page on the Actions tab says why. Make the entry by hand if no PR is "
+            f"open {late_alarm_hours}h out: see docs/runbook.md.{notes}"
+        )
     return FAIL, (
         f"{when}, main has no gw{gameweek:02d}_*.csv, and no open PR adds one: "
         "the entry workflow has not made it. Make the entry by hand now: see "

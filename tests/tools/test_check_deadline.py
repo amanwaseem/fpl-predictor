@@ -104,7 +104,18 @@ class TestAlarm(LogDir):
         status, message = self.check(6)
         self.assertEqual(status, check_deadline.FAIL)
         self.assertIn("no open PR adds one", message)
-        self.assertIn("by hand", message)
+        self.assertIn("Make the entry by hand now", message)
+
+    def test_no_pr_before_the_late_alarm_waits_for_the_entry_workflow(self):
+        """The previous gameweek may have settled hours ago, with no entry run since:
+        a hand-made branch then would stop the run that is coming (#188)."""
+        for hours in (20, 15, 10.5):
+            with self.subTest(hours=hours):
+                status, message = self.check(hours)
+                self.assertEqual(status, check_deadline.FAIL)
+                self.assertIn("acts on its next run", message)
+                self.assertNotIn("by hand now", message)
+                self.assertIn("if no PR is open 10h out", message)
 
     def test_inside_with_an_open_pr_says_merge_it(self):
         status, message = self.check(6, [pr(80, "predictions/gw06_baseline-v1.csv")])

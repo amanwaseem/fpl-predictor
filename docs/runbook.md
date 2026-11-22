@@ -116,9 +116,17 @@ wrong, and the email says which:
 - **"Read and merge #N"**: the PR is open and has not merged itself. Its
   `ci` is probably red, or auto-merge could not be turned on. Fix `ci` or
   merge it once it is green.
-- **"no open PR adds one"**: the entry workflow did not make it. Start at §1
-  now. If time is short, go straight to §9's fallback. An entry from a stale
-  snapshot is still evidence; no entry is not.
+- **"no open PR adds one yet"** (over 10 hours out): the entry workflow
+  hasn't opened its PR. The previous gameweek may have settled only hours
+  ago, with no entry run since. Check its latest run on the Actions tab: a
+  failed run says why, and you can start a real one there (Run workflow,
+  with dry run unticked). Don't push a
+  `predict/gwNN` branch yet: the workflow stops for one. If no PR is open 10
+  hours out, the watchdog says so.
+- **"no open PR adds one: … Make the entry by hand now"** (10 hours out or
+  less): the entry workflow did not make it. Start at §1 now. If time is
+  short, go straight to §9's fallback. An entry from a stale snapshot is still
+  evidence; no entry is not.
 
 It stops failing once an entry for that gameweek is merged. If it says "could
 not check", the API was unreachable. That is not a missed deadline, but look

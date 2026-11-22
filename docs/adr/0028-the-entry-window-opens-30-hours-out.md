@@ -46,7 +46,10 @@ for the same reason the entry is, so an alarm at 10 hours might never run in
 time. While the previous gameweek hasn't settled, the alarm stays at 10 hours:
 the entry workflow is waiting for its late window on purpose then, and an
 alarm at 20 would send someone to make the entry by hand for nothing (and
-their `predict/gwNN` branch would then stop the workflow).
+their `predict/gwNN` branch would then stop the workflow). The previous gameweek can
+also settle late, inside 20 hours, with no entry run since. So until 10 hours
+out, a watchdog alarm with no PR says to check the entry workflow's runs, not
+to make the entry by hand.
 
 ## Consequences
 
