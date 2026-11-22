@@ -296,9 +296,10 @@ function Entry({ gameweek }: { gameweek: number }) {
       {entry.isError && <Problem error={entry.error} />}
       {entry.data && (
         <>
+          {/* The status first: the proof opens to a long line, which would push it aside. */}
           <div className="entry-meta">
-            <Proof entry={entry.data} gameweek={gameweek} />
             <span>{scored ? "Scored" : "Not scored yet"}</span>
+            <Proof entry={entry.data} gameweek={gameweek} />
           </div>
           {entry.data.next_cursor && (
             <p role="alert" className="problem problem-warn">
