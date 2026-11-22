@@ -1,4 +1,4 @@
-# 0028. The entry window opens 30 hours out, once the previous gameweek has finished
+# 0028. The entry window opens 30 hours out, once the previous gameweek has settled
 
 - **Status:** Accepted
 - **Date:** 2026-11-22
@@ -25,22 +25,28 @@ the deadline. A missed deadline stays missed (ADR 0004).
 
 The window has two stages (`tools/entry_bot.py`):
 
-- **Early, 30 hours out or less, once the previous gameweek is `finished`.**
-  Several runs fall inside it, so a failed one is retried. Waiting for the
-  previous gameweek keeps the snapshot free of in-flight fixtures (runbook
-  section 1).
+- **Early, 30 hours out or less, once the previous gameweek has settled**
+  (`data_checked`, bonus confirmed). Several runs fall inside it, so a failed
+  one is retried. Waiting for the previous gameweek keeps the snapshot free of
+  in-flight fixtures and provisional bonus (runbook section 1). `finished`
+  alone is not enough: it flips hours earlier, and `usable_rounds` leaves a
+  round out of the features until `data_checked`, so an entry made in that gap
+  would miss the latest round while there was still time to wait for it.
 - **Late, 12 hours out or less, whatever the previous gameweek's state.** This
   is the old window, kept as a fallback for tight turnarounds such as
   Christmas (GW17 on 26 December, GW18's deadline on the 29th). Its unsettled
   round is excluded, as before.
 
 A previous gameweek missing from bootstrap (GW1's is last season's) counts as
-finished.
+settled.
 
 The watchdog's alarm (`tools/check_deadline.py`) moves from 10 hours to 20.
 That's after about two entry runs, with 20 hours left for a person. It is late
 for the same reason the entry is, so an alarm at 10 hours might never run in
-time.
+time. While the previous gameweek hasn't settled, the alarm stays at 10 hours:
+the entry workflow is waiting for its late window on purpose then, and an
+alarm at 20 would send someone to make the entry by hand for nothing (and
+their `predict/gwNN` branch would then stop the workflow).
 
 ## Consequences
 
@@ -55,7 +61,7 @@ time.
   snapshot id beside the deadline, so the snapshot's age is visible on every
   entry.
 - A hand-made `predict/gwNN` branch with no PR now fails the workflow from 30
-  hours out, not 12, once the previous gameweek has finished.
+  hours out, not 12, once the previous gameweek has settled.
 
 Considered and not chosen:
 

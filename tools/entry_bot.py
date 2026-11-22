@@ -21,10 +21,10 @@ Subcommands:
   before-deadline fails once the deadline is under a margin away.
   token-expiry    fails when ENTRY_BOT_TOKEN has expired or is about to.
 
-`decide` acts when the next deadline has not passed, nothing for that gameweek
-exists yet, and the deadline is inside the window: WINDOW_HOURS away or less
-once the previous gameweek has finished, LATE_WINDOW_HOURS or less regardless.
-Nothing else for that gameweek may exist yet:
+`decide` acts when the next deadline has not passed and is inside the window
+(WINDOW_HOURS away or less once the previous gameweek is settled,
+LATE_WINDOW_HOURS or less regardless), and nothing for that gameweek exists
+yet:
 
 - no entry on main for this season's gameweek. One from another season is
   not this deadline's entry: the log has no season dimension yet, so that
@@ -75,6 +75,7 @@ from check_deadline import (
     load_prs,
     log_dir_for,
     next_deadline,
+    previous_settled,
     prs_adding,
     season_of,
 )
@@ -96,8 +97,10 @@ from fpl.log.contract import (
 # workflow ran every 6 hours (median), with gaps of up to 10.8. A 12-hour window
 # could hold a single run, with no retry left if it failed.
 #
-# From WINDOW_HOURS out it acts once the previous gameweek has finished, so the
-# snapshot holds no in-flight fixtures (runbook section 1). From
+# From WINDOW_HOURS out it acts once the previous gameweek is settled (bonus
+# confirmed, check_deadline.previous_settled), so the snapshot holds no
+# in-flight fixtures or provisional bonus and that round is in the features
+# (runbook section 1). From
 # LATE_WINDOW_HOURS out it acts whatever that gameweek's state, so a tight
 # turnaround still gets its entry, with the unsettled round excluded. The
 # watchdog's alarm (check_deadline.ALARM_HOURS) sits between the two.
@@ -170,18 +173,6 @@ def late_prs(bootstrap, prs, now):
     return late
 
 
-def previous_finished(bootstrap, gameweek):
-    """Whether the gameweek before `gameweek` is finished in bootstrap.
-
-    True when bootstrap has no event for it: GW1, whose previous gameweek is
-    last season's, or a fake bootstrap made for a test run.
-    """
-    for event in bootstrap.get("events", []):
-        if isinstance(event, dict) and event.get("id") == gameweek - 1:
-            return event.get("finished") is True
-    return True
-
-
 def decide(
     bootstrap,
     predictions_dir,
@@ -221,13 +212,13 @@ def decide(
     gameweek, deadline = upcoming
     season = season_of(deadline)
     hours = (deadline - now).total_seconds() / 3600
-    settled = previous_finished(bootstrap, gameweek)
+    settled = previous_settled(bootstrap, gameweek)
     if ignore_window:
         stage = "window ignored"
+    elif hours <= window_hours and settled:
+        stage = f"early window, {window_hours}h, GW{gameweek - 1:02d} settled"
     elif hours <= late_window_hours:
         stage = f"late window, {late_window_hours}h"
-    elif hours <= window_hours and settled:
-        stage = f"early window, {window_hours}h, GW{gameweek - 1:02d} finished"
     else:
         stage = None
     inside = 0 < hours and stage is not None
@@ -263,8 +254,8 @@ def decide(
         if hours <= window_hours:
             return result(
                 SKIP,
-                f"GW{gameweek - 1:02d} has not finished; a later run makes the "
-                f"entry once it has, or from {late_window_hours}h out regardless.",
+                f"GW{gameweek - 1:02d} is not settled; a later run makes the "
+                f"entry once it is, or from {late_window_hours}h out regardless.",
             )
         return result(SKIP, f"Over {window_hours}h away; a later run makes the entry.")
 

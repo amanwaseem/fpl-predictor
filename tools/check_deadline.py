@@ -8,10 +8,13 @@ deadline is ALARM_HOURS away or less and `main` holds no entry for that
 gameweek. GitHub's failed-workflow email is the alert.
 
 Since #68 the entry workflow makes the entry and opens its PR once the
-deadline is 30 hours away and the previous gameweek has finished, or 12 hours
+deadline is 30 hours away and the previous gameweek is settled, or 12 hours
 away regardless (#188). This is the alarm for when that did not happen or
 its PR sits unmerged, so it fires after the entry workflow's first attempts,
 not before: an alarm that goes off every week by design is learned as noise.
+It follows the same two stages: ALARM_HOURS out once the previous gameweek is
+settled, LATE_ALARM_HOURS out while it is not, when the entry workflow is
+waiting on purpose.
 When it fails it says which: "merge #N", or "no PR: make the entry by hand".
 
 It passes, and says why, when there is an entry, when the deadline is further
@@ -60,12 +63,18 @@ from fpl.log.contract import (
     season_of_deadline,
 )
 
-# The entry workflow acts from 30 hours out once the previous gameweek has
-# finished, and from 12 regardless (entry_bot.WINDOW_HOURS, #188). Its hourly
+# The entry workflow acts from 30 hours out once the previous gameweek is
+# settled, and from 12 regardless (entry_bot.WINDOW_HOURS, #188). Its hourly
 # runs come about every 6 hours, so about two go by before this fires, and 20
 # hours are left to merge its PR or make the entry by hand. This workflow is
 # late in the same way, so a later alarm might never run before the deadline.
 ALARM_HOURS = 20
+
+# While the previous gameweek is not settled, the entry workflow waits for the
+# late window (entry_bot.LATE_WINDOW_HOURS, 12h) on purpose, and an alarm at 20
+# hours would send someone to make the entry by hand for nothing. This is the
+# alarm from before #188, two hours after the late window opens.
+LATE_ALARM_HOURS = 10
 
 # Two deadlines for one gameweek this far apart are two seasons. Closer, it is
 # the same gameweek with a deadline FPL moved after the entry was made.
@@ -116,6 +125,20 @@ def deadline_of(bootstrap, gameweek):
             except (KeyError, TypeError, ValueError):
                 return None
     return None
+
+
+def previous_settled(bootstrap, gameweek):
+    """Whether the gameweek before `gameweek` is settled in bootstrap.
+
+    Settled is `data_checked`: FPL has confirmed its bonus points, so
+    usable_rounds keeps it in the features (`finished` comes earlier, while
+    bonus is still provisional). True when bootstrap has no event for it: GW1,
+    whose previous gameweek is last season's, or a fake bootstrap.
+    """
+    for event in bootstrap.get("events", []):
+        if isinstance(event, dict) and event.get("id") == gameweek - 1:
+            return event.get("data_checked") is True
+    return True
 
 
 def season_of(deadline):
@@ -235,12 +258,21 @@ def load_prs(path):
     return prs
 
 
-def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS, log_dir=None):
+def check(
+    bootstrap,
+    classified,
+    prs,
+    now,
+    alarm_hours=ALARM_HOURS,
+    late_alarm_hours=LATE_ALARM_HOURS,
+    log_dir=None,
+):
     """(PASS or FAIL, a sentence saying why) for the next deadline.
 
     `classified` is classify_entries() for the next gameweek, or a function of
     (gameweek, deadline) returning it. `log_dir` is the directory it read, to
-    name; by default the deadline's season's.
+    name; by default the deadline's season's. The alarm is at `alarm_hours`
+    once the previous gameweek is settled, `late_alarm_hours` until then.
     """
     try:
         upcoming = next_deadline(bootstrap)
@@ -278,7 +310,13 @@ def check(bootstrap, classified, prs, now, alarm_hours=ALARM_HOURS, log_dir=None
     else:
         status_line = "No open PR adds one."
 
-    if hours > alarm_hours:
+    if not previous_settled(bootstrap, gameweek):
+        if hours > late_alarm_hours:
+            return PASS, (
+                f"{when}. No entry on main yet; GW{gameweek - 1:02d} is not settled, so "
+                f"the entry workflow waits for its late window. {status_line}{notes}"
+            )
+    elif hours > alarm_hours:
         return PASS, f"{when}. No entry on main yet; over {alarm_hours}h. {status_line}{notes}"
     if pending:
         numbers = ", ".join(f"#{n}" for n, _ in pending)

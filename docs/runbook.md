@@ -107,10 +107,11 @@ phantom model in the log.
 
 `.github/workflows/deadline.yml` is scheduled hourly, though GitHub starts it
 every few hours (see the automated entry, below). It fails, and GitHub emails
-you, when the next deadline is 20 hours away or less and `main` has no
-`predictions/gwNN_*.csv` made for it. The automated entry (below) opens its PR
-from 30 hours out once the previous gameweek has finished, so by then something
-has gone wrong, and the email says which:
+you, when the next deadline is 20 hours away or less (10 while the previous
+gameweek has not settled) and `main` has no `predictions/gwNN_*.csv` made for
+it. The automated entry (below) opens its PR from 30 hours out once the
+previous gameweek has settled, or 12 regardless, so by then something has gone
+wrong, and the email says which:
 
 - **"Read and merge #N"**: the PR is open and has not merged itself. Its
   `ci` is probably red, or auto-merge could not be turned on. Fix `ci` or
@@ -148,8 +149,9 @@ hours should pass; 6 hours with a logged gameweek should pass.
 `.github/workflows/entry.yml` is scheduled hourly. Its window has two stages
 (#188, ADR 0028):
 
-- **Early:** 30 hours out or less, once the previous gameweek is `finished`, so
-  the snapshot holds no in-flight fixtures (§1).
+- **Early:** 30 hours out or less, once the previous gameweek has settled
+  (`data_checked`, bonus confirmed), so the snapshot holds no in-flight
+  fixtures and the round is in the features (§1).
 - **Late:** 12 hours out or less, whatever the previous gameweek's state, so a
   tight turnaround still gets an entry. Its unsettled round is excluded (§3).
 
@@ -212,7 +214,7 @@ by default: it ignores the window, makes the entry under `scratch/`, and puts
 the digest on the run's summary page. Nothing is committed, released or
 opened. A fake deadline (dry runs only) tests just the decision, with the
 window kept and nothing fetched: 6 hours and a gameweek with no entry acts,
-25 hours acts (a fake has no previous gameweek, which counts as finished), 48
+25 hours acts (a fake has no previous gameweek, which counts as settled), 48
 hours skips, and a gameweek with an entry on `main` skips.
 
 ### Re-verifying an automated entry
