@@ -1,8 +1,10 @@
 # Makes each gameweek's entry and opens its PR before the deadline (#68). GW5
 # and GW7 were missed because nobody started the entry; for GW7 the watchdog
-# fired and still nothing happened. This runs hourly. Once the next deadline is
-# 12 hours away or less, with nothing for that gameweek on main or in an open
-# PR, it snapshots, runs fpl-entry, uploads the snapshot as a release asset and
+# fired and still nothing happened. This is scheduled hourly; GitHub starts it
+# about every 6 hours. Once the next deadline is 30 hours away or less and the
+# previous gameweek has finished, or 12 hours away or less regardless (#188,
+# ADR 0028), with nothing for that gameweek on main or in an open PR, it
+# snapshots, runs fpl-entry, uploads the snapshot as a release asset and
 # opens the PR with auto-merge on, so it merges itself once `ci` is green
 # (#119, ADR 0024): GW9's correct entry sat in an open PR that nobody merged
 # before the deadline, and was only accepted afterwards (ADR 0026). A human can still read it, and closing it is the veto. Every
@@ -19,7 +21,7 @@
 # release asset and opens the PR, rather than making a second entry.
 #
 # The watchdog (deadline.yml) is separate. It is the alarm when this has not
-# produced a merged entry 10 hours out, and it checks ENTRY_BOT_TOKEN daily.
+# produced a merged entry 20 hours out, and it checks ENTRY_BOT_TOKEN daily.
 #
 # Snapshots are not committed (rule 3). Each one that produced an entry is the
 # release asset snapshot-<id>, beside the digest, so fpl-verify can be re-run

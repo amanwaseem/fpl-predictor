@@ -34,3 +34,4 @@ answer.
 | [0025](0025-the-frontend-is-served-by-the-api.md) | The frontend is served by the API | Accepted |
 | [0026](0026-an-entry-pushed-before-its-deadline-counts.md) | An entry pushed before its deadline counts, if a maintainer accepts its late merge | Accepted |
 | [0027](0027-score-prs-merge-themselves.md) | Score PRs are made, and merge themselves, once a gameweek settles | Accepted |
+| [0028](0028-the-entry-window-opens-30-hours-out.md) | The entry window opens 30 hours out, once the previous gameweek has finished | Accepted |

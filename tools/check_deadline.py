@@ -8,7 +8,8 @@ deadline is ALARM_HOURS away or less and `main` holds no entry for that
 gameweek. GitHub's failed-workflow email is the alert.
 
 Since #68 the entry workflow makes the entry and opens its PR once the
-deadline is 12 hours away. This is the alarm for when that did not happen or
+deadline is 30 hours away and the previous gameweek has finished, or 12 hours
+away regardless (#188). This is the alarm for when that did not happen or
 its PR sits unmerged, so it fires after the entry workflow's first attempts,
 not before: an alarm that goes off every week by design is learned as noise.
 When it fails it says which: "merge #N", or "no PR: make the entry by hand".
@@ -59,10 +60,12 @@ from fpl.log.contract import (
     season_of_deadline,
 )
 
-# The entry workflow acts from 12 hours out and retries hourly. Two hours of
-# its retries go by before this fires, and ten hours are left to merge its PR
-# or make the entry by hand.
-ALARM_HOURS = 10
+# The entry workflow acts from 30 hours out once the previous gameweek has
+# finished, and from 12 regardless (entry_bot.WINDOW_HOURS, #188). Its hourly
+# runs come about every 6 hours, so about two go by before this fires, and 20
+# hours are left to merge its PR or make the entry by hand. This workflow is
+# late in the same way, so a later alarm might never run before the deadline.
+ALARM_HOURS = 20
 
 # Two deadlines for one gameweek this far apart are two seasons. Closer, it is
 # the same gameweek with a deadline FPL moved after the entry was made.

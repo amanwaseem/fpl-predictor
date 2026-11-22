@@ -79,10 +79,10 @@ class TestAlarm(LogDir):
         self.assertIn("No entry on main yet", message)
 
     def test_no_alarm_just_outside_the_alarm(self):
-        self.assertEqual(self.check(10.5)[0], check_deadline.PASS)
+        self.assertEqual(self.check(20.5)[0], check_deadline.PASS)
 
     def test_the_alarm_edge_is_inside(self):
-        self.assertEqual(self.check(10)[0], check_deadline.FAIL)
+        self.assertEqual(self.check(20)[0], check_deadline.FAIL)
 
     def test_inside_with_no_pr_says_make_it_by_hand(self):
         status, message = self.check(6)
