@@ -202,13 +202,18 @@ function Entry({ gameweek }: { gameweek: number }) {
           <p className="muted">Every player&rsquo;s expected points for the gameweek.</p>
           {showing && showing.model_version !== main?.model_version && (
             <p className="note small">
-              {main ? (
+              {main && main.gameweeks_logged.includes(gameweek) ? (
                 <>
                   These are the {modelName(showing.model_version)} model&rsquo;s predictions, not
                   our main ones.{" "}
                   <Link to={`/gameweeks/${gameweek}?${withoutModel()}`}>
                     See our main predictions
                   </Link>
+                </>
+              ) : main ? (
+                <>
+                  Our main model missed the gameweek {gameweek} deadline, so these are the{" "}
+                  {modelName(showing.model_version)} model&rsquo;s predictions.
                 </>
               ) : (
                 <>
