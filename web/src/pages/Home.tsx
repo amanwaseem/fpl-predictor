@@ -2,23 +2,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { type Schemas } from "../api/client";
-import {
-  POSITION_NAMES,
-  POSITIONS,
-  useEntry,
-  useModels,
-  useScorecard,
-  useStatus,
-} from "../api/queries";
+import { POSITION_NAMES, POSITIONS, useEntry, useModels, useStatus } from "../api/queries";
 import { ClubBadge, Countdown, Loading, PlayerPhoto, StatusPill } from "../components/bits";
 import { savedTeam } from "../remember";
 import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
-import { ScorecardTables } from "../components/ScorecardTables";
 import { REPOSITORY } from "../log";
 import { formatLocal } from "../format";
-import { byPreference, modelAbout, modelName, roleName } from "../models";
-import { againstBaseline, gameweekList, retiredNote, type Model } from "../scorecard";
+import { byPreference } from "../models";
 
 type Row = Schemas["Prediction"];
 
@@ -31,7 +22,6 @@ export function Home() {
   const [hasTeam] = useState(() => savedTeam() !== null);
   const status = useStatus();
   const models = useModels();
-  const scorecard = useScorecard();
 
   // The newest gameweek with an entry, and the main model's entry for it.
   const all = models.data?.models ?? [];
@@ -76,16 +66,6 @@ export function Home() {
           </section>
         )}
 
-        <section className="section" aria-labelledby="record">
-          <div className="section-head">
-            <h2 id="record">Track record</h2>
-            <a href="#scorecard">Full scorecard ↓</a>
-          </div>
-          {scorecard.isPending && <Loading />}
-          {scorecard.isError && <Problem error={scorecard.error} />}
-          {scorecard.data && <Record models={scorecard.data.models} />}
-        </section>
-
         <section className="section" aria-labelledby="how">
           <h2 id="how">How it works</h2>
           <div className="grid grid-3 steps">
@@ -108,17 +88,11 @@ export function Home() {
               <h3>Score</h3>
               <p className="muted small">
                 Once the gameweek's results are final, every prediction is scored. Good weeks and
-                bad ones, and missed ones too, all stay on the record below.
+                bad ones, and missed ones too, all stay on the{" "}
+                <Link to="/track-record">track record</Link>.
               </p>
             </div>
           </div>
-        </section>
-
-        <section className="section" aria-labelledby="scorecard">
-          <h2 id="scorecard">The full scorecard</h2>
-          {scorecard.data && (
-            <ScorecardTables season={scorecard.data.season} models={scorecard.data.models} />
-          )}
         </section>
       </div>
     </>
@@ -217,74 +191,6 @@ function TopPicks({ gameweek, model }: { gameweek: number; model: string }) {
           </ol>
         </div>
       ))}
-    </div>
-  );
-}
-
-function Record({ models }: { models: Model[] }) {
-  if (!models.length) return <p>No model has an entry yet.</p>;
-  const baseline = models.find((m) => m.role === "baseline");
-  return (
-    <div className="grid grid-3">
-      {models.map((m) => {
-        const vs = againstBaseline(m, baseline);
-        const mae = m.pooled.all?.mae;
-        // Relative to the baseline on the weeks both were scored: positive is better.
-        const better = vs ? ((vs.baselineMae - vs.mae) / vs.baselineMae) * 100 : null;
-        return (
-          <article className="card record-card" key={m.model_version}>
-            <div className="row">
-              <h3>{modelName(m.model_version)}</h3>
-              {retiredNote(m) ? (
-                <span className="pill pill-neutral">{retiredNote(m)}</span>
-              ) : (
-                roleName(m.role) &&
-                roleName(m.role) !== modelName(m.model_version) && (
-                  <span className="tag">{roleName(m.role)}</span>
-                )
-              )}
-            </div>
-            <p className="muted small">{modelAbout(m.model_version)}</p>
-            {mae !== undefined && mae !== null ? (
-              <>
-                <div className="big">
-                  {mae.toFixed(2)}
-                  <span className="muted small"> pts</span>
-                </div>
-                <p className="muted small">
-                  average miss per player, over {m.gameweeks_scored.length} scored gameweek
-                  {m.gameweeks_scored.length === 1 ? "" : "s"}
-                  {better !== null && (
-                    <>
-                      {" "}
-                      ·{" "}
-                      <span
-                        className={better > 0.05 ? "better" : better < -0.05 ? "worse" : undefined}
-                      >
-                        {Math.abs(better) < 0.05
-                          ? "level with the baseline"
-                          : `${Math.abs(better).toFixed(1)}% ${better > 0 ? "more" : "less"} accurate than the baseline`}
-                      </span>
-                    </>
-                  )}
-                </p>
-              </>
-            ) : (
-              <p className="muted small">
-                {m.gameweeks_logged.length
-                  ? `First predictions in GW${Math.min(...m.gameweeks_logged)}; scored once that gameweek settles.`
-                  : "No predictions yet."}
-              </p>
-            )}
-            {m.gameweeks_missed.length > 0 && (
-              <p className="small missed">Missed {gameweekList(m.gameweeks_missed)}</p>
-            )}
-            <p className="small muted">
-              <code>{m.model_version}</code>
-            </p>
-          </article>
-        );
-      })}
     </div>
   );
 }

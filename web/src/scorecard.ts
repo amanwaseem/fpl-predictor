@@ -69,3 +69,16 @@ export function againstBaseline(model: Model, baseline: Model | undefined) {
   if (mine === null || base === null) return null;
   return { gameweeks: shared.length, mae: mine, baselineMae: base, difference: mine - base };
 }
+
+// How much more accurate than the baseline, as a percentage of the baseline's
+// average error on the same gameweeks: positive is better.
+export function percentBetter(vs: ReturnType<typeof againstBaseline>): number | null {
+  return vs ? ((vs.baselineMae - vs.mae) / vs.baselineMae) * 100 : null;
+}
+
+// Gameweeks with nothing published at all: missed by a model, logged by none.
+export function missedGameweeks(models: Model[]): number[] {
+  const logged = new Set(models.flatMap((m) => m.gameweeks_logged));
+  const missed = new Set(models.flatMap((m) => m.gameweeks_missed));
+  return [...missed].filter((gw) => !logged.has(gw)).sort((a, b) => a - b);
+}

@@ -32,6 +32,13 @@ export function signed(x: number, digits = 3): string {
   return `${sign}${Math.abs(rounded).toFixed(digits)}`;
 }
 
+// A list as a sentence has it: "6, 8, 9 and 10".
+export function andList(items: (string | number)[]): string {
+  const words = items.map(String);
+  if (words.length < 2) return words.join("");
+  return `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+}
+
 // A route parameter that must be a positive whole number, or null.
 export function positiveInt(value: string | undefined): number | null {
   return value && /^\d+$/.test(value) && Number(value) > 0 ? Number(value) : null;
