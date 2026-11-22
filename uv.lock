@@ -290,7 +290,7 @@ requires-dist = [{ name = "requests", specifier = ">=2.34,<3" }]
 api = [
     { name = "alembic", specifier = ">=1.20,<2" },
     { name = "fastapi", specifier = ">=0.159,<1" },
-    { name = "highspy", specifier = ">=1.15,<2" },
+    { name = "highspy", specifier = ">=1.15,<1.16" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3,<4" },
     { name = "sqlalchemy", specifier = ">=2.1,<2.2" },
     { name = "uvicorn", specifier = ">=0.54,<1" },
@@ -304,7 +304,7 @@ dev = [
     { name = "alembic", specifier = ">=1.20,<2" },
     { name = "coverage", specifier = ">=7.16,<8" },
     { name = "fastapi", specifier = ">=0.159,<1" },
-    { name = "highspy", specifier = ">=1.15,<2" },
+    { name = "highspy", specifier = ">=1.15,<1.16" },
     { name = "httpx2", specifier = ">=2.16,<3" },
     { name = "lightgbm", specifier = ">=4.7,<5" },
     { name = "mypy", specifier = "==2.4.1" },
@@ -321,7 +321,7 @@ ml = [
     { name = "lightgbm", specifier = ">=4.7,<5" },
     { name = "numpy", specifier = ">=2.5,<3" },
 ]
-optimise = [{ name = "highspy", specifier = ">=1.15,<2" }]
+optimise = [{ name = "highspy", specifier = ">=1.15,<1.16" }]
 
 [[package]]
 name = "graphql-core"

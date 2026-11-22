@@ -15,6 +15,11 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # 1.16 prints a banner to stdout that breaks --json (#189). Held in
+      # pyproject.toml too. Try again on the next minor release.
+      - dependency-name: "highspy"
+        versions: ["1.16.x"]
     groups:
       python:
         patterns: ["*"]
