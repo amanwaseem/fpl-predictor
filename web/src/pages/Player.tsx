@@ -51,11 +51,13 @@ function PlayerPage({ playerId }: { playerId: number }) {
   const weeks = [...new Set([...played.keys(), ...p.predictions.map((x) => x.gameweek)])].sort(
     (a, b) => b - a,
   );
-  // One prediction a week: the main model's where it was logged, else the baseline's.
+  // One prediction a week: that week's main model's where it was logged, else
+  // the baseline's.
   const predicted = (gw: number) =>
     pickPrediction(
       p.predictions.filter((x) => x.gameweek === gw),
       models.data?.models,
+      gw,
     );
   // The points a week's entries were scored against, where they were; the
   // match data otherwise. The two agree once bonus is final.

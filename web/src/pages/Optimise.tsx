@@ -22,10 +22,18 @@ export function Optimise() {
 
   // What is on screen comes from the URL alone; the form is applied on submit.
   // Advice comes from the main model (#194). A link may still name another,
-  // which is kept; with none known, the API's default is used.
+  // which is kept for its own team; with none known, the API's default is used.
   const team = positiveInt(params.get("team") ?? undefined);
   const linked = params.get("model");
   const model = linked ?? main?.model_version;
+  // Named only when it is known not to be the main model.
+  const notMain = (version: string) =>
+    linked !== null && main !== undefined && version !== main.model_version;
+  const withoutModel = () => {
+    const next = new URLSearchParams(params);
+    next.delete("model");
+    return `?${next}`;
+  };
   const freeParam = params.get("free");
   const free = freeParam !== null && /^[0-5]$/.test(freeParam) ? Number(freeParam) : undefined;
 
@@ -84,7 +92,7 @@ export function Optimise() {
     // one, rather than ask once for the API's default and again for main.
     enabled: asking,
     // Asking costs an FPL API call and a solve: not again just because the
-    // reader came back to the tab. "Get advice" asks again.
+    // reader came back to the tab. "Get my advice" asks again.
     refetchOnWindowFocus: false,
     // A failure here may be the FPL API's; asking it again at once rarely helps.
     retry: false,
@@ -120,7 +128,8 @@ export function Optimise() {
     else toRemember.current = asked;
     const next = new URLSearchParams();
     next.set("team", form.team.trim());
-    if (linked) next.set("model", linked);
+    // A linked model goes with the linked team: another team gets main advice.
+    if (linked && asked === team) next.set("model", linked);
     if (form.free !== "") next.set("free", form.free);
     // The same request again is asked again: the squad may have changed on
     // FPL since, and the answer is cached for five minutes. No new history
@@ -208,9 +217,12 @@ export function Optimise() {
           <div className="section-head">
             <h2 id="advice">Your advice for gameweek {advice.data.gameweek}</h2>
             <span className="muted small">
-              {linked && advice.data.model_version !== main?.model_version
-                ? `From the ${modelName(advice.data.model_version)} model · `
-                : ""}
+              {notMain(advice.data.model_version) && (
+                <>
+                  From the {modelName(advice.data.model_version)} model (
+                  <Link to={withoutModel()}>see our main advice</Link>) ·{" "}
+                </>
+              )}
               Deadline {formatLocal(advice.data.deadline_utc)}
             </span>
           </div>
@@ -263,7 +275,11 @@ export function Optimise() {
         {fresh.data && (
           <>
             <p className="muted small">
-              Gameweek {fresh.data.gameweek}.{" "}
+              Gameweek {fresh.data.gameweek}
+              {notMain(fresh.data.model_version)
+                ? `, from the ${modelName(fresh.data.model_version)} model`
+                : ""}
+              .{" "}
               <Link
                 to={
                   linked

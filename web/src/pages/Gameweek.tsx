@@ -15,7 +15,7 @@ import { Problem } from "../components/Problem";
 import { clubName } from "../clubs";
 import { formatLocal, formatUtc, positiveInt, signed } from "../format";
 import { entryHistoryUrl } from "../log";
-import { byPreference, modelName } from "../models";
+import { byPreference, mainIn, modelName } from "../models";
 import { NotFound } from "./NotFound";
 
 type Row = Schemas["Prediction"];
@@ -86,15 +86,14 @@ function Entry({ gameweek }: { gameweek: number }) {
   const navigate = useNavigate();
   const models = useModels();
 
-  const logged = (models.data?.models ?? []).filter((m) => m.gameweeks_logged.includes(gameweek));
-  // One set of predictions for users (#194): the main model's, or for a
-  // gameweek before it ran, the baseline's. A link may still ask for another
-  // by ?model=; one with no entry this gameweek falls back.
-  const preferred = byPreference(logged)[0];
+  // One set of predictions for users (#194): the model that was main that
+  // gameweek, or for a gameweek before one ran, the baseline's. A link may
+  // still ask for another by ?model=; one with no entry this gameweek falls back.
+  const logged = byPreference(models.data?.models, gameweek);
   const asked = logged.find((m) => m.model_version === params.get("model"));
-  const showing = asked ?? preferred;
+  const showing = asked ?? logged[0];
   const model = showing?.model_version;
-  const mainHere = logged.some((m) => m.role === "main");
+  const main = mainIn(models.data?.models, gameweek);
   const allGameweeks = [
     ...new Set((models.data?.models ?? []).flatMap((m) => m.gameweeks_logged)),
   ].sort((a, b) => b - a);
@@ -201,17 +200,15 @@ function Entry({ gameweek }: { gameweek: number }) {
           <p className="eyebrow">Predictions</p>
           <h1>Gameweek {gameweek}</h1>
           <p className="muted">Every player&rsquo;s expected points for the gameweek.</p>
-          {showing && showing.role !== "main" && (
+          {showing && showing.model_version !== main?.model_version && (
             <p className="note small">
-              {asked ? (
+              {main ? (
                 <>
                   These are the {modelName(showing.model_version)} model&rsquo;s predictions, not
                   our main ones.{" "}
-                  {mainHere && (
-                    <Link to={`/gameweeks/${gameweek}?${withoutModel()}`}>
-                      See our main predictions
-                    </Link>
-                  )}
+                  <Link to={`/gameweeks/${gameweek}?${withoutModel()}`}>
+                    See our main predictions
+                  </Link>
                 </>
               ) : (
                 <>
@@ -407,7 +404,7 @@ function Proof({ entry, gameweek }: { entry: Schemas["PredictionPage"]; gameweek
   const early = Date.parse(entry.generated_at_utc) < Date.parse(entry.deadline_utc);
   const href = entryHistoryUrl(entry.season, gameweek, entry.model_version);
   return (
-    <details className="proof">
+    <details className={early ? "proof proof-early" : "proof"}>
       <summary>{early ? "✓ Published before the deadline" : "Published"}</summary>
       <p>
         Made{" "}

@@ -28,9 +28,11 @@ record: how one ends.
   scored gameweeks (0007). The old main model then retires. A challenger
   that does not, retires itself.
 - **Retiring a model ends its record, and keeps it.** It is no longer logged;
-  its entries stay in the log, and its season and last gameweek are
-  recorded with the reason. The weeks after it are not missed: the scoring harness and
-  `/v1/models` say it is retired, and from when.
+  its entries stay in the log, and its season, last gameweek and the role it
+  held are recorded with the reason. The weeks after it are not missed: the
+  scoring harness and `/v1/models` say it is retired, and from when. The site
+  shows a former main model's predictions for the gameweeks it was main, since
+  those are what users saw before the deadlines (#194).
 - **The rules are tests.** Exactly one baseline, exactly one main model, at
   most one challenger, every logged model with exactly one role, and none
   both logged and retired. `fpl-entry` refuses to run a retired model, the

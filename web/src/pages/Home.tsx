@@ -36,8 +36,7 @@ export function Home() {
   // The newest gameweek with an entry, and the main model's entry for it.
   const all = models.data?.models ?? [];
   const latest = Math.max(0, ...all.flatMap((m) => m.gameweeks_logged)) || null;
-  const logged = all.filter((m) => latest && m.gameweeks_logged.includes(latest));
-  const featured = byPreference(logged)[0]?.model_version;
+  const featured = latest ? byPreference(all, latest)[0]?.model_version : undefined;
 
   return (
     <>

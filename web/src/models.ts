@@ -28,17 +28,36 @@ export function liveModels(models: Schemas["Model"][] | undefined): Schemas["Mod
   return (models ?? []).filter((m) => m.role && m.role !== "retired");
 }
 
-// Users see one set of predictions (#194): the main model's, or for a
-// gameweek it did not log, the baseline's, then any other's. The models are
-// compared on Track record; a link may still ask for one by ?model=.
-const ROLE_ORDER: Partial<Record<NonNullable<Role>, number>> = { main: 0, baseline: 1 };
-
-function rank(role: Role | null | undefined): number {
-  return role ? (ROLE_ORDER[role] ?? 2) : 3;
+// The model that was main in `gameweek`, among those that logged it. A
+// promotion retires the old main model (ADR 0020), but its predictions are
+// still what users saw before those deadlines, so a retired model that ended
+// as main comes first for the gameweeks it logged. Main models follow one
+// another, so of two that logged a gameweek, the one retired first was main.
+export function mainIn(
+  models: Schemas["Model"][] | undefined,
+  gameweek: number,
+): Schemas["Model"] | undefined {
+  const logged = (models ?? []).filter((m) => m.gameweeks_logged.includes(gameweek));
+  const former = logged
+    .filter((m) => m.retired_from === "main")
+    .sort((a, b) => (a.retired_after ?? 0) - (b.retired_after ?? 0))[0];
+  return former ?? logged.find((m) => m.role === "main");
 }
 
-export function byPreference(models: Schemas["Model"][]): Schemas["Model"][] {
-  return [...models].sort((a, b) => rank(a.role) - rank(b.role));
+// Users see one set of predictions (#194): the main model's for that
+// gameweek, or for one before a main model ran, the baseline's, then any
+// other's. The models are compared on Track record; a link may still ask for
+// one by ?model=. Only models that logged the gameweek are listed.
+export function byPreference(
+  models: Schemas["Model"][] | undefined,
+  gameweek: number,
+): Schemas["Model"][] {
+  const main = mainIn(models, gameweek)?.model_version;
+  const rank = (m: Schemas["Model"]) =>
+    m.model_version === main ? 0 : m.role === "baseline" ? 1 : m.role ? 2 : 3;
+  return (models ?? [])
+    .filter((m) => m.gameweeks_logged.includes(gameweek))
+    .sort((a, b) => rank(a) - rank(b));
 }
 
 // A player's one prediction for a gameweek, from the most preferred model
@@ -46,11 +65,14 @@ export function byPreference(models: Schemas["Model"][]): Schemas["Model"][] {
 export function pickPrediction<T extends { model_version: string }>(
   predictions: T[],
   models: Schemas["Model"][] | undefined,
+  gameweek: number,
 ): T | undefined {
-  const roleOf = (version: string) => models?.find((m) => m.model_version === version)?.role;
-  return [...predictions].sort(
-    (a, b) => rank(roleOf(a.model_version)) - rank(roleOf(b.model_version)),
-  )[0];
+  const order = byPreference(models, gameweek).map((m) => m.model_version);
+  const rank = (version: string) => {
+    const i = order.indexOf(version);
+    return i === -1 ? order.length : i;
+  };
+  return [...predictions].sort((a, b) => rank(a.model_version) - rank(b.model_version))[0];
 }
 
 export function modelName(version: string): string {
