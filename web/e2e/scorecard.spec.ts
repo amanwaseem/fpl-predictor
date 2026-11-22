@@ -67,6 +67,17 @@ test("each week on the chart gives both figures and links to its predictions", a
 
 test("missed gameweeks are listed, not left out", async ({ page }) => {
   test.skip(missed.length === 0, "no gameweek has been missed");
+  // The API works a miss out from which gameweeks have finished, and the
+  // database in CI holds the log but no football data, so it finds none
+  // there. The committed scores say which weeks were missed.
+  await page.route("**/v1/scorecard", async (route) => {
+    const response = await route.fetch();
+    const card: { models: { model_version: string; gameweeks_missed: number[] }[] } =
+      await response.json();
+    for (const model of card.models)
+      model.gameweeks_missed = scores.models[model.model_version]?.gameweeks_missed ?? [];
+    await route.fulfill({ response, json: card });
+  });
   await page.goto("/track-record");
   const weeks =
     missed.length > 1
