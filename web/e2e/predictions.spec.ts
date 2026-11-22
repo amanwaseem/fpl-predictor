@@ -53,10 +53,16 @@ test("filters narrow the entry and sorting reorders it", async ({ page }) => {
   await expect(table.locator('tbody tr:not([data-position="GKP"])')).toHaveCount(0);
 
   await table.getByRole("button", { name: "Price" }).click();
-  const prices = await table.locator("tbody td.price").allTextContents();
-  const values = prices.map((p) => Number(p.replace(/[£m]/g, "")));
-  expect(values.length).toBeGreaterThan(0);
-  expect(values).toEqual([...values].sort((a, b) => b - a));
+  await expect(page).toHaveURL(/sort=price/);
+  // Polled: reading the prices once can catch the table before it re-sorts,
+  // which failed about one run in five.
+  await expect
+    .poll(async () => {
+      const prices = await table.locator("tbody td.price").allTextContents();
+      const values = prices.map((p) => Number(p.replace(/[£m]/g, "")));
+      return values.length > 0 && values.every((v, i) => i === 0 || values[i - 1] >= v);
+    })
+    .toBe(true);
 });
 
 test("an entry shows its top fifty first, and more on asking", async ({ page }) => {
