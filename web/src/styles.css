@@ -215,13 +215,22 @@ main {
   box-shadow: 0 0 0 4px rgba(91, 140, 255, 0.18);
 }
 /* One row of links: on the narrowest phones it scrolls sideways rather than
-   breaking "My team" over two lines. */
+   breaking "My team" over two lines. With no scrollbar, a glow at an edge with
+   more links past it shows that it scrolls, as .table-scroll does. */
 .site-nav {
   display: flex;
   gap: 0.25rem;
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
+  background:
+    linear-gradient(to right, var(--ink) 30%, transparent) left / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--ink) 30%, transparent) right / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(91 140 255 / 0.35), transparent) left / 0.75rem 100%
+      no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(91 140 255 / 0.35), transparent) right / 0.75rem
+      100% no-repeat scroll,
+    var(--ink);
 }
 .site-nav a {
   color: var(--on-ink-muted);
@@ -240,9 +249,11 @@ main {
   color: var(--on-ink);
   background: rgba(255, 255, 255, 0.07);
 }
+/* Selected is blue, so hovering another link never looks like a second
+   current page. */
 .site-nav a.active {
-  color: var(--on-ink);
-  background: var(--surface-2);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 .site-footer {
   border-top: 1px solid var(--line);
@@ -575,16 +586,17 @@ details.help ol {
 /* Tables */
 .table-scroll {
   overflow-x: auto;
-  /* A shadow at an edge with more table past it, so a phone shows there is
-     more to scroll to. The covers move with the content (local) and hide the
-     shadows (scroll) once an end is reached. */
+  /* A glow at an edge with more table past it, so a phone shows there is
+     more to scroll to. Blue, because a black shadow barely shows on navy. The
+     covers move with the content (local) and hide the glows (scroll) once an
+     end is reached. */
   background:
     linear-gradient(to right, var(--surface) 30%, transparent) left / 2rem 100% no-repeat local,
     linear-gradient(to left, var(--surface) 30%, transparent) right / 2rem 100% no-repeat local,
-    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.5), transparent) left / 0.75rem 100%
+    radial-gradient(farthest-side at 0 50%, rgb(91 140 255 / 0.35), transparent) left / 0.75rem 100%
       no-repeat scroll,
-    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.5), transparent) right / 0.75rem 100%
-      no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(91 140 255 / 0.35), transparent) right / 0.75rem
+      100% no-repeat scroll,
     var(--surface);
 }
 table {

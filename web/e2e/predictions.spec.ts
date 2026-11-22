@@ -56,13 +56,16 @@ test("filters narrow the entry and sorting reorders it", async ({ page }) => {
   await expect(page).toHaveURL(/sort=price/);
   // Polled: reading the prices once can catch the table before it re-sorts,
   // which failed about one run in five.
+  // A failure names the first pair out of order, not just "expected true".
   await expect
     .poll(async () => {
       const prices = await table.locator("tbody td.price").allTextContents();
       const values = prices.map((p) => Number(p.replace(/[£m]/g, "")));
-      return values.length > 0 && values.every((v, i) => i === 0 || values[i - 1] >= v);
+      if (values.length === 0) return "no prices";
+      const i = values.findIndex((v, j) => j > 0 && values[j - 1] < v);
+      return i === -1 ? "descending" : `£${values[i - 1]}m before £${values[i]}m`;
     })
-    .toBe(true);
+    .toBe("descending");
 });
 
 test("an entry shows its top fifty first, and more on asking", async ({ page }) => {
