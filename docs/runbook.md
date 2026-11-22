@@ -105,18 +105,28 @@ phantom model in the log.
 
 ### When the deadline watchdog fires
 
-`.github/workflows/deadline.yml` runs hourly. It fails, and GitHub emails you,
-when the next deadline is 10 hours away or less and `main` has no
-`predictions/gwNN_*.csv` made for it. The automated entry (below) opens its PR
-from 12 hours out, so by then something has gone wrong, and the email says
-which:
+`.github/workflows/deadline.yml` is scheduled hourly, though GitHub starts it
+every few hours (see the automated entry, below). It fails, and GitHub emails
+you, when the next deadline is 20 hours away or less (10 while the previous
+gameweek has not settled) and `main` has no `predictions/gwNN_*.csv` made for
+it. The automated entry (below) opens its PR from 30 hours out once the
+previous gameweek has settled, or 12 regardless, so by then something has gone
+wrong, and the email says which:
 
 - **"Read and merge #N"**: the PR is open and has not merged itself. Its
   `ci` is probably red, or auto-merge could not be turned on. Fix `ci` or
   merge it once it is green.
-- **"no open PR adds one"**: the entry workflow did not make it. Start at §1
-  now. If time is short, go straight to §9's fallback. An entry from a stale
-  snapshot is still evidence; no entry is not.
+- **"no open PR adds one yet"** (over 10 hours out): the entry workflow
+  hasn't opened its PR. The previous gameweek may have settled only hours
+  ago, with no entry run since. Check its latest run on the Actions tab: a
+  failed run says why, and you can start a real one there (Run workflow,
+  with dry run unticked). Don't push a
+  `predict/gwNN` branch yet: the workflow stops for one. If no PR is open 10
+  hours out, the watchdog says so.
+- **"no open PR adds one: … Make the entry by hand now"** (10 hours out or
+  less): the entry workflow did not make it. Start at §1 now. If time is
+  short, go straight to §9's fallback. An entry from a stale snapshot is still
+  evidence; no entry is not.
 
 It stops failing once an entry for that gameweek is merged. If it says "could
 not check", the API was unreachable. That is not a missed deadline, but look
@@ -144,9 +154,21 @@ hours should pass; 6 hours with a logged gameweek should pass.
 
 ### The automated entry
 
-`.github/workflows/entry.yml` runs hourly. Once the next deadline is 12 hours
-away or less, with nothing for that gameweek on `main` or in an open PR, it
-takes a snapshot, runs `fpl-entry`, uploads the snapshot and digest as the
+`.github/workflows/entry.yml` is scheduled hourly. Its window has two stages
+(#188, ADR 0028):
+
+- **Early:** 30 hours out or less, once the previous gameweek has settled
+  (`data_checked`, bonus confirmed), so the snapshot holds no in-flight
+  fixtures and the round is in the features (§1).
+- **Late:** 12 hours out or less, whatever the previous gameweek's state, so a
+  tight turnaround still gets an entry. Its unsettled round is excluded (§3).
+
+GitHub starts scheduled runs late or drops them: in practice this runs about
+every 6 hours, with gaps of up to 11. Opening the window 30 hours out leaves
+several runs inside it, so a failed one is retried before the deadline.
+
+Inside the window, with nothing for that gameweek on `main` or in an open PR,
+it takes a snapshot, runs `fpl-entry`, uploads the snapshot and digest as the
 release `snapshot-<id>`, and opens a PR from `entry-bot/<season>-gwNN` with
 auto-merge on. The PR merges itself (rebase) once `ci` is green (ADR 0024).
 Every decision is `tools/entry_bot.py decide`; each run's summary page says
@@ -178,7 +200,7 @@ What it does in the cases that are not the usual one:
 | an open PR for a gameweek whose deadline has passed | turns its auto-merge off, and comments on it once. Opened before the deadline and unchanged: you may accept it in `tools/late_merges.json` and merge it (ADR 0026). Otherwise close it |
 | the deadline under 5 minutes away mid-run | stops before pushing or opening anything |
 
-Nothing fails outside the 12-hour window, so a branch you push days early
+Nothing fails outside the window, so a branch you push days early
 does not turn every hourly run red. A failure before the push deletes that
 run's release again; a failure after it leaves the branch for the next run to
 resume. It skips while any open PR adds an entry for the gameweek, so a
@@ -200,7 +222,8 @@ by default: it ignores the window, makes the entry under `scratch/`, and puts
 the digest on the run's summary page. Nothing is committed, released or
 opened. A fake deadline (dry runs only) tests just the decision, with the
 window kept and nothing fetched: 6 hours and a gameweek with no entry acts,
-48 hours skips, and a gameweek with an entry on `main` skips.
+25 hours acts (a fake has no previous gameweek, which counts as settled), 48
+hours skips, and a gameweek with an entry on `main` skips.
 
 ### Re-verifying an automated entry
 

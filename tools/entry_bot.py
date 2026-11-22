@@ -21,8 +21,10 @@ Subcommands:
   before-deadline fails once the deadline is under a margin away.
   token-expiry    fails when ENTRY_BOT_TOKEN has expired or is about to.
 
-`decide` acts when the next deadline is WINDOW_HOURS away or less and has not
-passed, and nothing for that gameweek exists yet:
+`decide` acts when the next deadline has not passed and is inside the window
+(WINDOW_HOURS away or less once the previous gameweek is settled,
+LATE_WINDOW_HOURS or less regardless), and nothing for that gameweek exists
+yet:
 
 - no entry on main for this season's gameweek. One from another season is
   not this deadline's entry: the log has no season dimension yet, so that
@@ -73,6 +75,7 @@ from check_deadline import (
     load_prs,
     log_dir_for,
     next_deadline,
+    previous_settled,
     prs_adding,
     season_of,
 )
@@ -89,10 +92,20 @@ from fpl.log.contract import (
     season_of_directory,
 )
 
-# Late enough for the final press conferences before most deadlines, early
-# enough that a failed run is retried a dozen times before the deadline. The
-# watchdog's alarm (check_deadline.ALARM_HOURS) sits inside this.
-WINDOW_HOURS = 12
+# The window has two stages (#188). The cron says hourly, but GitHub starts
+# scheduled runs late or drops them: from late October to November 2026 this
+# workflow ran every 6 hours (median), with gaps of up to 10.8. A 12-hour window
+# could hold a single run, with no retry left if it failed.
+#
+# From WINDOW_HOURS out it acts once the previous gameweek is settled (bonus
+# confirmed, check_deadline.previous_settled), so the snapshot holds no
+# in-flight fixtures or provisional bonus and that round is in the features
+# (runbook section 1). From
+# LATE_WINDOW_HOURS out it acts whatever that gameweek's state, so a tight
+# turnaround still gets its entry, with the unsettled round excluded. The
+# watchdog's alarm (check_deadline.ALARM_HOURS) sits between the two.
+WINDOW_HOURS = 30
+LATE_WINDOW_HOURS = 12
 
 # `gh pr list` is asked for this many open PRs. A list that long may be
 # truncated, and could hide the PR that already adds this week's entry. Closed
@@ -161,7 +174,14 @@ def late_prs(bootstrap, prs, now):
 
 
 def decide(
-    bootstrap, predictions_dir, prs, branches, now, window_hours=WINDOW_HOURS, ignore_window=False
+    bootstrap,
+    predictions_dir,
+    prs,
+    branches,
+    now,
+    window_hours=WINDOW_HOURS,
+    late_window_hours=LATE_WINDOW_HOURS,
+    ignore_window=False,
 ):
     """A dict: action, gameweek, deadline, season, branch, late, why."""
     out: dict[str, Any] = {
@@ -192,7 +212,16 @@ def decide(
     gameweek, deadline = upcoming
     season = season_of(deadline)
     hours = (deadline - now).total_seconds() / 3600
-    inside = 0 < hours and (hours <= window_hours or ignore_window)
+    settled = previous_settled(bootstrap, gameweek)
+    if ignore_window:
+        stage = "window ignored"
+    elif hours <= window_hours and settled:
+        stage = f"early window, {window_hours}h, GW{gameweek - 1:02d} settled"
+    elif hours <= late_window_hours:
+        stage = f"late window, {late_window_hours}h"
+    else:
+        stage = None
+    inside = 0 < hours and stage is not None
     branch = bot_branch(season, gameweek)
     # The season's log directory as the repository names it, for PR paths and
     # the workflow; `predictions_dir`, if given, is where to read it from.
@@ -222,6 +251,12 @@ def decide(
     if hours <= 0:
         return result(SKIP, "The deadline has passed. A missed deadline stays missed.")
     if not inside:
+        if hours <= window_hours:
+            return result(
+                SKIP,
+                f"GW{gameweek - 1:02d} is not settled; a later run makes the "
+                f"entry once it is, or from {late_window_hours}h out regardless.",
+            )
         return result(SKIP, f"Over {window_hours}h away; a later run makes the entry.")
 
     # Inside the window from here: a failure is worth an email.
@@ -273,7 +308,7 @@ def decide(
             "by hand (docs/runbook.md section 7).",
         )
 
-    return result(ACT, "Making the entry." + (" (window ignored)" if ignore_window else ""))
+    return result(ACT, f"Making the entry ({stage}).")
 
 
 def report(action, why, title="Entry workflow"):

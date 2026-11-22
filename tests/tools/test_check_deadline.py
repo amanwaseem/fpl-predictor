@@ -34,11 +34,19 @@ def at(hours):
     return NOW + timedelta(hours=hours)
 
 
-def bootstrap(gameweek, hours_away):
-    """GW `gameweek` is next, `hours_away` from NOW; the one before it is past."""
+def bootstrap(gameweek, hours_away, previous_settled=True):
+    """GW `gameweek` is next, `hours_away` from NOW; the one before it is past.
+
+    It is settled (data_checked) unless `previous_settled` is False.
+    """
     return {
         "events": [
-            {"id": gameweek - 1, "deadline_time": "2026-10-03T10:00:00Z", "is_next": False},
+            {
+                "id": gameweek - 1,
+                "deadline_time": "2026-10-03T10:00:00Z",
+                "is_next": False,
+                "data_checked": previous_settled,
+            },
             {"id": gameweek, "deadline_time": at(hours_away).strftime(STAMP), "is_next": True},
         ]
     }
@@ -64,8 +72,8 @@ class LogDir(unittest.TestCase):
         self.log = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.log, ignore_errors=True)
 
-    def check(self, hours, prs=(), gameweek=6):
-        boot = bootstrap(gameweek, hours)
+    def check(self, hours, prs=(), gameweek=6, previous_settled=True):
+        boot = bootstrap(gameweek, hours, previous_settled)
         return check_deadline.check(
             boot, lambda gw, d: check_deadline.classify_entries(gw, d, self.log), list(prs), NOW
         )
@@ -79,16 +87,35 @@ class TestAlarm(LogDir):
         self.assertIn("No entry on main yet", message)
 
     def test_no_alarm_just_outside_the_alarm(self):
-        self.assertEqual(self.check(10.5)[0], check_deadline.PASS)
+        self.assertEqual(self.check(20.5)[0], check_deadline.PASS)
 
     def test_the_alarm_edge_is_inside(self):
-        self.assertEqual(self.check(10)[0], check_deadline.FAIL)
+        self.assertEqual(self.check(20)[0], check_deadline.FAIL)
+
+    def test_the_alarm_waits_while_the_previous_gameweek_is_not_settled(self):
+        """#188: the entry workflow waits for its 12h late window then, on purpose."""
+        status, message = self.check(18, previous_settled=False)
+        self.assertEqual(status, check_deadline.PASS)
+        self.assertIn("GW05 is not settled", message)
+        self.assertEqual(self.check(10.5, previous_settled=False)[0], check_deadline.PASS)
+        self.assertEqual(self.check(10, previous_settled=False)[0], check_deadline.FAIL)
 
     def test_inside_with_no_pr_says_make_it_by_hand(self):
         status, message = self.check(6)
         self.assertEqual(status, check_deadline.FAIL)
         self.assertIn("no open PR adds one", message)
-        self.assertIn("by hand", message)
+        self.assertIn("Make the entry by hand now", message)
+
+    def test_no_pr_before_the_late_alarm_waits_for_the_entry_workflow(self):
+        """The previous gameweek may have settled hours ago, with no entry run since:
+        a hand-made branch then would stop the run that is coming (#188)."""
+        for hours in (20, 15, 10.5):
+            with self.subTest(hours=hours):
+                status, message = self.check(hours)
+                self.assertEqual(status, check_deadline.FAIL)
+                self.assertIn("acts on its next run", message)
+                self.assertNotIn("by hand now", message)
+                self.assertIn("if no PR is open 10h out", message)
 
     def test_inside_with_an_open_pr_says_merge_it(self):
         status, message = self.check(6, [pr(80, "predictions/gw06_baseline-v1.csv")])
@@ -303,6 +330,21 @@ class TestMain(unittest.TestCase):
         with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", io.StringIO()):
             with self.assertRaises(SystemExit):
                 check_deadline.cli(["--fake-deadline-hours", "48"])
+
+
+class TestPreviousSettled(unittest.TestCase):
+    def test_reads_only_a_true_data_checked(self):
+        """`finished` alone is not settled: bonus is still provisional."""
+        for flags in ({}, {"finished": True}, {"data_checked": None}, {"data_checked": "true"}):
+            with self.subTest(flags=flags):
+                boot = {"events": [{"id": 5, **flags}, {"id": 6, "is_next": True}]}
+                self.assertFalse(check_deadline.previous_settled(boot, 6))
+        boot = {"events": [{"id": 5, "data_checked": True}, {"id": 6, "is_next": True}]}
+        self.assertTrue(check_deadline.previous_settled(boot, 6))
+
+    def test_no_previous_event_counts_as_settled(self):
+        """GW1, whose previous gameweek is last season's, and fake bootstraps."""
+        self.assertTrue(check_deadline.previous_settled({"events": [{"id": 1}]}, 1))
 
 
 if __name__ == "__main__":

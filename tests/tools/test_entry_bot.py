@@ -43,11 +43,20 @@ def at(hours):
     return NOW + timedelta(hours=hours)
 
 
-def bootstrap(gameweek, hours_away, earlier=None):
-    """GW `gameweek` is next, `hours_away` from NOW. `earlier` maps past GWs to deadlines."""
+def bootstrap(gameweek, hours_away, earlier=None, previous_settled=False):
+    """GW `gameweek` is next, `hours_away` from NOW. `earlier` maps past GWs to deadlines.
+
+    The gameweek before it is not settled (no data_checked) unless `previous_settled`.
+    """
     earlier = earlier or {gameweek - 1: datetime(2026, 10, 23, 17, 30, tzinfo=UTC)}
     events = [
-        {"id": gw, "deadline_time": d.strftime(STAMP), "is_next": False}
+        {
+            "id": gw,
+            "deadline_time": d.strftime(STAMP),
+            "is_next": False,
+            "finished": previous_settled and gw == gameweek - 1,
+            "data_checked": previous_settled and gw == gameweek - 1,
+        }
         for gw, d in sorted(earlier.items())
     ]
     events.append(
@@ -165,6 +174,59 @@ class TestWindow(LogDir):
         out = self.decide(hours=12.5)
         self.assertEqual(out["action"], entry_bot.SKIP)
         self.assertIn("later run", out["why"])
+
+    def test_the_late_window_acts_while_the_previous_gameweek_is_in_play(self):
+        """A tight turnaround still gets its entry; the unsettled round is excluded."""
+        out = self.decide(hours=12)
+        self.assertEqual(out["action"], entry_bot.ACT)
+        self.assertIn("late window", out["why"])
+
+    def test_the_early_window_acts_once_the_previous_gameweek_is_settled(self):
+        """#188: GitHub runs the hourly schedule every ~6h, so the window opens 30h out."""
+        for hours in (30, 25, 12.5):
+            with self.subTest(hours=hours):
+                out = self.decide(boot=bootstrap(9, hours, previous_settled=True))
+                self.assertEqual(out["action"], entry_bot.ACT)
+                self.assertIn("early window", out["why"])
+                self.assertIn("GW08 settled", out["why"])
+
+    def test_the_early_window_waits_for_the_previous_gameweek(self):
+        """No snapshot with in-flight fixtures while there is still time to wait."""
+        for hours in (30, 25, 12.5):
+            with self.subTest(hours=hours):
+                out = self.decide(hours=hours)
+                self.assertEqual(out["action"], entry_bot.SKIP)
+                self.assertIn("GW08 is not settled", out["why"])
+
+    def test_the_early_window_waits_for_bonus_not_just_the_last_match(self):
+        """`finished` comes before `data_checked`; until then usable_rounds drops the round."""
+        boot = bootstrap(9, 25)
+        boot["events"][0]["finished"] = True
+        out = self.decide(boot=boot)
+        self.assertEqual(out["action"], entry_bot.SKIP)
+        self.assertIn("GW08 is not settled", out["why"])
+
+    def test_a_settled_run_inside_12h_names_the_early_stage(self):
+        """The summary says the round was settled, not that it was excluded."""
+        out = self.decide(boot=bootstrap(9, 11, previous_settled=True))
+        self.assertEqual(out["action"], entry_bot.ACT)
+        self.assertIn("early window", out["why"])
+
+    def test_skips_beyond_the_early_window_even_when_settled(self):
+        out = self.decide(boot=bootstrap(9, 30.5, previous_settled=True))
+        self.assertEqual(out["action"], entry_bot.SKIP)
+        self.assertIn("Over 30h away", out["why"])
+
+    def test_no_previous_event_counts_as_finished(self):
+        """GW1 (the previous gameweek is last season's) and fake bootstraps."""
+        boot = {
+            "events": [
+                {"id": 1, "deadline_time": at(25).strftime(STAMP), "is_next": True},
+            ]
+        }
+        out = self.decide(boot=boot)
+        self.assertEqual(out["action"], entry_bot.ACT)
+        self.assertIn("early window", out["why"])
 
     def test_skips_once_the_deadline_has_passed(self):
         """Rule 2: nothing is made after the deadline, even if is_next lags."""

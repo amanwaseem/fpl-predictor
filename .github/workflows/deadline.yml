@@ -3,10 +3,12 @@
 # it is silent exactly then. See tools/check_deadline.py.
 #
 # Since #68 the entry workflow (entry.yml) makes the entry and opens its PR
-# from 12 hours out. This is its alarm: hourly, it fails when the deadline is
-# 10 hours away or less and main has no entry, and says whether to merge an
-# open PR or make the entry by hand. GitHub's failed-workflow email is the
-# alert. Firing any earlier would go red before every gameweek by design.
+# from 30 hours out once the previous gameweek is settled, or 12 regardless
+# (#188). This is its alarm: hourly (in practice every few hours), it fails
+# when the deadline is 20 hours away or less (10 while the previous gameweek
+# is not settled) and main has no entry, and says whether to merge an open PR
+# or make the entry by hand. GitHub's failed-workflow email is the alert.
+# Firing any earlier would go red before every gameweek by design.
 #
 # Once a day it also checks ENTRY_BOT_TOKEN, the token the entry workflow
 # opens its PR with. Fine-grained tokens always expire; a week's warning
