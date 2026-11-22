@@ -107,7 +107,7 @@ test("a filter a link carries that no control can show is ignored", async ({ pag
   await expect(page.getByText("No players match.")).toHaveCount(0);
 });
 
-test("a player's page shows each model's prediction beside what happened", async ({ page }) => {
+test("a player's page shows our prediction beside what happened", async ({ page }) => {
   // The database in CI holds the log only, not football data: the player is stubbed.
   await stubPlayer(page);
   await page.goto("/players/42");
@@ -133,6 +133,41 @@ test("a gameweek or player that is not a number is not found, without asking the
 
 test("a model with no entry that gameweek falls back to one that has", async ({ page }) => {
   await page.goto("/gameweeks/4?model=form-fixture-v1");
-  await expect(page.getByLabel("Model")).toHaveValue("baseline-v1");
+  await expect(page.getByText(/main model wasn.t running yet in gameweek 4/)).toBeVisible();
   await expect(page.getByRole("table", { name: "Predictions" })).toBeVisible();
+});
+
+// #194: users get one set of predictions and plain words; the models are
+// compared on Track record. A link may still ask for one by ?model=.
+const INSIDER = /baseline-v1|form-fixture-v1|gbm-v1|Snapshot|RMSE/;
+
+test("Predictions offers no model choice, and names no model code or snapshot", async ({
+  page,
+}) => {
+  await page.goto("/gameweeks/8");
+  await expect(page.getByRole("table", { name: "Predictions" })).toBeVisible();
+  await expect(page.getByLabel("Model")).toHaveCount(0);
+  expect(await page.locator("main").innerText()).not.toMatch(INSIDER);
+  await page.getByText("Published before the deadline").click();
+  await expect(page.getByRole("link", { name: /committed to the public log/ })).toBeVisible();
+});
+
+test("a link to another model still opens it, and says so", async ({ page }) => {
+  await page.goto("/gameweeks/8?model=baseline-v1");
+  await expect(page.getByText(/not our main ones/)).toBeVisible();
+  await page.getByRole("link", { name: "See our main predictions" }).click();
+  await expect(page).not.toHaveURL(/model=/);
+  await expect(page.getByText(/not our main ones/)).toHaveCount(0);
+});
+
+test("My team and a player's page offer no model choice either", async ({ page }) => {
+  await page.goto("/optimise");
+  await expect(page.getByRole("button", { name: "Get my advice" })).toBeVisible();
+  await expect(page.getByLabel("Model")).toHaveCount(0);
+  expect(await page.locator("main").innerText()).not.toMatch(INSIDER);
+
+  await stubPlayer(page);
+  await page.goto("/players/42");
+  await expect(page.getByRole("heading", { name: "Ada Tester" })).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toMatch(INSIDER);
 });

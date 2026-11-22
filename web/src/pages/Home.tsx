@@ -17,7 +17,7 @@ import { Problem } from "../components/Problem";
 import { ScorecardTables } from "../components/ScorecardTables";
 import { REPOSITORY } from "../log";
 import { formatLocal } from "../format";
-import { modelAbout, modelName, roleName } from "../models";
+import { byPreference, modelAbout, modelName, roleName } from "../models";
 import { againstBaseline, gameweekList, retiredNote, type Model } from "../scorecard";
 
 type Row = Schemas["Prediction"];
@@ -37,7 +37,7 @@ export function Home() {
   const all = models.data?.models ?? [];
   const latest = Math.max(0, ...all.flatMap((m) => m.gameweeks_logged)) || null;
   const logged = all.filter((m) => latest && m.gameweeks_logged.includes(latest));
-  const featured = (logged.find((m) => m.role === "main") ?? logged[0])?.model_version;
+  const featured = byPreference(logged)[0]?.model_version;
 
   return (
     <>
@@ -56,7 +56,7 @@ export function Home() {
                 {latest ? `See GW${latest} predictions` : "See predictions"}
               </Link>
               <Link className="button button-on-ink" to="/optimise">
-                {hasTeam ? "Advice for your team" : "Optimise my team"}
+                {hasTeam ? "See my advice" : "Get my advice"}
               </Link>
             </div>
           </div>
@@ -71,9 +71,7 @@ export function Home() {
           <section className="section" aria-labelledby="top-picks">
             <div className="section-head">
               <h2 id="top-picks">Top picks for gameweek {latest}</h2>
-              <Link to={`/gameweeks/${latest}?model=${featured}`}>
-                All {modelName(featured)} predictions →
-              </Link>
+              <Link to={`/gameweeks/${latest}`}>All predictions →</Link>
             </div>
             <TopPicks gameweek={latest} model={featured} />
           </section>
@@ -160,9 +158,7 @@ function DeadlineCard({
             <dd>{formatLocal(status.next_deadline_utc)}</dd>
             <dt>Predictions</dt>
             <dd>
-              {status.next_gameweek_entries.length
-                ? status.next_gameweek_entries.map(modelName).join(", ")
-                : "Coming before the deadline"}
+              {status.next_gameweek_entries.length ? "Out now" : "Coming before the deadline"}
             </dd>
           </>
         )}
@@ -190,10 +186,7 @@ function TopPicks({ gameweek, model }: { gameweek: number; model: string }) {
         <div className="card pick-group" key={position}>
           <h3>
             {POSITION_NAMES[position]}
-            <Link
-              className="small"
-              to={`/gameweeks/${gameweek}?model=${model}&position=${position}`}
-            >
+            <Link className="small" to={`/gameweeks/${gameweek}?position=${position}`}>
               More
             </Link>
           </h3>

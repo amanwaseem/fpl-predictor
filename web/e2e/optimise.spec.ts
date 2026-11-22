@@ -49,7 +49,7 @@ test("advice for a team shows its transfers and XI", async ({ page, request }) =
   );
   await page.goto("/optimise");
   await page.getByLabel("FPL team ID").fill("123");
-  await page.getByRole("button", { name: "Get advice" }).click();
+  await page.getByRole("button", { name: "Get my advice" }).click();
   await expect(page).toHaveURL(/team=123/);
   await expect(page.getByRole("list", { name: "Transfers" })).toContainText(into.web_name);
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
@@ -120,11 +120,11 @@ test("my team is remembered after asking, and can be forgotten", async ({ page }
   await stubAdvice(page, 321);
   await page.goto("/optimise");
   await page.getByLabel("FPL team ID").fill("321");
-  await page.getByRole("button", { name: "Get advice" }).click();
+  await page.getByRole("button", { name: "Get my advice" }).click();
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
 
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "Advice for your team" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "See my advice" })).toBeVisible();
   await page.goto("/optimise");
   await expect(page).toHaveURL(/team=321/);
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
@@ -140,7 +140,7 @@ test("a shared link shows its own team, and leaves mine remembered", async ({ pa
   await stubAdvice(page, 654);
   await page.goto("/optimise");
   await page.getByLabel("FPL team ID").fill("321");
-  await page.getByRole("button", { name: "Get advice" }).click();
+  await page.getByRole("button", { name: "Get my advice" }).click();
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
 
   await page.goto("/optimise?team=654");
@@ -156,14 +156,14 @@ test("a team asked for again after forgetting is remembered, though its advice i
   await stubAdvice(page, 321);
   await page.goto("/optimise");
   await page.getByLabel("FPL team ID").fill("321");
-  await page.getByRole("button", { name: "Get advice" }).click();
+  await page.getByRole("button", { name: "Get my advice" }).click();
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
   await page.getByRole("button", { name: "Forget my team" }).click();
   await page.goBack();
   await expect(page).not.toHaveURL(/team=321/);
 
   await page.getByLabel("FPL team ID").fill("321");
-  await page.getByRole("button", { name: "Get advice" }).click();
+  await page.getByRole("button", { name: "Get my advice" }).click();
   await expect(page.getByText("Remembered in this browser: team 321.")).toBeVisible();
 });
 
@@ -174,7 +174,7 @@ test("My team in the header brings the remembered team back from a shared link",
   await stubAdvice(page, 654);
   await page.goto("/optimise");
   await page.getByLabel("FPL team ID").fill("321");
-  await page.getByRole("button", { name: "Get advice" }).click();
+  await page.getByRole("button", { name: "Get my advice" }).click();
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
   await page.goto("/optimise?team=654");
   await page
@@ -213,7 +213,7 @@ test("with storage blocked, My team works as before", async ({ page }) => {
   await stubAdvice(page, 321);
   await page.goto("/optimise");
   await page.getByLabel("FPL team ID").fill("321");
-  await page.getByRole("button", { name: "Get advice" }).click();
+  await page.getByRole("button", { name: "Get my advice" }).click();
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
   await expect(page.getByText(/Remembered in this browser/)).toHaveCount(0);
 });
@@ -230,7 +230,7 @@ test("the form follows the URL, back and forward included", async ({ page }) => 
   }
   await page.goto("/optimise?team=11");
   await page.getByLabel("FPL team ID").fill("22");
-  await page.getByRole("button", { name: "Get advice" }).click();
+  await page.getByRole("button", { name: "Get my advice" }).click();
   await expect(page.getByRole("alert")).toContainText("No team 22.");
   await page.goBack();
   await expect(page.getByLabel("FPL team ID")).toHaveValue("11");

@@ -15,7 +15,7 @@ import { Problem } from "../components/Problem";
 import { clubName } from "../clubs";
 import { formatLocal, formatUtc, positiveInt, signed } from "../format";
 import { entryHistoryUrl } from "../log";
-import { modelAbout, modelName } from "../models";
+import { byPreference, modelName } from "../models";
 import { NotFound } from "./NotFound";
 
 type Row = Schemas["Prediction"];
@@ -87,11 +87,14 @@ function Entry({ gameweek }: { gameweek: number }) {
   const models = useModels();
 
   const logged = (models.data?.models ?? []).filter((m) => m.gameweeks_logged.includes(gameweek));
-  const preferred = logged.find((m) => m.role === "main") ?? logged[0];
-  // A ?model= with no entry this gameweek falls back, so the select shows
-  // the model whose entry is on screen.
+  // One set of predictions for users (#194): the main model's, or for a
+  // gameweek before it ran, the baseline's. A link may still ask for another
+  // by ?model=; one with no entry this gameweek falls back.
+  const preferred = byPreference(logged)[0];
   const asked = logged.find((m) => m.model_version === params.get("model"));
-  const model = (asked ?? preferred)?.model_version;
+  const showing = asked ?? preferred;
+  const model = showing?.model_version;
+  const mainHere = logged.some((m) => m.role === "main");
   const allGameweeks = [
     ...new Set((models.data?.models ?? []).flatMap((m) => m.gameweeks_logged)),
   ].sort((a, b) => b - a);
@@ -125,6 +128,11 @@ function Entry({ gameweek }: { gameweek: number }) {
     if (position === null) next.delete("position");
     if (team === null) next.delete("team");
     if (asked_sort !== null && asked_sort !== sort) next.delete("sort");
+    return next;
+  };
+  const withoutModel = () => {
+    const next = kept();
+    next.delete("model");
     return next;
   };
 
@@ -192,7 +200,27 @@ function Entry({ gameweek }: { gameweek: number }) {
         <div>
           <p className="eyebrow">Predictions</p>
           <h1>Gameweek {gameweek}</h1>
-          {model && <p className="muted">{modelAbout(model) ?? model}</p>}
+          <p className="muted">Every player&rsquo;s expected points for the gameweek.</p>
+          {showing && showing.role !== "main" && (
+            <p className="note small">
+              {asked ? (
+                <>
+                  These are the {modelName(showing.model_version)} model&rsquo;s predictions, not
+                  our main ones.{" "}
+                  {mainHere && (
+                    <Link to={`/gameweeks/${gameweek}?${withoutModel()}`}>
+                      See our main predictions
+                    </Link>
+                  )}
+                </>
+              ) : (
+                <>
+                  Our main model wasn&rsquo;t running yet in gameweek {gameweek}, so these are the{" "}
+                  {modelName(showing.model_version)} model&rsquo;s predictions.
+                </>
+              )}
+            </p>
+          )}
         </div>
         {logged.length > 0 && (
           <div className="controls">
@@ -210,16 +238,6 @@ function Entry({ gameweek }: { gameweek: number }) {
                 {allGameweeks.map((gw) => (
                   <option key={gw} value={gw}>
                     Gameweek {gw}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              Model
-              <select value={model} onChange={(e) => update("model", e.target.value)}>
-                {logged.map((m) => (
-                  <option key={m.model_version} value={m.model_version}>
-                    {modelName(m.model_version)}
                   </option>
                 ))}
               </select>
@@ -279,23 +297,8 @@ function Entry({ gameweek }: { gameweek: number }) {
       {entry.data && (
         <>
           <div className="entry-meta">
-            <span>
-              {modelName(entry.data.model_version)} <code>{entry.data.model_version}</code>
-            </span>
-            <span title={formatUtc(entry.data.generated_at_utc)}>
-              Made {formatLocal(entry.data.generated_at_utc)}
-            </span>
-            <span title={formatUtc(entry.data.deadline_utc)}>
-              Deadline {formatLocal(entry.data.deadline_utc)}
-            </span>
-            <span>
-              Snapshot <code>{entry.data.snapshot_id}</code>
-            </span>
-            <span>{scored ? "Scored: error is predicted minus actual" : "Not scored yet"}</span>
-            {(() => {
-              const href = entryHistoryUrl(entry.data.season, gameweek, entry.data.model_version);
-              return href ? <a href={href}>Proof it was published in time</a> : null;
-            })()}
+            <Proof entry={entry.data} gameweek={gameweek} />
+            <span>{scored ? "Scored" : "Not scored yet"}</span>
           </div>
           {entry.data.next_cursor && (
             <p role="alert" className="problem problem-warn">
@@ -387,11 +390,32 @@ function Entry({ gameweek }: { gameweek: number }) {
           <p className="note small after">
             Showing {Math.min(shown, rows.length)} of {rows.length} players
             {rows.length !== items.length ? ` (${items.length} in all)` : ""}. Minutes and points
-            are what the model expected for the whole gameweek.
+            are what we expected for the whole gameweek.
+            {scored ? " Error is predicted minus actual." : ""}
           </p>
         </>
       )}
     </div>
+  );
+}
+
+// The proof that the predictions came before the deadline (#194), folded into
+// one line: tap it for when they were made, the deadline, and the entry's
+// history in the public log.
+function Proof({ entry, gameweek }: { entry: Schemas["PredictionPage"]; gameweek: number }) {
+  const early = Date.parse(entry.generated_at_utc) < Date.parse(entry.deadline_utc);
+  const href = entryHistoryUrl(entry.season, gameweek, entry.model_version);
+  return (
+    <details className="proof">
+      <summary>{early ? "✓ Published before the deadline" : "Published"}</summary>
+      <p>
+        Made{" "}
+        <span title={formatUtc(entry.generated_at_utc)}>{formatLocal(entry.generated_at_utc)}</span>
+        , deadline{" "}
+        <span title={formatUtc(entry.deadline_utc)}>{formatLocal(entry.deadline_utc)}</span>.{" "}
+        {href && <a href={href}>See when it was committed to the public log</a>}
+      </p>
+    </details>
   );
 }
 

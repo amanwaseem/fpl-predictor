@@ -568,6 +568,16 @@ details.help ol {
   color: var(--muted);
 }
 
+/* "✓ Published before the deadline": the proof, one tap away (#194). */
+details.proof summary {
+  cursor: pointer;
+  color: var(--good);
+  font-weight: 600;
+}
+details.proof p {
+  margin: 0.35rem 0 0;
+}
+
 /* Running text, as on How it works: lines short enough to read. */
 .prose {
   max-width: 46rem;

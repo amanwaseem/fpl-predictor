@@ -28,6 +28,31 @@ export function liveModels(models: Schemas["Model"][] | undefined): Schemas["Mod
   return (models ?? []).filter((m) => m.role && m.role !== "retired");
 }
 
+// Users see one set of predictions (#194): the main model's, or for a
+// gameweek it did not log, the baseline's, then any other's. The models are
+// compared on Track record; a link may still ask for one by ?model=.
+const ROLE_ORDER: Partial<Record<NonNullable<Role>, number>> = { main: 0, baseline: 1 };
+
+function rank(role: Role | null | undefined): number {
+  return role ? (ROLE_ORDER[role] ?? 2) : 3;
+}
+
+export function byPreference(models: Schemas["Model"][]): Schemas["Model"][] {
+  return [...models].sort((a, b) => rank(a.role) - rank(b.role));
+}
+
+// A player's one prediction for a gameweek, from the most preferred model
+// that logged it that week.
+export function pickPrediction<T extends { model_version: string }>(
+  predictions: T[],
+  models: Schemas["Model"][] | undefined,
+): T | undefined {
+  const roleOf = (version: string) => models?.find((m) => m.model_version === version)?.role;
+  return [...predictions].sort(
+    (a, b) => rank(roleOf(a.model_version)) - rank(roleOf(b.model_version)),
+  )[0];
+}
+
 export function modelName(version: string): string {
   return MODELS[version]?.name ?? version;
 }
