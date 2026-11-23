@@ -15,3 +15,10 @@ checks.positive_data_acceptance.expected-statuses = ["2xx", "404", "422", "429",
 [[operations]]
 include-path = "/v1/entries/{fpl_team_id}/advice"
 enabled = false
+
+# Team news reads FPL's bootstrap-static: not fuzzed from CI, which would then
+# fail whenever FPL is down or refuses the runner. Tested against canned
+# responses in tests/api/test_news.py and tests/db/test_db_news.py (#196).
+[[operations]]
+include-path = "/v1/news"
+enabled = false
