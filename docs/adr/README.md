@@ -19,7 +19,7 @@ answer.
 | [0010](0010-squad-selection-by-integer-programming.md) | Squad selection by integer programming, reusing the legal-XI selector | Accepted |
 | [0011](0011-paths-relative-to-the-repository-root.md) | Paths are relative to the repository root, and the install is editable only | Accepted |
 | [0012](0012-ci-gates-on-one-required-check.md) | CI gates on one required check | Accepted |
-| [0013](0013-players-who-change-club-mid-season.md) | Players who change club mid-season | Open |
+| [0013](0013-players-who-change-club-mid-season.md) | Players who change club mid-season | Superseded by [0029](0029-no-rule-for-players-who-change-club.md) |
 | [0014](0014-a-static-json-api-not-a-hosted-server.md) | A static JSON API, not a hosted server | Superseded by [0015](0015-a-hosted-service-over-a-rebuildable-projection.md) |
 | [0015](0015-a-hosted-service-over-a-rebuildable-projection.md) | A hosted service over a rebuildable projection | Accepted |
 | [0016](0016-optimise-my-team-caches-beside-the-projection.md) | Optimise my team: caches beside the projection, estimates said aloud | Accepted |
@@ -35,3 +35,4 @@ answer.
 | [0026](0026-an-entry-pushed-before-its-deadline-counts.md) | An entry pushed before its deadline counts, if a maintainer accepts its late merge | Accepted |
 | [0027](0027-score-prs-merge-themselves.md) | Score PRs are made, and merge themselves, once a gameweek settles | Accepted |
 | [0028](0028-the-entry-window-opens-30-hours-out.md) | The entry window opens 30 hours out, once the previous gameweek has settled | Accepted |
+| [0029](0029-no-rule-for-players-who-change-club.md) | No rule for players who change club mid-season, for now | Accepted |

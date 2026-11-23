@@ -403,9 +403,14 @@ Settled:
   weak: held out (#39), the ratings beat FPL's own difficulty by 0.002 MAE,
   within what four gameweeks can resolve. The decision rests on other grounds
   — see [ADR 0009](adr/0009-model-fixture-difficulty-explicitly.md).
+- ~~How to handle players transferred between clubs mid-season.~~ **No rule,
+  for now** (#190): a mover is predicted as if he had always been at his new
+  club. Held out on ten seasons of January moves, movers are predicted a little
+  low, not high, and no worse than players who stayed. Of the candidate rules,
+  only leaving out last season's figures helps, by 0.02 points a gameweek on a
+  handful of players, so it waits for the next gbm version — see
+  [ADR 0029](adr/0029-no-rule-for-players-who-change-club.md).
 
 Open:
 
-- How to handle players transferred between clubs mid-season — `player_id` is
-  stable but team affiliation is not. What each part does today, and the
-  questions to settle: [ADR 0013](adr/0013-players-who-change-club-mid-season.md).
+- None.
