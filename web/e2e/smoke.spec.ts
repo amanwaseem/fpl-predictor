@@ -14,6 +14,7 @@ test("the open data is for developers: in the footer, not the main navigation", 
     "Home",
     "Predictions",
     "My team",
+    "Track record",
     "How it works",
   ]);
   await expect(

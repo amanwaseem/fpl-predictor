@@ -71,7 +71,7 @@ export function About() {
         </ul>
         <p>
           The baseline is deliberately simple. A model is only worth using if it beats it, and the{" "}
-          <Link to="/">track record on the home page</Link> shows by how much each one does.
+          <Link to="/track-record">track record</Link> shows by how much each one does.
         </p>
       </section>
 

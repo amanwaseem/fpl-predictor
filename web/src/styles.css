@@ -863,6 +863,145 @@ a.player-name:hover {
 .record-card .row {
   justify-content: space-between;
 }
+.answer strong {
+  color: var(--fg);
+}
+details.fold summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+details.fold[open] summary {
+  margin-bottom: 1rem;
+}
+
+/* The week-by-week chart (#195). The going-by-form line is a grey that can be
+   told from the accent with any colour vision, and keeps 3:1 on the card. */
+.miss-chart {
+  --chart-form: #7c8496;
+  margin: 0;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.chart-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+/* A line's key is a short line; a missed week's, the tint it has on the chart. */
+.key {
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+}
+.key.ours {
+  background: var(--accent);
+}
+.key.form {
+  background: var(--chart-form);
+}
+.key.key-missed {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bad) 45%, transparent);
+}
+.chart {
+  position: relative;
+  height: 240px;
+}
+.chart svg {
+  display: block;
+}
+.chart .gridline {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.chart .tick {
+  fill: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.chart .tick-missed {
+  fill: var(--bad);
+}
+/* A faint tint, not a block: a missed week has no figure to stand out. */
+.chart .missed-week {
+  fill: var(--bad);
+  fill-opacity: 0.1;
+}
+.chart .crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+.chart .series path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* A ring in the card's colour keeps each point clear where the lines cross. */
+.chart .series circle {
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+.chart .ours path {
+  stroke: var(--accent);
+}
+.chart .ours circle {
+  fill: var(--accent);
+}
+.chart .form path {
+  stroke: var(--chart-form);
+}
+.chart .form circle {
+  fill: var(--chart-form);
+}
+.chart .hit {
+  fill: transparent;
+}
+.chart a {
+  outline: none;
+}
+.chart a:focus-visible .hit {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.chart-tip {
+  position: absolute;
+  pointer-events: none;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.45rem 0.65rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.chart-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+}
+.chart-tip-row b {
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
 .steps {
   counter-reset: step;
 }

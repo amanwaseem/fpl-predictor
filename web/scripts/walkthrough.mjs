@@ -34,6 +34,7 @@ const PAGES = [
   { name: "player", path: `/players/${player}` },
   { name: "optimise", path: "/optimise" },
   { name: "optimise-team", path: "/optimise?team=1" },
+  { name: "track-record", path: "/track-record" },
   { name: "about", path: "/about" },
   { name: "missing-gameweek", path: "/gameweeks/99" },
   { name: "missing-player", path: "/players/999999" },

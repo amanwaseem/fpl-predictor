@@ -8,6 +8,7 @@ import { Home } from "./pages/Home";
 import { NotFound } from "./pages/NotFound";
 import { Optimise } from "./pages/Optimise";
 import { Player } from "./pages/Player";
+import { TrackRecord } from "./pages/TrackRecord";
 
 export function App() {
   // A new page starts at the top, as a link to another site would; Back and
@@ -32,6 +33,7 @@ export function App() {
             </NavLink>
             <NavLink to="/gameweeks">Predictions</NavLink>
             <NavLink to="/optimise">My team</NavLink>
+            <NavLink to="/track-record">Track record</NavLink>
             <NavLink to="/about">How it works</NavLink>
           </nav>
         </div>
@@ -43,6 +45,7 @@ export function App() {
           <Route path="/gameweeks/:gameweek" element={<Gameweek />} />
           <Route path="/players/:playerId" element={<Player />} />
           <Route path="/optimise" element={<Optimise />} />
+          <Route path="/track-record" element={<TrackRecord />} />
           <Route path="/about" element={<About />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
