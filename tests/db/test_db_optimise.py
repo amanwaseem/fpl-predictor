@@ -107,7 +107,7 @@ class TestOptimise(OptimiseCase):
         # positions, each from a club the squad doesn't have: more than the
         # bench can cover, so buying some back is worth a hit.
         clubs = {self.by_id[i]["team"] for i in self.squad_ids}
-        swaps = {}
+        swaps: dict[int, int] = {}
         for best in sorted(self.best.xi, key=lambda p: -p.predicted_points)[:6]:
             weakest = min(
                 (
