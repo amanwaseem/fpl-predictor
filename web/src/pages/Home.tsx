@@ -1,53 +1,75 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { type Schemas } from "../api/client";
-import { POSITION_NAMES, POSITIONS, useEntry, useModels, useStatus } from "../api/queries";
+import { api, unwrap, type Schemas } from "../api/client";
+import {
+  POSITION_NAMES,
+  POSITIONS,
+  useEntry,
+  useGameweek,
+  useModels,
+  useNews,
+  useStatus,
+} from "../api/queries";
 import { ClubBadge, Countdown, Loading, PlayerPhoto, StatusPill } from "../components/bits";
+import { Problem } from "../components/Problem";
+import { opponentText } from "../fixtures";
+import { formatLocal, signed } from "../format";
+import { byPreference, liveModels } from "../models";
 import { savedTeam } from "../remember";
 import { useTitle } from "../useTitle";
-import { Problem } from "../components/Problem";
-import { REPOSITORY } from "../log";
-import { formatLocal } from "../format";
-import { byPreference } from "../models";
+import { weekState, type WeekState } from "../week";
 
 type Row = Schemas["Prediction"];
+type News = Schemas["PlayerNews"];
 
 // Players a manager could pick this week: available, or doubtful at worst.
 const pickable = (r: Row) => r.status === "a" || r.status === "d";
 
+// How many doubts the team news shows: the most owned, which touch most teams.
+const NEWS_SHOWN = 8;
+
+// The front page knows what week it is (#196): one sentence and one filled
+// button for what matters now, the reader's own team if one is remembered,
+// then the top picks, the team news and a line of proof.
 export function Home() {
   useTitle(null);
-  // Read once: the button names the reader's own team if one is remembered.
-  const [hasTeam] = useState(() => savedTeam() !== null);
+  // Read once, so the page does not change under the reader.
+  const [team] = useState(() => savedTeam()?.team ?? null);
+  const [now] = useState(() => new Date());
   const status = useStatus();
   const models = useModels();
+
+  // The gameweek before the next one is the one that may be in play.
+  const next = status.data?.next_gameweek;
+  const current = useGameweek(next && next > 1 ? next - 1 : null);
+  const week = status.data ? weekState(status.data, current.data?.fixtures, now) : null;
 
   // The newest gameweek with an entry, and the main model's entry for it.
   const all = models.data?.models ?? [];
   const latest = Math.max(0, ...all.flatMap((m) => m.gameweeks_logged)) || null;
   const featured = latest ? byPreference(all, latest)[0]?.model_version : undefined;
+  const live = liveModels(all);
+  const main = (live.find((m) => m.role === "main") ?? live[0])?.model_version;
 
   return (
     <>
       <section className="hero">
         <div className="wrap hero-grid">
           <div>
+            <Kicker week={week} />
             <h1>
               Know who will score <em>before</em> the deadline.
             </h1>
-            <p className="lede">
-              Points predictions for every Premier League player, published before each deadline,
-              never edited, and scored against what really happened.
-            </p>
-            <div className="hero-actions">
-              <Link className="button" to="/gameweeks">
-                {latest ? `See GW${latest} predictions` : "See predictions"}
-              </Link>
-              <Link className="button button-on-ink" to="/optimise">
-                {hasTeam ? "See my advice" : "Get my advice"}
-              </Link>
-            </div>
+            {week ? (
+              <WeekLine week={week} />
+            ) : status.isError ? (
+              <p className="lede">
+                Points predictions for every Premier League player, published before each deadline.
+              </p>
+            ) : (
+              <Loading />
+            )}
           </div>
           <DeadlineCard status={status.data} error={status.isError ? status.error : null} />
         </div>
@@ -55,6 +77,10 @@ export function Home() {
 
       <div className="wrap">
         {models.isError && <Problem error={models.error} />}
+
+        <section className="section" aria-label={team ? "Your team" : "Where to start"}>
+          {team ? <TeamCard team={team} week={week} model={main} /> : <Doors />}
+        </section>
 
         {latest && featured && (
           <section className="section" aria-labelledby="top-picks">
@@ -66,36 +92,151 @@ export function Home() {
           </section>
         )}
 
-        <section className="section" aria-labelledby="how">
-          <h2 id="how">How it works</h2>
-          <div className="grid grid-3 steps">
-            <div className="card step">
-              <h3>Predict</h3>
-              <p className="muted small">
-                Before each deadline, every model predicts points for all ~670 players from data
-                available at that moment, and nothing after it.
-              </p>
-            </div>
-            <div className="card step">
-              <h3>Publish</h3>
-              <p className="muted small">
-                The predictions are committed to a <a href={REPOSITORY}>public log on GitHub</a>.
-                Git's history shows they came before the deadline, and a check refuses any later
-                edit.
-              </p>
-            </div>
-            <div className="card step">
-              <h3>Score</h3>
-              <p className="muted small">
-                Once the gameweek's results are final, every prediction is scored. Good weeks and
-                bad ones, and missed ones too, all stay on the{" "}
-                <Link to="/track-record">track record</Link>.
-              </p>
-            </div>
-          </div>
-        </section>
+        <TeamNews />
+
+        <p className="proof-line">
+          How have our predictions done, week by week?{" "}
+          <Link to="/track-record">See the track record →</Link>
+        </p>
       </div>
     </>
+  );
+}
+
+function Kicker({ week }: { week: WeekState | null }) {
+  if (!week) return <p className="kicker">&nbsp;</p>;
+  if (week.kind === "live")
+    return (
+      <p className="kicker kicker-live">
+        <span className="pulse" aria-hidden="true" />
+        Gameweek {week.gameweek} is live
+      </p>
+    );
+  if (week.kind === "predictions")
+    return <p className="kicker">Gameweek {week.gameweek} predictions are out</p>;
+  return <p className="kicker">{week.next ? `Before gameweek ${week.next}` : "Between seasons"}</p>;
+}
+
+// The week's one sentence and its one filled button, with at most one quieter
+// link beside it.
+function WeekLine({ week }: { week: WeekState }) {
+  let sentence: string;
+  let action: { to: string; label: string };
+  let other: { to: string; label: string } | null = null;
+  if (week.kind === "live") {
+    sentence = `Gameweek ${week.gameweek} is live. Our predictions were published before the deadline.`;
+    action = { to: `/gameweeks/${week.gameweek}`, label: `See GW${week.gameweek} predictions` };
+    other = { to: "/optimise", label: "My team" };
+  } else if (week.kind === "predictions") {
+    sentence = `GW${week.gameweek} predictions are in. Deadline ${formatLocal(week.deadline)}.`;
+    action = { to: "/optimise", label: "Get advice for my team" };
+    other = { to: `/gameweeks/${week.gameweek}`, label: `See GW${week.gameweek} predictions` };
+  } else {
+    const day = week.arrives
+      ? new Date(week.arrives).toLocaleDateString("en-GB", { weekday: "long" })
+      : null;
+    sentence = !week.next
+      ? "The season is over. Next season's predictions come before its first deadline."
+      : day
+        ? `GW${week.next} predictions arrive ${day}, before the ${formatLocal(week.deadline)} deadline.`
+        : `GW${week.next} predictions arrive before the ${formatLocal(week.deadline)} deadline.`;
+    action = week.last
+      ? { to: `/gameweeks/${week.last}`, label: `See how GW${week.last} went` }
+      : { to: "/track-record", label: "See the track record" };
+  }
+  return (
+    <>
+      <p className="lede">{sentence}</p>
+      <div className="hero-actions">
+        <Link className="button" to={action.to}>
+          {action.label}
+        </Link>
+        {other && (
+          <Link className="button button-on-ink" to={other.to}>
+            {other.label}
+          </Link>
+        )}
+      </div>
+    </>
+  );
+}
+
+// The reader's remembered team. Before a deadline, the advice waiting for it,
+// asked under the same key as My team, so going there shows it at once.
+function TeamCard({
+  team,
+  week,
+  model,
+}: {
+  team: number;
+  week: WeekState | null;
+  model: string | undefined;
+}) {
+  const ahead = week?.kind === "predictions";
+  const advice = useQuery({
+    queryKey: ["advice", team, model, undefined],
+    enabled: ahead && !!model,
+    refetchOnWindowFocus: false,
+    retry: false,
+    queryFn: () =>
+      unwrap(
+        api.GET("/v1/entries/{fpl_team_id}/advice", {
+          params: { path: { fpl_team_id: team }, query: { model } },
+        }),
+      ),
+  });
+  const plan = advice.data?.plan;
+  const n = plan?.transfers.length ?? 0;
+  const line = !ahead
+    ? "See your advice and best eleven"
+    : advice.isPending
+      ? "Working out your advice…"
+      : advice.isError || !plan
+        ? "Your advice is waiting on My team"
+        : n === 0
+          ? "Hold: no transfer is worth making this week"
+          : `${n} transfer${n === 1 ? "" : "s"} suggested, ${signed(plan.xi_gain, 1)} points`;
+  return (
+    <Link className="card team-card" to="/optimise">
+      <span>
+        <span className="eyebrow">Your team · {team}</span>
+        <span className="team-card-line">{line}</span>
+      </span>
+      <span className="team-card-go" aria-hidden="true">
+        →
+      </span>
+    </Link>
+  );
+}
+
+// A first visit: the three places to go, one line each.
+function Doors() {
+  const doors = [
+    {
+      to: "/optimise",
+      title: "My team",
+      line: "Your transfers, captain and best eleven, from your FPL team ID. No sign-in.",
+    },
+    {
+      to: "/gameweeks",
+      title: "Predictions",
+      line: "Every player's expected points, with who they play and what they cost.",
+    },
+    {
+      to: "/track-record",
+      title: "Track record",
+      line: "Every prediction scored, week by week, including the misses.",
+    },
+  ];
+  return (
+    <div className="grid grid-3 doors">
+      {doors.map((d) => (
+        <Link className="card door" to={d.to} key={d.to}>
+          <h3>{d.title}</h3>
+          <p className="muted small">{d.line}</p>
+        </Link>
+      ))}
+    </div>
   );
 }
 
@@ -150,6 +291,7 @@ function DeadlineCard({
 
 function TopPicks({ gameweek, model }: { gameweek: number; model: string }) {
   const entry = useEntry(gameweek, model);
+  const fixtures = useGameweek(gameweek).data?.fixtures;
   if (entry.isPending) return <Loading />;
   if (entry.isError) return <Problem error={entry.error} />;
   const rows = entry.data.items.filter(pickable);
@@ -177,7 +319,10 @@ function TopPicks({ gameweek, model }: { gameweek: number; model: string }) {
                       </Link>
                       <span className="player-meta">
                         <ClubBadge team={r.team} />
-                        <span className="pos">£{r.price.toFixed(1)}m</span>
+                        {/* None at all: the database has the log but no football data. */}
+                        {!!fixtures?.length && (
+                          <span className="opponent">{opponentText(fixtures, r.team)}</span>
+                        )}
                         <StatusPill status={r.status} />
                       </span>
                     </span>
@@ -193,6 +338,56 @@ function TopPicks({ gameweek, model }: { gameweek: number; model: string }) {
       ))}
     </div>
   );
+}
+
+// Who may miss the next gameweek, from FPL's latest news: the most owned few.
+function TeamNews() {
+  const news = useNews();
+  if (news.isPending) return null;
+  const items = news.data?.items.slice(0, NEWS_SHOWN) ?? [];
+  return (
+    <section className="section" aria-labelledby="news">
+      <div className="section-head">
+        <h2 id="news">Team news</h2>
+      </div>
+      {news.isError ? (
+        <p className="muted small">FPL&rsquo;s team news couldn&rsquo;t be read just now.</p>
+      ) : items.length === 0 ? (
+        <p className="muted small">No one is doubtful, injured or suspended.</p>
+      ) : (
+        <>
+          <ul className="news-list" aria-label="Players in doubt">
+            {items.map((p) => (
+              <li key={p.player_id}>
+                <span className={`chance ${isOut(p) ? "chance-out" : "chance-doubt"}`}>
+                  {chanceText(p)}
+                </span>
+                <Link className="player-name" to={`/players/${p.player_id}`}>
+                  {p.web_name}
+                </Link>
+                <ClubBadge team={p.team} />
+                <span className="muted small news-text">{p.news || "No details given"}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">
+            Our predictions use FPL&rsquo;s chance of playing as it stood when they were made.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+// Out: no chance of playing, or injured, suspended or unavailable with no
+// figure given.
+const isOut = (p: News) =>
+  p.chance_of_playing === 0 || (p.chance_of_playing === null && p.status !== "d");
+
+// "75%", or a word when FPL gives no figure.
+function chanceText(p: News): string {
+  if (isOut(p)) return "Out";
+  return p.chance_of_playing === null ? "Doubt" : `${p.chance_of_playing}%`;
 }
 
 // Counts down to the deadline, then asks for the status again: the API names

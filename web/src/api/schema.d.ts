@@ -147,6 +147,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/news": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get News
+         * @description Players who may miss the next gameweek, from FPL's latest news, most owned
+         *     first. Read from the FPL API, cached for a few minutes.
+         */
+        get: operations["get_news_v1_news_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/optimise": {
         parameters: {
             query?: never;
@@ -422,6 +443,11 @@ export interface components {
             /** Season */
             season: string;
         };
+        /** NewsList */
+        NewsList: {
+            /** Items */
+            items: components["schemas"]["PlayerNews"][];
+        };
         /**
          * OptimiseRequest
          * @description A squad to plan transfers from, or none for the best squad from scratch.
@@ -600,6 +626,35 @@ export interface components {
             season: string;
             /** Second Name */
             second_name: string;
+            /** Web Name */
+            web_name: string;
+        };
+        /**
+         * PlayerNews
+         * @description A player who may miss the next gameweek, from FPL's latest news (#196).
+         */
+        PlayerNews: {
+            /** Chance Of Playing */
+            chance_of_playing: number | null;
+            /** News */
+            news: string;
+            /** News Added Utc */
+            news_added_utc: string | null;
+            /** Player Code */
+            player_code: number | null;
+            /** Player Id */
+            player_id: number;
+            /** Position */
+            position: string;
+            /** Selected By Percent */
+            selected_by_percent: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "d" | "i" | "s" | "n";
+            /** Team */
+            team: string;
             /** Web Name */
             web_name: string;
         };
@@ -1115,6 +1170,53 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_news_v1_news_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewsList"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -9,7 +9,7 @@ from fastapi import Path as PathParam
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from fpl.api import queries, schemas, solver, upstream
+from fpl.api import news, queries, schemas, solver, upstream
 from fpl.api.limits import solver_rate
 from fpl.api.problems import responses
 from fpl.db import migrate
@@ -115,6 +115,13 @@ def get_player(
     """A player's clubs, matches and every prediction made for them, with actuals."""
     with db.connect() as conn:
         return queries.player(conn, queries.resolve_season(conn, season), player_id)
+
+
+@v1.get("/news", response_model=schemas.NewsList, tags=["players"], responses=responses(502))
+def get_news(db: Database):
+    """Players who may miss the next gameweek, from FPL's latest news, most owned
+    first. Read from the FPL API, cached for a few minutes."""
+    return {"items": news.doubts(upstream.fetch(db, "bootstrap-static/"))}
 
 
 @v1.get("/models", response_model=schemas.ModelList, tags=["models"])
