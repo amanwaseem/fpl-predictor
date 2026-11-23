@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useNavigationType } from "react-router-dom";
+import { useWeek } from "./api/queries";
 import { SITE_NAME } from "./brand";
 import { REPOSITORY } from "./log";
 import { About } from "./pages/About";
 import { Gameweek, LatestGameweek } from "./pages/Gameweek";
 import { Home } from "./pages/Home";
+import { Live } from "./pages/Live";
 import { NotFound } from "./pages/NotFound";
 import { Optimise } from "./pages/Optimise";
 import { Player } from "./pages/Player";
@@ -15,6 +17,8 @@ export function App() {
   // Forward leave the browser to restore where the reader was.
   const { pathname } = useLocation();
   const navigation = useNavigationType();
+  // A pulsing dot on Live while a gameweek is in play (#199).
+  const playing = useWeek().week?.kind === "live";
   useEffect(() => {
     if (navigation !== "POP") window.scrollTo(0, 0);
   }, [pathname, navigation]);
@@ -32,6 +36,10 @@ export function App() {
               Home
             </NavLink>
             <NavLink to="/gameweeks">Predictions</NavLink>
+            <NavLink to="/live">
+              {playing && <span className="pulse" aria-hidden="true" />}
+              Live
+            </NavLink>
             <NavLink to="/optimise">My team</NavLink>
             <NavLink to="/track-record">Track record</NavLink>
             <NavLink to="/about">How it works</NavLink>
@@ -44,6 +52,7 @@ export function App() {
           <Route path="/gameweeks" element={<LatestGameweek />} />
           <Route path="/gameweeks/:gameweek" element={<Gameweek />} />
           <Route path="/players/:playerId" element={<Player />} />
+          <Route path="/live" element={<Live />} />
           <Route path="/optimise" element={<Optimise />} />
           <Route path="/track-record" element={<TrackRecord />} />
           <Route path="/about" element={<About />} />

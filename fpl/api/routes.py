@@ -9,7 +9,7 @@ from fastapi import Path as PathParam
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from fpl.api import news, queries, schemas, solver, upstream
+from fpl.api import live, news, queries, schemas, solver, upstream
 from fpl.api.limits import solver_rate
 from fpl.api.problems import responses
 from fpl.db import migrate
@@ -122,6 +122,24 @@ def get_news(db: Database):
     """Players who may miss the next gameweek, from FPL's latest news, most owned
     first. Read from the FPL API, cached for a few minutes."""
     return {"items": news.doubts(upstream.fetch(db, "bootstrap-static/"))}
+
+
+@v1.get(
+    "/live/{gameweek}", response_model=schemas.Live, tags=["gameweeks"], responses=responses(502)
+)
+def get_live(
+    db: Database,
+    gameweek: GameweekParam,
+    team: Annotated[
+        int | None,
+        Query(ge=1, le=100_000_000, description="An FPL team ID, for its picks and points."),
+    ] = None,
+):
+    """Live points and match scores for a gameweek, from FPL, a minute old at most.
+    Provisional until FPL confirms them; official scoring waits for that."""
+    with db.connect() as conn:
+        season = queries.resolve_season(conn, None)
+    return live.live(db, season, gameweek, team)
 
 
 @v1.get("/models", response_model=schemas.ModelList, tags=["models"])

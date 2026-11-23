@@ -22,3 +22,11 @@ enabled = false
 [[operations]]
 include-path = "/v1/news"
 enabled = false
+
+# Live points read the FPL API, and with ?team= a manager's picks: not fuzzed
+# from CI, which would send FPL a request for every random team id and fail
+# whenever FPL is down. Tested against recorded responses in
+# tests/api/test_live.py and tests/db/test_db_live.py (#199).
+[[operations]]
+include-path = "/v1/live/{gameweek}"
+enabled = false

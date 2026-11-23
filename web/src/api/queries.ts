@@ -1,6 +1,7 @@
 // Queries more than one page reads, defined once so their keys and options agree.
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { weekState } from "../week";
 import { api, unwrap } from "./client";
 
 // Every logged model: its gameweeks and role. It needs only the log.
@@ -33,6 +34,39 @@ export function useNews() {
     queryKey: ["news"],
     queryFn: () => unwrap(api.GET("/v1/news")),
     // Not worth a second request to FPL if the first failed.
+    retry: false,
+  });
+}
+
+// What the week is doing (web/src/week.ts): predictions out, a gameweek in
+// play, or between the two. The front page and the menu's live dot share it.
+export function useWeek() {
+  const status = useStatus();
+  const next = status.data?.next_gameweek;
+  const current = useGameweek(next && next > 1 ? next - 1 : null);
+  const [now] = useState(() => new Date());
+  return {
+    status,
+    week: status.data ? weekState(status.data, current.data?.fixtures, now) : null,
+  };
+}
+
+// Once a minute: FPL's live data is cached that long by the API (#199).
+export const LIVE_POLL_MS = 60_000;
+
+// A gameweek's live points and scores, and a team's picks if one is given.
+// Asked again every minute while a match is on, and not otherwise.
+export function useLive(gameweek: number | null | undefined, team?: number | null) {
+  return useQuery({
+    queryKey: ["live", gameweek, team ?? null],
+    enabled: !!gameweek,
+    queryFn: () =>
+      unwrap(
+        api.GET("/v1/live/{gameweek}", {
+          params: { path: { gameweek: gameweek! }, query: { team: team ?? undefined } },
+        }),
+      ),
+    refetchInterval: (query) => (query.state.data?.in_play ? LIVE_POLL_MS : false),
     retry: false,
   });
 }

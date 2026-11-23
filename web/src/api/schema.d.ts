@@ -127,6 +127,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/live/{gameweek}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Live
+         * @description Live points and match scores for a gameweek, from FPL, a minute old at most.
+         *     Provisional until FPL confirms them; official scoring waits for that.
+         */
+        get: operations["get_live_v1_live__gameweek__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/models": {
         parameters: {
             query?: never;
@@ -403,6 +424,82 @@ export interface components {
         Health: {
             /** Status */
             status: string;
+        };
+        /**
+         * Live
+         * @description A gameweek's live points and scores, from FPL, a minute old at most (#199).
+         */
+        Live: {
+            /** Fixtures */
+            fixtures: components["schemas"]["LiveFixture"][];
+            /** Gameweek */
+            gameweek: number;
+            /** In Play */
+            in_play: boolean;
+            /** Players */
+            players: components["schemas"]["LivePlayer"][];
+            /** Season */
+            season: string;
+            team: components["schemas"]["LiveTeam"] | null;
+        };
+        /** LiveFixture */
+        LiveFixture: {
+            /** Away */
+            away: string;
+            /** Away Score */
+            away_score: number | null;
+            /** Fixture Id */
+            fixture_id: number;
+            /** Home */
+            home: string;
+            /** Home Score */
+            home_score: number | null;
+            /** Kickoff Utc */
+            kickoff_utc: string | null;
+            /** Minutes */
+            minutes: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "not_started" | "live" | "finished";
+        };
+        /** LivePick */
+        LivePick: {
+            /** Is Captain */
+            is_captain: boolean;
+            /** Is Vice Captain */
+            is_vice_captain: boolean;
+            /** Multiplier */
+            multiplier: number;
+            /** Player Id */
+            player_id: number;
+            /** Position */
+            position: number;
+        };
+        /** LivePlayer */
+        LivePlayer: {
+            /** Bonus */
+            bonus: number;
+            /** Minutes */
+            minutes: number;
+            /** Player Id */
+            player_id: number;
+            /** Total Points */
+            total_points: number;
+        };
+        /** LiveTeam */
+        LiveTeam: {
+            /** Active Chip */
+            active_chip: string | null;
+            /** Fpl Team Id */
+            fpl_team_id: number;
+            /** Picks */
+            picks: components["schemas"]["LivePick"][];
+            /** Points */
+            points: number;
+            /** Transfers Cost */
+            transfers_cost: number;
         };
         /** Metrics */
         Metrics: {
@@ -1138,6 +1235,58 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_live_v1_live__gameweek__get: {
+        parameters: {
+            query?: {
+                /** @description An FPL team ID, for its picks and points. */
+                team?: number | null;
+            };
+            header?: never;
+            path: {
+                gameweek: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Live"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -74,7 +74,7 @@ test("while a gameweek is in play, the page says it is live", async ({ page }) =
   await page.goto("/");
   await expect(page.locator(".kicker")).toHaveText("Gameweek 11 is live");
   await expect(filled(page)).toHaveCount(1);
-  await expect(filled(page)).toHaveText("See GW11 predictions");
+  await expect(filled(page)).toHaveText("Follow GW11 live");
 });
 
 test("between gameweeks, the page says when predictions arrive", async ({ page }) => {
@@ -89,7 +89,7 @@ test("between gameweeks, the page says when predictions arrive", async ({ page }
 test("a first visit gets three places to start", async ({ page }) => {
   await page.goto("/");
   const start = page.getByRole("region", { name: "Where to start" });
-  for (const name of ["My team", "Predictions", "Track record"])
+  for (const name of ["My team", "Predictions", "Live"])
     await expect(start.getByRole("link", { name: new RegExp(`^${name}`) })).toBeVisible();
 });
 

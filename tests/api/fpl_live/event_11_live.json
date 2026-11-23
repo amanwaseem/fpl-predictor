@@ -1,0 +1,92 @@
+{
+ "elements": [
+  {
+   "id": 1,
+   "stats": {
+    "minutes": 69,
+    "goals_scored": 0,
+    "assists": 0,
+    "bonus": 0,
+    "bps": 5,
+    "total_points": 1
+   }
+  },
+  {
+   "id": 2,
+   "stats": {
+    "minutes": 20,
+    "goals_scored": 0,
+    "assists": 0,
+    "bonus": 0,
+    "bps": 4,
+    "total_points": 1
+   }
+  },
+  {
+   "id": 3,
+   "stats": {
+    "minutes": 0,
+    "goals_scored": 0,
+    "assists": 0,
+    "bonus": 0,
+    "bps": 0,
+    "total_points": 0
+   }
+  },
+  {
+   "id": 4,
+   "stats": {
+    "minutes": 90,
+    "goals_scored": 0,
+    "assists": 0,
+    "bonus": 0,
+    "bps": 5,
+    "total_points": 1
+   }
+  },
+  {
+   "id": 5,
+   "stats": {
+    "minutes": 90,
+    "goals_scored": 0,
+    "assists": 0,
+    "bonus": 0,
+    "bps": 8,
+    "total_points": 1
+   }
+  },
+  {
+   "id": 6,
+   "stats": {
+    "minutes": 0,
+    "goals_scored": 0,
+    "assists": 0,
+    "bonus": 0,
+    "bps": 0,
+    "total_points": 0
+   }
+  },
+  {
+   "id": 7,
+   "stats": {
+    "minutes": 20,
+    "goals_scored": 0,
+    "assists": 0,
+    "bonus": 0,
+    "bps": 5,
+    "total_points": 1
+   }
+  },
+  {
+   "id": 8,
+   "stats": {
+    "minutes": 90,
+    "goals_scored": 0,
+    "assists": 0,
+    "bonus": 0,
+    "bps": 4,
+    "total_points": 1
+   }
+  }
+ ]
+}

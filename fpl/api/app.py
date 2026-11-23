@@ -22,7 +22,7 @@ API_VERSION = "1"
 # Five minutes keeps clients and CDNs from asking every time without leaving a
 # fresh entry invisible for long; the ETag makes the re-check cheap.
 CACHE_CONTROL = "public, max-age=300"
-LIVE_PREFIXES = ("/v1/entries/", "/v1/status")
+LIVE_PREFIXES = ("/v1/entries/", "/v1/status", "/v1/live/")
 
 
 def etag_for(body):

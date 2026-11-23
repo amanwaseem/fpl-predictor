@@ -224,6 +224,59 @@ class NewsList(BaseModel):
     items: list[PlayerNews]
 
 
+class LiveFixture(BaseModel):
+    fixture_id: int
+    kickoff_utc: datetime | None
+    home: str
+    away: str
+    home_score: int | None
+    away_score: int | None
+    # Finished once FPL says the match is over, before its bonus is confirmed.
+    state: Literal["not_started", "live", "finished"]
+    minutes: int
+
+
+class LivePlayer(BaseModel):
+    player_id: int
+    minutes: int
+    # Provisional: bonus is FPL's, added once it confirms it.
+    total_points: int
+    bonus: int
+
+
+class LivePick(BaseModel):
+    player_id: int
+    # 1 to 15; 12 to 15 are the bench, in order.
+    position: int
+    # 0 on the bench, 2 for the captain, 3 with a triple captain.
+    multiplier: int
+    is_captain: bool
+    is_vice_captain: bool
+
+
+class LiveTeam(BaseModel):
+    fpl_team_id: int
+    active_chip: str | None
+    picks: list[LivePick]
+    transfers_cost: int
+    # Each pick's points so far times its multiplier, less the transfers' cost,
+    # before automatic substitutions.
+    points: int
+
+
+class Live(BaseModel):
+    """A gameweek's live points and scores, from FPL, a minute old at most (#199)."""
+
+    season: str
+    gameweek: int
+    # A match is under way: worth asking again in a minute.
+    in_play: bool
+    fixtures: list[LiveFixture]
+    players: list[LivePlayer]
+    # With ?team=, that FPL team's picks and points.
+    team: LiveTeam | None
+
+
 class Health(BaseModel):
     status: str
 
