@@ -1,115 +1,67 @@
 import { Link } from "react-router-dom";
-import { useModels } from "../api/queries";
 import { REPOSITORY } from "../log";
-import { liveModels, modelAbout, modelName, roleName } from "../models";
-import { Loading } from "../components/bits";
-import { Problem } from "../components/Problem";
 import { useTitle } from "../useTitle";
 
-// How the site works, for FPL managers rather than developers (#176).
+// How the site works, as the questions managers ask (#200): short answers,
+// in the footer rather than the menu. The models and why to trust the record
+// are on Track record.
 export function About() {
   useTitle("How it works");
-  const models = useModels();
-  const logged = liveModels(models.data?.models);
-
   return (
-    <div className="wrap page prose">
+    <div className="wrap page prose faq">
       <p className="eyebrow">How it works</p>
-      <h1>Predictions you can check</h1>
+      <h1>Questions and answers</h1>
       <p className="lede">
-        Before every FPL deadline, each model here predicts how many points every Premier League
-        player will score. The predictions are published before the deadline, never changed, and
-        scored once the gameweek is over.
+        Points predictions for every Premier League player, published before each FPL deadline and
+        never changed afterwards.
       </p>
 
-      <section className="section" aria-labelledby="reading">
-        <h2 id="reading">Reading a prediction</h2>
-        <p>
-          A prediction is a player&rsquo;s <strong>expected points</strong> for the gameweek: what
-          the player would score on average if the gameweek were played many times. A 6
-          doesn&rsquo;t mean 6 points this week. It means a better bet than a 4. Most weeks a few
-          players blank and a few haul, and the predictions are about who is likelier to.
-        </p>
-        <p>
-          On <Link to="/gameweeks">Predictions</Link>, each player has predicted points and minutes
-          for the whole gameweek, so a double gameweek counts both matches. Once the gameweek is
-          scored, the actual points sit beside them. A player with a status flag (a doubt, an injury
-          or a suspension) has the prediction scaled by FPL&rsquo;s chance of playing.
-        </p>
-      </section>
+      <h2>What does &ldquo;5.2 points&rdquo; mean?</h2>
+      <p>
+        What the player would score on average if the gameweek were played many times. It
+        isn&rsquo;t a promise for this week: a 6 is a better bet than a 4, and a double gameweek
+        counts both matches.
+      </p>
 
-      <section className="section" aria-labelledby="my-team">
-        <h2 id="my-team">Advice for your team</h2>
-        <p>
-          <Link to="/optimise">My team</Link> reads your squad from FPL using your team ID, which is
-          public, so there&rsquo;s no sign-in. It then works out the transfers, starting XI and
-          captain that score the most predicted points within FPL&rsquo;s rules. A transfer that
-          costs a hit is only suggested when it gains more than the 4 points it costs. Your team ID
-          is remembered in your browser only, and nowhere else.
-        </p>
-        <p>
-          FPL keeps your selling prices and free transfers private, so they are estimated unless you
-          give them. If the advice suggests a sale you can&rsquo;t afford, set your free transfers
-          and check your selling prices in the FPL app.
-        </p>
-      </section>
+      <h2>Where do I find my team ID?</h2>
+      <p>
+        Sign in at fantasy.premierleague.com and open the Points tab. The address ends like{" "}
+        <code>/entry/1234567/event/9</code>: the number after <code>entry</code> is your team ID.
+        Put it in <Link to="/optimise">My team</Link>.
+      </p>
 
-      <section className="section" aria-labelledby="models">
-        <h2 id="models">The models</h2>
-        {models.isPending && <Loading what="Reading the models" />}
-        {models.isError && <Problem error={models.error} />}
-        <ul>
-          {logged.map((m) => (
-            <li key={m.model_version}>
-              <strong>{modelName(m.model_version)}</strong>
-              {roleName(m.role) && roleName(m.role) !== modelName(m.model_version)
-                ? ` (${roleName(m.role)?.toLowerCase()})`
-                : ""}
-              : {modelAbout(m.model_version) ?? m.model_version}
-            </li>
-          ))}
-        </ul>
-        <p>
-          The baseline is deliberately simple. A model is only worth using if it beats it, and the{" "}
-          <Link to="/track-record">track record</Link> shows by how much each one does.
-        </p>
-      </section>
+      <h2>Do you need my password?</h2>
+      <p>
+        No. Your squad is public on FPL, so the team ID is all it takes. It&rsquo;s remembered in
+        your browser only, and nowhere else.
+      </p>
 
-      <section className="section" aria-labelledby="trust">
-        <h2 id="trust">Why you can trust the track record</h2>
-        <p>
-          Every prediction is committed to a{" "}
-          <a href={`${REPOSITORY}/tree/main/predictions`}>public log on GitHub</a> before the
-          deadline. Git&rsquo;s history shows when each one was made, and a check refuses any change
-          to a prediction once it&rsquo;s there. A model can&rsquo;t quietly drop its bad weeks: a
-          missed deadline stays missed. Each gameweek page links to the proof that its predictions
-          were published in time.
-        </p>
-      </section>
+      <h2>When do new predictions come out?</h2>
+      <p>
+        About a day before each deadline, once the gameweek before it is over and its bonus points
+        are confirmed. On a tight turnaround, as at Christmas, they come later, but always before
+        the deadline.
+      </p>
 
-      <section className="section" aria-labelledby="limits">
-        <h2 id="limits">What it can&rsquo;t do</h2>
-        <ul>
-          <li>
-            Predictions are made from data taken a few hours before the deadline. Team news after
-            that, such as a late injury or a manager&rsquo;s press conference, isn&rsquo;t in them.
-          </li>
-          <li>
-            They run slightly low, mostly for regular starters, and defenders above all, whose
-            defensive contribution points the models don&rsquo;t fully expect.{" "}
-            <a href={`${REPOSITORY}/blob/main/reports/bias-2026-27.md`}>The full analysis</a>{" "}
-            explains why, and what was tried.
-          </li>
-          <li>
-            A point or two either way is normal for a single player in a single week. Predictions
-            are most useful for comparing players, not for promising a score.
-          </li>
-        </ul>
-      </section>
+      <h2>Why might the advice be wrong?</h2>
+      <p>
+        Team news after the predictions are made, such as a late injury, isn&rsquo;t in them. FPL
+        keeps selling prices and free transfers private, so they&rsquo;re estimated unless you give
+        them. And a point or two either way is normal for one player in one week.
+      </p>
 
-      <p className="note small">
-        An independent fan project, not affiliated with the Premier League or Fantasy Premier
-        League. Free, with no accounts, no ads and no tracking.
+      <h2>Is this official FPL?</h2>
+      <p>
+        No. It&rsquo;s an independent fan project, not affiliated with the Premier League or Fantasy
+        Premier League. Free, with no accounts, no ads and no tracking.
+      </p>
+
+      <h2>How good are the predictions?</h2>
+      <p>
+        Every one is scored once its gameweek is over, misses included.{" "}
+        <Link to="/track-record">The track record</Link> shows how far off they are and how each
+        model compares, and the <a href={`${REPOSITORY}/tree/main/predictions`}>public log</a>{" "}
+        proves when each was made.
       </p>
     </div>
   );

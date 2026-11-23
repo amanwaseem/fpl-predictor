@@ -17,12 +17,12 @@ import { Problem } from "../components/Problem";
 import { opponentText } from "../fixtures";
 import { formatLocal, signed } from "../format";
 import { byPreference, liveModels } from "../models";
+import { chanceText, isOut } from "../news";
 import { savedTeam } from "../remember";
 import { useTitle } from "../useTitle";
 import { type WeekState } from "../week";
 
 type Row = Schemas["Prediction"];
-type News = Schemas["PlayerNews"];
 
 // Players a manager could pick this week: available, or doubtful at worst.
 const pickable = (r: Row) => r.status === "a" || r.status === "d";
@@ -377,17 +377,6 @@ function TeamNews() {
       )}
     </section>
   );
-}
-
-// Out: no chance of playing, or injured, suspended or unavailable with no
-// figure given.
-const isOut = (p: News) =>
-  p.chance_of_playing === 0 || (p.chance_of_playing === null && p.status !== "d");
-
-// "75%", or a word when FPL gives no figure.
-function chanceText(p: News): string {
-  if (isOut(p)) return "Out";
-  return p.chance_of_playing === null ? "Doubt" : `${p.chance_of_playing}%`;
 }
 
 // Counts down to the deadline, then asks for the status again: the API names

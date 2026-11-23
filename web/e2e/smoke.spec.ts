@@ -11,13 +11,14 @@ test("the open data is for developers: in the footer, not the main navigation", 
 }) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
-    "Home",
     "Predictions",
     "Live",
     "My team",
     "Track record",
-    "How it works",
   ]);
+  await expect(
+    page.getByRole("contentinfo").getByRole("link", { name: "How it works" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("contentinfo").getByRole("link", { name: "Open data (for developers)" }),
   ).toHaveAttribute("href", "/docs");
@@ -43,14 +44,22 @@ test("the API stays the API", async ({ request }) => {
   expect(response.headers()["content-type"]).toContain("application/problem+json");
 });
 
-test("How it works names every logged model", async ({ page, request }) => {
-  const { models } = await (await request.get("/v1/models")).json();
+test("How it works answers managers' questions, and leaves the models to Track record", async ({
+  page,
+}) => {
   await page.goto("/about");
-  await expect(page.getByRole("heading", { name: "Predictions you can check" })).toBeVisible();
-  const logged = models.filter((m: { role: string | null }) => m.role && m.role !== "retired");
-  await expect(page.getByRole("region", { name: "The models" }).getByRole("listitem")).toHaveCount(
-    logged.length,
-  );
+  for (const question of [
+    "What does “5.2 points” mean?",
+    "Where do I find my team ID?",
+    "Do you need my password?",
+    "When do new predictions come out?",
+    "Why might the advice be wrong?",
+    "Is this official FPL?",
+  ])
+    await expect(page.getByRole("heading", { name: question })).toBeVisible();
+  await expect(
+    page.getByRole("main").getByRole("link", { name: "The track record" }),
+  ).toHaveAttribute("href", "/track-record");
 });
 
 test("the favicon and robots.txt are files, not the app", async ({ request }) => {
