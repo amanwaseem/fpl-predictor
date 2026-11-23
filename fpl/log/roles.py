@@ -12,7 +12,9 @@ A retired model is no longer logged. Its entries stay in the log, and its
 record ends at its last gameweek: the weeks after are not missed, they are
 after it. Retiring a model is moving it here from ROLES to RETIRED, in the PR
 that takes it out of fpl.log.entry.LOGGED_MODELS, with the season, its last
-gameweek and the reason.
+gameweek, the role it held until then and the reason. The role is what lets
+the site keep showing a former main model's predictions for the gameweeks it
+was main (#194): those are what users saw before those deadlines.
 
 Standard library only: the entry, the scoring harness and the API read it.
 """
@@ -26,7 +28,8 @@ ROLES = {
     "gbm-v1": CHALLENGER,
 }
 
-# Retired models: {model: {"season": "2026/27", "last_gameweek": 12, "reason": "..."}}.
+# Retired models:
+# {model: {"season": "2026/27", "last_gameweek": 12, "role": "main", "reason": "..."}}.
 RETIRED: dict[str, dict] = {}
 
 
@@ -37,6 +40,14 @@ def last_gameweek(model, season):
     if isinstance(retired, dict) and retired.get("season") == season:
         return retired.get("last_gameweek")
     return None
+
+
+def retired_from(model, season):
+    """The role `model` held until it retired in `season` (main or challenger),
+    or None if it was not retired in that season."""
+    if last_gameweek(model, season) is None:
+        return None
+    return RETIRED[model].get("role")
 
 
 def role(model, season):
@@ -78,8 +89,12 @@ def problems(roles=None, retired=None, logged=None):
             or isinstance(gameweek, bool)
             or not why.get("reason")
             or not why.get("season")
+            or why.get("role") not in (MAIN, CHALLENGER)
         ):
-            found.append(f"{model}: a retirement is a season, a last_gameweek and a reason")
+            found.append(
+                f"{model}: a retirement is a season, a last_gameweek, the role it "
+                "held (main or challenger) and a reason"
+            )
     if logged is not None:
         if sorted(logged) != sorted(roles):
             found.append(

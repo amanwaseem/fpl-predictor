@@ -28,6 +28,53 @@ export function liveModels(models: Schemas["Model"][] | undefined): Schemas["Mod
   return (models ?? []).filter((m) => m.role && m.role !== "retired");
 }
 
+// The model that was main in `gameweek`, whether or not it logged it, or
+// undefined before any main model ran. A promotion retires the old main model
+// (ADR 0020), but its predictions are still what users saw before those
+// deadlines. Main models follow one another, so the main model in a gameweek
+// is the first to retire as main after it, or the main model now.
+export function mainIn<M extends Schemas["Model"]>(
+  models: M[] | undefined,
+  gameweek: number,
+): M | undefined {
+  const started = (models ?? []).filter((m) => m.first_gameweek <= gameweek);
+  const former = started
+    .filter((m) => m.retired_from === "main" && (m.retired_after ?? 0) >= gameweek)
+    .sort((a, b) => (a.retired_after ?? 0) - (b.retired_after ?? 0))[0];
+  return former ?? started.find((m) => m.role === "main");
+}
+
+// Users see one set of predictions (#194): the main model's for that
+// gameweek, or for one before a main model ran (or one it missed), the
+// baseline's, then any other's. The models are compared on Track record; a link may still ask for
+// one by ?model=. Only models that logged the gameweek are listed.
+export function byPreference(
+  models: Schemas["Model"][] | undefined,
+  gameweek: number,
+): Schemas["Model"][] {
+  const main = mainIn(models, gameweek)?.model_version;
+  const rank = (m: Schemas["Model"]) =>
+    m.model_version === main ? 0 : m.role === "baseline" ? 1 : m.role ? 2 : 3;
+  return (models ?? [])
+    .filter((m) => m.gameweeks_logged.includes(gameweek))
+    .sort((a, b) => rank(a) - rank(b));
+}
+
+// A player's one prediction for a gameweek, from the most preferred model
+// that logged it that week.
+export function pickPrediction<T extends { model_version: string }>(
+  predictions: T[],
+  models: Schemas["Model"][] | undefined,
+  gameweek: number,
+): T | undefined {
+  const order = byPreference(models, gameweek).map((m) => m.model_version);
+  const rank = (version: string) => {
+    const i = order.indexOf(version);
+    return i === -1 ? order.length : i;
+  };
+  return [...predictions].sort((a, b) => rank(a.model_version) - rank(b.model_version))[0];
+}
+
 export function modelName(version: string): string {
   return MODELS[version]?.name ?? version;
 }

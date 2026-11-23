@@ -6,7 +6,9 @@ test("the front page reads the API's status", async ({ page }) => {
   await expect(page.getByLabel("Status")).toContainText("Season");
 });
 
-test("the API is for developers: in the footer, not the main navigation", async ({ page }) => {
+test("the open data is for developers: in the footer, not the main navigation", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
     "Home",
@@ -14,10 +16,9 @@ test("the API is for developers: in the footer, not the main navigation", async 
     "My team",
     "How it works",
   ]);
-  await expect(page.getByRole("contentinfo").getByRole("link", { name: /API/ })).toHaveAttribute(
-    "href",
-    "/docs",
-  );
+  await expect(
+    page.getByRole("contentinfo").getByRole("link", { name: "Open data (for developers)" }),
+  ).toHaveAttribute("href", "/docs");
 });
 
 test("the front page shows this gameweek's top picks by position", async ({ page }) => {

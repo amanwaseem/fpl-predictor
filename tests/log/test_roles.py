@@ -16,7 +16,7 @@ SEASON = "2026/27"
 
 
 def retired(last=9, **extra):
-    return {"season": SEASON, "last_gameweek": last, "reason": "beaten"} | extra
+    return {"season": SEASON, "last_gameweek": last, "role": "main", "reason": "beaten"} | extra
 
 
 class TestTheRolesAsTheyStand(unittest.TestCase):
@@ -61,9 +61,16 @@ class TestTheRules(unittest.TestCase):
         found = self.check({"b-v1": roles.BASELINE, "c-v1": roles.CHALLENGER}, {"m-v1": retired()})
         self.assertIn("main", found[0])
 
-    def test_a_retirement_needs_a_season_a_last_gameweek_and_a_reason(self):
+    def test_a_retirement_needs_a_season_a_last_gameweek_a_role_and_a_reason(self):
         base = {"b-v1": roles.BASELINE, "m-v1": roles.MAIN}
-        for bad in ({"last_gameweek": 9, "reason": "r"}, retired(last=True), retired(reason=""), 9):
+        for bad in (
+            {"last_gameweek": 9, "role": "main", "reason": "r"},
+            retired(last=True),
+            retired(reason=""),
+            retired(role=None),
+            retired(role="baseline"),
+            9,
+        ):
             with self.subTest(retirement=bad):
                 self.assertEqual(len(self.check(base, {"old-v1": bad})), 1)
 
@@ -90,6 +97,13 @@ class TestARetiredRecord(unittest.TestCase):
             self.assertEqual(roles.last_gameweek("old-v1", SEASON), 9)
             self.assertIsNone(roles.last_gameweek("old-v1", "2027/28"))
             self.assertIsNone(roles.role("old-v1", "2027/28"))
+
+    def test_a_retirement_keeps_the_role_it_ended(self):
+        """#194: the site shows a former main model's predictions for its weeks."""
+        with mock.patch.dict(roles.RETIRED, {"old-v1": retired(role="main")}):
+            self.assertEqual(roles.retired_from("old-v1", SEASON), roles.MAIN)
+            self.assertIsNone(roles.retired_from("old-v1", "2027/28"))
+        self.assertIsNone(roles.retired_from("form-fixture-v1", SEASON))
 
     def test_an_entry_after_a_retirement_contradicts_it(self):
         with mock.patch.dict(roles.RETIRED, {"old-v1": retired()}):

@@ -148,6 +148,9 @@ class Model(BaseModel):
     # with entries but no role, which only a test log has.
     role: Literal["baseline", "main", "challenger", "retired"] | None
     retired_after: int | None
+    # The role a retired model held until retired_after, so the site can show
+    # a former main model's predictions for the gameweeks it was main (#194).
+    retired_from: Literal["main", "challenger"] | None
 
 
 class ModelList(BaseModel):

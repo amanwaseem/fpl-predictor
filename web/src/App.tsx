@@ -57,7 +57,7 @@ export function App() {
           <nav className="footer-links" aria-label="More">
             <Link to="/about">How it works</Link>
             <a href={REPOSITORY}>Prediction log on GitHub</a>
-            <a href="/docs">API for developers</a>
+            <a href="/docs">Open data (for developers)</a>
           </nav>
         </div>
       </footer>

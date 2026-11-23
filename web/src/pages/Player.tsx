@@ -2,13 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
-import { POSITION_NAMES } from "../api/queries";
+import { POSITION_NAMES, useModels } from "../api/queries";
 import { ClubBadge, Loading, PlayerPhoto } from "../components/bits";
 import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
 import { clubColours, clubName } from "../clubs";
 import { fixed, positiveInt } from "../format";
-import { modelName } from "../models";
+import { pickPrediction } from "../models";
 import { NotFound } from "./NotFound";
 
 type Fixture = Schemas["PlayedFixture"];
@@ -25,8 +25,11 @@ function PlayerPage({ playerId }: { playerId: number }) {
       unwrap(api.GET("/v1/players/{player_id}", { params: { path: { player_id: playerId } } })),
   });
   useTitle(player.data ? `${player.data.first_name} ${player.data.second_name}` : "Player");
+  // The roles say which prediction to show (#194). Waited for, so the figures
+  // don't change under the reader when they arrive; without them, any model's.
+  const models = useModels();
 
-  if (player.isPending)
+  if (player.isPending || models.isPending)
     return (
       <div className="wrap page">
         <Loading />
@@ -40,7 +43,6 @@ function PlayerPage({ playerId }: { playerId: number }) {
     );
   const p = player.data;
 
-  const models = [...new Set(p.predictions.map((x) => x.model_version))].sort();
   // A fixture with no gameweek (postponed, not yet rescheduled) has no row here.
   const played = new Map<number, Fixture[]>();
   for (const f of p.history) {
@@ -49,8 +51,14 @@ function PlayerPage({ playerId }: { playerId: number }) {
   const weeks = [...new Set([...played.keys(), ...p.predictions.map((x) => x.gameweek)])].sort(
     (a, b) => b - a,
   );
-  const predicted = (gw: number, model: string) =>
-    p.predictions.find((x) => x.gameweek === gw && x.model_version === model);
+  // One prediction a week: that week's main model's where it was logged, else
+  // the baseline's.
+  const predicted = (gw: number) =>
+    pickPrediction(
+      p.predictions.filter((x) => x.gameweek === gw),
+      models.data?.models,
+      gw,
+    );
   // The points a week's entries were scored against, where they were; the
   // match data otherwise. The two agree once bonus is final.
   const points = (gw: number, fixtures: Fixture[]) =>
@@ -65,7 +73,7 @@ function PlayerPage({ playerId }: { playerId: number }) {
     p.history.reduce((s, f) => s + f[key], 0);
   // The newest prediction, for the "this gameweek" figure.
   const newest = p.predictions.length ? Math.max(...p.predictions.map((x) => x.gameweek)) : null;
-  const next = newest === null ? [] : p.predictions.filter((x) => x.gameweek === newest);
+  const thisWeek = newest === null ? undefined : predicted(newest);
 
   return (
     <div className="wrap page">
@@ -94,14 +102,12 @@ function PlayerPage({ playerId }: { playerId: number }) {
           </p>
         </div>
         <dl className="stat-strip" style={{ flexBasis: "100%" }}>
-          {next.map((x) => (
-            <div className="stat" key={x.model_version}>
-              <dt>
-                GW{x.gameweek}, {modelName(x.model_version)}
-              </dt>
-              <dd>{x.predicted_points.toFixed(1)}</dd>
+          {thisWeek && (
+            <div className="stat">
+              <dt>GW{thisWeek.gameweek} prediction</dt>
+              <dd>{thisWeek.predicted_points.toFixed(1)}</dd>
             </div>
-          ))}
+          )}
           <div className="stat">
             <dt>Season points</dt>
             <dd>{sum("total_points")}</dd>
@@ -138,11 +144,9 @@ function PlayerPage({ playerId }: { playerId: number }) {
                   <th scope="col" className="num">
                     Points
                   </th>
-                  {models.map((m) => (
-                    <th scope="col" className="num" key={m}>
-                      {modelName(m)}
-                    </th>
-                  ))}
+                  <th scope="col" className="num">
+                    Predicted
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -168,14 +172,7 @@ function PlayerPage({ playerId }: { playerId: number }) {
                       <td className="num">
                         <strong>{points(gw, fixtures) ?? "–"}</strong>
                       </td>
-                      {models.map((m) => {
-                        const x = predicted(gw, m);
-                        return (
-                          <td className="num" key={m}>
-                            {fixed(x?.predicted_points, 2)}
-                          </td>
-                        );
-                      })}
+                      <td className="num">{fixed(predicted(gw)?.predicted_points, 2)}</td>
                     </tr>
                   );
                 })}
@@ -184,8 +181,8 @@ function PlayerPage({ playerId }: { playerId: number }) {
           </div>
         )}
         <p className="note small after">
-          Points are FPL points for the gameweek; each model's column is what it predicted before
-          the deadline.
+          Points are what the player scored in FPL that gameweek. Predicted is what we predicted
+          before its deadline.
         </p>
       </section>
     </div>

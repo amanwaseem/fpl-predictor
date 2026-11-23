@@ -410,6 +410,8 @@ export interface components {
             model_version: string;
             /** Retired After */
             retired_after: number | null;
+            /** Retired From */
+            retired_from: ("main" | "challenger") | null;
             /** Role */
             role: ("baseline" | "main" | "challenger" | "retired") | null;
         };
@@ -735,6 +737,8 @@ export interface components {
             pooled: components["schemas"]["Pooled"];
             /** Retired After */
             retired_after: number | null;
+            /** Retired From */
+            retired_from: ("main" | "challenger") | null;
             /** Role */
             role: ("baseline" | "main" | "challenger" | "retired") | null;
         };

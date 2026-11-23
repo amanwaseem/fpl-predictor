@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
-import { stubPlayer } from "./fixtures";
+import { PLAYER, stubPlayer } from "./fixtures";
 
 // The newest gameweek of the newest season in the committed log, read from git
 // rather than written in: every new entry moves it, and a test pinned to one
@@ -107,7 +107,7 @@ test("a filter a link carries that no control can show is ignored", async ({ pag
   await expect(page.getByText("No players match.")).toHaveCount(0);
 });
 
-test("a player's page shows each model's prediction beside what happened", async ({ page }) => {
+test("a player's page shows our prediction beside what happened", async ({ page }) => {
   // The database in CI holds the log only, not football data: the player is stubbed.
   await stubPlayer(page);
   await page.goto("/players/42");
@@ -115,6 +115,65 @@ test("a player's page shows each model's prediction beside what happened", async
   const gw8 = page.getByRole("row", { name: /GW8/ });
   await expect(gw8).toContainText("CHE (H)");
   await expect(gw8).toContainText("5.10");
+});
+
+test("a player's page shows the model that was main that week, after a promotion", async ({
+  page,
+}) => {
+  // #194: form-fixture-v1 was main to GW11 and retired; gbm-v1, the challenger
+  // from GW9, is main from GW12. What users saw before a deadline stays.
+  const range = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  const model = (version: string, logged: number[], role: string, retired?: number) => ({
+    model_version: version,
+    first_gameweek: logged[0],
+    gameweeks_logged: logged,
+    gameweeks_scored: [],
+    gameweeks_missed: [],
+    role,
+    retired_after: retired ?? null,
+    retired_from: retired ? "main" : null,
+  });
+  await page.route("**/v1/models", (route) =>
+    route.fulfill({
+      json: {
+        season: "2026/27",
+        models: [
+          model("baseline-v1", range(4, 12), "baseline"),
+          model("form-fixture-v1", range(6, 11), "retired", 11),
+          model("gbm-v1", range(9, 12), "main"),
+        ],
+      },
+    }),
+  );
+  const predicted = (gameweek: number, model_version: string, predicted_points: number) => ({
+    gameweek,
+    model_version,
+    predicted_points,
+    expected_minutes: 80,
+    actual_points: null,
+    actual_minutes: null,
+  });
+  await page.route(`**/v1/players/${PLAYER.player_id}`, (route) =>
+    route.fulfill({
+      json: {
+        ...PLAYER,
+        history: [],
+        predictions: [
+          predicted(5, "baseline-v1", 1.5),
+          predicted(10, "baseline-v1", 2.5),
+          predicted(10, "form-fixture-v1", 3.5),
+          predicted(10, "gbm-v1", 4.5),
+          predicted(12, "baseline-v1", 5.5),
+          predicted(12, "gbm-v1", 6.5),
+        ],
+      },
+    }),
+  );
+  await page.goto(`/players/${PLAYER.player_id}`);
+  await expect(page.getByRole("row", { name: /GW5\b/ })).toContainText("1.50");
+  await expect(page.getByRole("row", { name: /GW10\b/ })).toContainText("3.50");
+  await expect(page.getByRole("row", { name: /GW12\b/ })).toContainText("6.50");
 });
 
 test("an unknown player is the API's problem, worded as the API words it", async ({ page }) => {
@@ -133,6 +192,41 @@ test("a gameweek or player that is not a number is not found, without asking the
 
 test("a model with no entry that gameweek falls back to one that has", async ({ page }) => {
   await page.goto("/gameweeks/4?model=form-fixture-v1");
-  await expect(page.getByLabel("Model")).toHaveValue("baseline-v1");
+  await expect(page.getByText(/main model wasn.t running yet in gameweek 4/)).toBeVisible();
   await expect(page.getByRole("table", { name: "Predictions" })).toBeVisible();
+});
+
+// #194: users get one set of predictions and plain words; the models are
+// compared on Track record. A link may still ask for one by ?model=.
+const INSIDER = /baseline-v1|form-fixture-v1|gbm-v1|Snapshot|RMSE/;
+
+test("Predictions offers no model choice, and names no model code or snapshot", async ({
+  page,
+}) => {
+  await page.goto("/gameweeks/8");
+  await expect(page.getByRole("table", { name: "Predictions" })).toBeVisible();
+  await expect(page.getByLabel("Model")).toHaveCount(0);
+  expect(await page.locator("main").innerText()).not.toMatch(INSIDER);
+  await page.getByText("Published before the deadline").click();
+  await expect(page.getByRole("link", { name: /committed to the public log/ })).toBeVisible();
+});
+
+test("a link to another model still opens it, and says so", async ({ page }) => {
+  await page.goto("/gameweeks/8?model=baseline-v1");
+  await expect(page.getByText(/not our main ones/)).toBeVisible();
+  await page.getByRole("link", { name: "See our main predictions" }).click();
+  await expect(page).not.toHaveURL(/model=/);
+  await expect(page.getByText(/not our main ones/)).toHaveCount(0);
+});
+
+test("My team and a player's page offer no model choice either", async ({ page }) => {
+  await page.goto("/optimise");
+  await expect(page.getByRole("button", { name: "Get my advice" })).toBeVisible();
+  await expect(page.getByLabel("Model")).toHaveCount(0);
+  expect(await page.locator("main").innerText()).not.toMatch(INSIDER);
+
+  await stubPlayer(page);
+  await page.goto("/players/42");
+  await expect(page.getByRole("heading", { name: "Ada Tester" })).toBeVisible();
+  expect(await page.locator("main").innerText()).not.toMatch(INSIDER);
 });

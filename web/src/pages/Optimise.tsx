@@ -21,18 +21,26 @@ export function Optimise() {
   const main = live.find((m) => m.role === "main") ?? live[0];
 
   // What is on screen comes from the URL alone; the form is applied on submit.
-  // With no model chosen and none known, the API's default is used.
+  // Advice comes from the main model (#194). A link may still name another,
+  // which is kept for its own team; with none known, the API's default is used.
   const team = positiveInt(params.get("team") ?? undefined);
-  const model = params.get("model") ?? main?.model_version;
+  const linked = params.get("model");
+  const model = linked ?? main?.model_version;
+  // Named only when it is known not to be the main model.
+  const notMain = (version: string) =>
+    linked !== null && main !== undefined && version !== main.model_version;
+  const withoutModel = () => {
+    const next = new URLSearchParams(params);
+    next.delete("model");
+    return `?${next}`;
+  };
   const freeParam = params.get("free");
   const free = freeParam !== null && /^[0-5]$/.test(freeParam) ? Number(freeParam) : undefined;
 
   // The form follows the URL, so back and forward leave the two agreeing, and
-  // only the URL: the models list arriving must not clear what was typed. An
-  // empty model is the default one.
+  // only the URL: the models list arriving must not clear what was typed.
   const fromUrl = () => ({
     team: params.get("team") ?? "",
-    model: params.get("model") ?? "",
     free: params.get("free") ?? "",
   });
   // Reset while rendering, not in an effect: React's pattern for state that
@@ -45,10 +53,6 @@ export function Optimise() {
     setFormSearch(search);
     setForm(fromUrl());
   }
-  const chosen = form.model || model || "";
-  // A model from a link that is not offered is still shown as chosen.
-  const offered = live.map((m) => m.model_version);
-  if (chosen && !offered.includes(chosen)) offered.push(chosen);
 
   // The reader's own team, remembered in this browser (#176). My team with no
   // team in the link shows it, however it was reached; a link with a team
@@ -88,7 +92,7 @@ export function Optimise() {
     // one, rather than ask once for the API's default and again for main.
     enabled: asking,
     // Asking costs an FPL API call and a solve: not again just because the
-    // reader came back to the tab. "Get advice" asks again.
+    // reader came back to the tab. "Get my advice" asks again.
     refetchOnWindowFocus: false,
     // A failure here may be the FPL API's; asking it again at once rarely helps.
     retry: false,
@@ -119,17 +123,13 @@ export function Optimise() {
     // Advice already cached for this request is shown without a fetch, so the
     // team is remembered now; otherwise once the fetch succeeds.
     const asked = positiveInt(form.team.trim());
-    const cachedKey = [
-      "advice",
-      asked,
-      chosen || main?.model_version,
-      form.free === "" ? undefined : Number(form.free),
-    ];
+    const cachedKey = ["advice", asked, model, form.free === "" ? undefined : Number(form.free)];
     if (asked !== null && queryClient.getQueryData(cachedKey) !== undefined) remember(asked);
     else toRemember.current = asked;
     const next = new URLSearchParams();
     next.set("team", form.team.trim());
-    if (chosen) next.set("model", chosen);
+    // A linked model goes with the linked team: another team gets main advice.
+    if (linked && asked === team) next.set("model", linked);
     if (form.free !== "") next.set("free", form.free);
     // The same request again is asked again: the squad may have changed on
     // FPL since, and the answer is cached for five minutes. No new history
@@ -171,19 +171,6 @@ export function Optimise() {
             />
           </label>
           <label className="field">
-            Model
-            <select value={chosen} onChange={(e) => setForm({ ...form, model: e.target.value })}>
-              {offered.map((name) => (
-                <option key={name} value={name}>
-                  {modelName(name)}
-                  {live.find((m) => m.model_version === name)?.role === "main"
-                    ? " (recommended)"
-                    : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
             Free transfers
             <select value={form.free} onChange={(e) => setForm({ ...form, free: e.target.value })}>
               <option value="">Work it out</option>
@@ -195,7 +182,7 @@ export function Optimise() {
             </select>
           </label>
           <button type="submit" className="button">
-            Get advice
+            Get my advice
           </button>
         </div>
         {saved && (
@@ -230,14 +217,19 @@ export function Optimise() {
           <div className="section-head">
             <h2 id="advice">Your advice for gameweek {advice.data.gameweek}</h2>
             <span className="muted small">
-              From {modelName(advice.data.model_version)} · deadline{" "}
-              {formatLocal(advice.data.deadline_utc)}
+              {notMain(advice.data.model_version) && (
+                <>
+                  From the {modelName(advice.data.model_version)} model (
+                  <Link to={withoutModel()}>see our main advice</Link>) ·{" "}
+                </>
+              )}
+              Deadline {formatLocal(advice.data.deadline_utc)}
             </span>
           </div>
           {advice.data.deadline_passed && (
             <p role="alert" className="problem problem-warn">
-              The gameweek {advice.data.gameweek} deadline has passed. This is what the model would
-              have advised.
+              The gameweek {advice.data.gameweek} deadline has passed. This is what we would have
+              advised.
             </p>
           )}
           {advice.data.plan && <PlanView plan={advice.data.plan} codes={adviceCodes} />}
@@ -264,9 +256,10 @@ export function Optimise() {
       <section className="section card" aria-labelledby="fresh">
         <div className="section-head">
           <div>
-            <h2 id="fresh">Best squad from scratch</h2>
+            <h2 id="fresh">Playing a wildcard or free hit?</h2>
             <p className="muted small" style={{ margin: 0 }}>
-              The best fifteen within £100m under every FPL rule. Handy for a wildcard or free hit.
+              The best fifteen within £100m under every FPL rule, picked from scratch for this
+              gameweek.
             </p>
           </div>
           <button
@@ -282,8 +275,18 @@ export function Optimise() {
         {fresh.data && (
           <>
             <p className="muted small">
-              Gameweek {fresh.data.gameweek}, from {modelName(fresh.data.model_version)}.{" "}
-              <Link to={`/gameweeks/${fresh.data.gameweek}?model=${fresh.data.model_version}`}>
+              Gameweek {fresh.data.gameweek}
+              {notMain(fresh.data.model_version)
+                ? `, from the ${modelName(fresh.data.model_version)} model`
+                : ""}
+              .{" "}
+              <Link
+                to={
+                  linked
+                    ? `/gameweeks/${fresh.data.gameweek}?model=${fresh.data.model_version}`
+                    : `/gameweeks/${fresh.data.gameweek}`
+                }
+              >
                 See every prediction
               </Link>
             </p>

@@ -481,6 +481,21 @@
             ],
             "title": "Retired After"
           },
+          "retired_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "main",
+                  "challenger"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired From"
+          },
           "role": {
             "anyOf": [
               {
@@ -506,7 +521,8 @@
           "gameweeks_scored",
           "gameweeks_missed",
           "role",
-          "retired_after"
+          "retired_after",
+          "retired_from"
         ],
         "title": "Model",
         "type": "object"
@@ -1398,6 +1414,21 @@
             ],
             "title": "Retired After"
           },
+          "retired_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "main",
+                  "challenger"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired From"
+          },
           "role": {
             "anyOf": [
               {
@@ -1424,6 +1455,7 @@
           "gameweeks_missed",
           "role",
           "retired_after",
+          "retired_from",
           "per_gameweek",
           "pooled"
         ],

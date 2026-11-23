@@ -413,6 +413,7 @@ def models(connection, season):
             ),
             "role": roles.role(model, season),
             "retired_after": roles.last_gameweek(model, season),
+            "retired_from": roles.retired_from(model, season),
         }
         for model, gameweeks in sorted(logged.items())
     ]
