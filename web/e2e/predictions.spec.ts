@@ -44,10 +44,7 @@ test("/gameweeks opens the newest gameweek's entry", async ({ page }) => {
 test("filters narrow the entry and sorting reorders it", async ({ page }) => {
   await page.goto("/gameweeks/8?model=baseline-v1");
   const table = page.getByRole("table", { name: "Predictions" });
-  await page
-    .getByRole("group", { name: "Position" })
-    .getByRole("button", { name: "Goalkeepers" })
-    .click();
+  await page.getByRole("group", { name: "Position" }).getByRole("button", { name: "GK" }).click();
   await expect(page).toHaveURL(/position=GKP/);
   await expect(table.locator("tbody tr").first()).toHaveAttribute("data-position", "GKP");
   await expect(table.locator('tbody tr:not([data-position="GKP"])')).toHaveCount(0);
@@ -66,6 +63,116 @@ test("filters narrow the entry and sorting reorders it", async ({ page }) => {
       return i === -1 ? "descending" : `£${values[i - 1]}m before £${values[i]}m`;
     })
     .toBe("descending");
+});
+
+// #197: arrows, short position tabs, filter chips, opponents, Actual only once scored.
+test("the arrows step through the logged gameweeks and stop at the ends", async ({
+  page,
+  request,
+}) => {
+  const { models } = await (await request.get("/v1/models")).json();
+  const logged = [
+    ...new Set<number>(models.flatMap((m: { gameweeks_logged: number[] }) => m.gameweeks_logged)),
+  ].sort((a, b) => a - b);
+  await page.goto(`/gameweeks/${logged[0]}?position=MID`);
+  await expect(page.getByRole("link", { name: `Gameweek ${logged[0]! - 1}` })).toHaveCount(0);
+  await page.getByRole("link", { name: `Gameweek ${logged[1]}` }).click();
+  await expect(page).toHaveURL(new RegExp(`/gameweeks/${logged[1]}\\?position=MID$`));
+  await page.goto(`/gameweeks/${logged.at(-1)}`);
+  await expect(page.getByRole("link", { name: `Gameweek ${logged.at(-1)! + 1}` })).toHaveCount(0);
+  // No browser dropdowns are left on the page.
+  await expect(page.locator("select")).toHaveCount(0);
+});
+
+test("the position tabs fit a phone, with nothing cut off", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/gameweeks/8");
+  const tabs = page.getByRole("group", { name: "Position" });
+  for (const name of ["All", "GK", "DEF", "MID", "FWD"]) {
+    const box = (await tabs.getByRole("button", { name }).boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+  }
+});
+
+test("club, price and fitness filters combine, and the link keeps them", async ({ page }) => {
+  await page.goto("/gameweeks/8?model=baseline-v1");
+  await page.getByRole("button", { name: "Filters" }).click();
+  const clubs = page.getByRole("group", { name: "Clubs" });
+  await clubs.getByRole("button", { name: "ARS" }).click();
+  await clubs.getByRole("button", { name: "CHE" }).click();
+  // The address changes in a transition, so the box is ticked a moment later.
+  await page.getByLabel("Fit players only").click();
+  await expect(page.getByLabel("Fit players only")).toBeChecked();
+  await expect(page).toHaveURL(/team=ARS%2CCHE|team=ARS,CHE/);
+  await expect(page).toHaveURL(/fit=1/);
+  const rows = page.getByRole("table", { name: "Predictions" }).locator("tbody tr");
+  await expect(rows.first()).toBeVisible();
+  for (const team of await rows.evaluateAll((trs) => trs.map((tr) => tr.dataset.team)))
+    expect(["ARS", "CHE"]).toContain(team);
+  await expect(rows.locator(".pill")).toHaveCount(0);
+
+  // A shared link brings the same view, the price included.
+  await page.goto(`${new URL(page.url()).pathname}${new URL(page.url()).search}&max=6`);
+  await expect(page.getByRole("button", { name: "Filters (3)" })).toBeVisible();
+  const prices = await page
+    .getByRole("table", { name: "Predictions" })
+    .locator("tbody td.price")
+    .allTextContents();
+  for (const price of prices) expect(Number(price.replace(/[£m]/g, ""))).toBeLessThanOrEqual(6);
+});
+
+test("points per £m sorts by value for money", async ({ page }) => {
+  await page.goto("/gameweeks/8?model=baseline-v1");
+  await page
+    .getByRole("group", { name: "Sort by" })
+    .getByRole("button", { name: "Points per £m" })
+    .click();
+  await expect(page).toHaveURL(/sort=value/);
+  const table = page.getByRole("table", { name: "Predictions" });
+  await expect(table.getByRole("columnheader", { name: /Per £m/ })).toBeVisible();
+});
+
+test("Actual shows only once a gameweek is scored", async ({ page, request }) => {
+  const { models } = await (await request.get("/v1/models")).json();
+  const all = models.flatMap((m: { gameweeks_logged: number[] }) => m.gameweeks_logged);
+  const scored = new Set(models.flatMap((m: { gameweeks_scored: number[] }) => m.gameweeks_scored));
+  const pending = all.find((gw: number) => !scored.has(gw));
+  await page.goto(`/gameweeks/${[...scored][0]}`);
+  const table = page.getByRole("table", { name: "Predictions" });
+  await expect(table.getByRole("columnheader", { name: /Actual/ })).toBeVisible();
+  await expect(table.getByRole("columnheader", { name: /Error/ })).toHaveCount(0);
+  test.skip(pending === undefined, "every logged gameweek is scored");
+  await page.goto(`/gameweeks/${pending}`);
+  await expect(table.getByRole("columnheader", { name: /Predicted/ })).toBeVisible();
+  await expect(table.getByRole("columnheader", { name: /Actual/ })).toHaveCount(0);
+});
+
+test("every row shows its opponents, doubles and blanks included", async ({ page, request }) => {
+  const detail = await (await request.get("/v1/gameweeks/8")).json();
+  const fixture = (id: number, home: string, away: string, hour: number) => ({
+    fixture_id: id,
+    kickoff_utc: `2026-10-24T${String(hour).padStart(2, "0")}:00:00Z`,
+    home,
+    away,
+    home_score: null,
+    away_score: null,
+    finished: false,
+  });
+  // Arsenal play twice, Chelsea once, and everyone else not at all.
+  await page.route("**/v1/gameweeks/8", (route) =>
+    route.fulfill({
+      json: {
+        ...detail,
+        fixtures: [fixture(1, "ARS", "CHE", 12), fixture(2, "LIV", "ARS", 15)],
+      },
+    }),
+  );
+  await page.goto("/gameweeks/8?model=baseline-v1&team=ARS,CHE,LIV,MCI");
+  const row = (team: string) =>
+    page.locator(`table[aria-label="Predictions"] tbody tr[data-team="${team}"]`).first();
+  await expect(row("ARS").locator(".opponent-col")).toHaveText("CHE (H), LIV (A)");
+  await expect(row("CHE").locator(".opponent-col")).toHaveText("ARS (A)");
+  await expect(row("MCI").locator(".opponent-col")).toHaveText("No match");
 });
 
 test("an entry shows its top fifty first, and more on asking", async ({ page }) => {

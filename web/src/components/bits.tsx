@@ -1,6 +1,8 @@
 // Small pieces every page uses: player photos, club badges, availability,
-// the deadline countdown and the page title.
-import { useEffect, useState } from "react";
+// the deadline countdown, and the stepper and chips that stand in for
+// browser dropdowns (#197).
+import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { clubColours, clubName } from "../clubs";
 
 // FPL's own photo CDN, keyed by the player's code (#136). These are Premier
@@ -106,5 +108,52 @@ export function Loading({ what = "Loading" }: { what?: string }) {
       <span className="spinner" aria-hidden="true" />
       {what}…
     </p>
+  );
+}
+
+// "‹ Gameweek 12 ›": arrows to the steps either side, which stop at the ends.
+// The title in the middle is the page's heading.
+export function Stepper({
+  previous,
+  next,
+  children,
+}: {
+  previous: { to: string; label: string } | null;
+  next: { to: string; label: string } | null;
+  children: ReactNode;
+}) {
+  const arrow = (step: { to: string; label: string } | null, symbol: string, rel: string) =>
+    step ? (
+      <Link className="stepper-arrow" to={step.to} aria-label={step.label} rel={rel}>
+        {symbol}
+      </Link>
+    ) : (
+      <span className="stepper-arrow" aria-hidden="true" data-disabled="">
+        {symbol}
+      </span>
+    );
+  return (
+    <div className="stepper">
+      {arrow(previous, "‹", "prev")}
+      {children}
+      {arrow(next, "›", "next")}
+    </div>
+  );
+}
+
+// A toggle that reads as a chip: a club, a filter. Pressed is selected.
+export function Chip({
+  pressed,
+  onClick,
+  children,
+}: {
+  pressed: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button type="button" className="chip" aria-pressed={pressed} onClick={onClick}>
+      {children}
+    </button>
   );
 }
