@@ -100,10 +100,22 @@ test("a team FPL doesn't know is named, in a manager's words", async ({ page }) 
 
 // Remembering the reader's own team, in this browser only (#176). A small
 // stubbed answer is enough: what is tested is what is remembered, and when.
+// A real best squad, solved once per worker and shared: the advice stubs need
+// one, and CI runs the API with the solver's rate limit on (ten a minute), so
+// asking in every test would run into it.
+let realSquad: Promise<Record<string, any>> | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+function bestSquad(page: Page) {
+  realSquad ??= page.request
+    .post("/v1/optimise", { data: { model: "baseline-v1" } })
+    .then((response) => {
+      if (!response.ok()) throw new Error(`/v1/optimise answered ${response.status()}`);
+      return response.json();
+    });
+  return realSquad;
+}
+
 async function stubAdvice(page: Page, id: number) {
-  const real = await (
-    await page.request.post("/v1/optimise", { data: { model: "baseline-v1" } })
-  ).json();
+  const real = await bestSquad(page);
   await page.route(`**/v1/entries/${id}/advice*`, (route) =>
     route.fulfill({
       json: {
@@ -262,9 +274,7 @@ test("a remembered team opens straight on its advice, and change brings the box 
 
 test("free transfers and hits change the advice without leaving the page", async ({ page }) => {
   const asked: URL[] = [];
-  const real = await (
-    await page.request.post("/v1/optimise", { data: { model: "baseline-v1" } })
-  ).json();
+  const real = await bestSquad(page);
   await page.route("**/v1/entries/321/advice*", (route) => {
     const url = new URL(route.request().url());
     asked.push(url);
