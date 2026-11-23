@@ -42,8 +42,8 @@ HEADERS = {"User-Agent": "fpl-predictor (+https://github.com/amanwaseem/fpl-pred
 FREE_CHIPS = frozenset({"wildcard", "freehit"})
 
 
-def fetch(engine, path):
-    """The JSON at BASE/path, from the cache if it is fresh enough.
+def fetch(engine, path, max_age=CACHE_SECONDS):
+    """The JSON at BASE/path, from the cache if it is under `max_age` seconds old.
 
     A 404 from FPL is the caller's (no such team, or no picks for that
     gameweek), and is raised as one, and kept like an answer; anything else
@@ -56,7 +56,7 @@ def fetch(engine, path):
                 UpstreamResponse.status, UpstreamResponse.body, UpstreamResponse.fetched_at_utc
             ).where(UpstreamResponse.path == path)
         ).first()
-    if row is not None and now - row.fetched_at_utc < timedelta(seconds=CACHE_SECONDS):
+    if row is not None and now - row.fetched_at_utc < timedelta(seconds=max_age):
         status, body = row.status, row.body
     else:
         status, body = _get(path)

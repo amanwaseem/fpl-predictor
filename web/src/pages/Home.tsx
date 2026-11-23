@@ -7,9 +7,10 @@ import {
   POSITIONS,
   useEntry,
   useGameweek,
+  useLive,
   useModels,
   useNews,
-  useStatus,
+  useWeek,
 } from "../api/queries";
 import { ClubBadge, Countdown, Loading, PlayerPhoto, StatusPill } from "../components/bits";
 import { Problem } from "../components/Problem";
@@ -18,7 +19,7 @@ import { formatLocal, signed } from "../format";
 import { byPreference, liveModels } from "../models";
 import { savedTeam } from "../remember";
 import { useTitle } from "../useTitle";
-import { weekState, type WeekState } from "../week";
+import { type WeekState } from "../week";
 
 type Row = Schemas["Prediction"];
 type News = Schemas["PlayerNews"];
@@ -36,14 +37,8 @@ export function Home() {
   useTitle(null);
   // Read once, so the page does not change under the reader.
   const [team] = useState(() => savedTeam()?.team ?? null);
-  const [now] = useState(() => new Date());
-  const status = useStatus();
+  const { status, week } = useWeek();
   const models = useModels();
-
-  // The gameweek before the next one is the one that may be in play.
-  const next = status.data?.next_gameweek;
-  const current = useGameweek(next && next > 1 ? next - 1 : null);
-  const week = status.data ? weekState(status.data, current.data?.fixtures, now) : null;
 
   // The newest gameweek with an entry, and the main model's entry for it.
   const all = models.data?.models ?? [];
@@ -124,9 +119,9 @@ function WeekLine({ week }: { week: WeekState }) {
   let action: { to: string; label: string };
   let other: { to: string; label: string } | null = null;
   if (week.kind === "live") {
-    sentence = `Gameweek ${week.gameweek} is live. Our predictions were published before the deadline.`;
-    action = { to: `/gameweeks/${week.gameweek}`, label: `See GW${week.gameweek} predictions` };
-    other = { to: "/optimise", label: "My team" };
+    sentence = `Gameweek ${week.gameweek} is live. See the points as they come, against what we predicted.`;
+    action = { to: "/live", label: `Follow GW${week.gameweek} live` };
+    other = { to: `/gameweeks/${week.gameweek}`, label: `GW${week.gameweek} predictions` };
   } else if (week.kind === "predictions") {
     sentence = `GW${week.gameweek} predictions are in. Deadline ${formatLocal(week.deadline)}.`;
     action = { to: "/optimise", label: "Get advice for my team" };
@@ -173,6 +168,8 @@ function TeamCard({
   model: string | undefined;
 }) {
   const ahead = week?.kind === "predictions";
+  // During matches, the team's live total (#199).
+  const live = useLive(week?.kind === "live" ? week.gameweek : null, team);
   const advice = useQuery({
     // My team's key for the same request: no free transfers given, hits allowed.
     queryKey: ["advice", team, model, undefined, undefined],
@@ -188,17 +185,19 @@ function TeamCard({
   });
   const plan = advice.data?.plan;
   const n = plan?.transfers.length ?? 0;
-  const line = !ahead
-    ? "See your advice and best eleven"
-    : advice.isPending
-      ? "Working out your advice…"
-      : advice.isError || !plan
-        ? "Your advice is waiting on My team"
-        : n === 0
-          ? "Hold: no transfer is worth making this week"
-          : `${n} transfer${n === 1 ? "" : "s"} suggested, ${signed(plan.xi_gain, 1)} points`;
+  const line = live.data?.team
+    ? `${live.data.team.points} points so far, live`
+    : !ahead
+      ? "See your advice and best eleven"
+      : advice.isPending
+        ? "Working out your advice…"
+        : advice.isError || !plan
+          ? "Your advice is waiting on My team"
+          : n === 0
+            ? "Hold: no transfer is worth making this week"
+            : `${n} transfer${n === 1 ? "" : "s"} suggested, ${signed(plan.xi_gain, 1)} points`;
   return (
-    <Link className="card team-card" to="/optimise">
+    <Link className="card team-card" to={live.data?.team ? "/live" : "/optimise"}>
       <span>
         <span className="eyebrow">Your team · {team}</span>
         <span className="team-card-line">{line}</span>
@@ -224,9 +223,9 @@ function Doors() {
       line: "Every player's expected points, with who they play and what they cost.",
     },
     {
-      to: "/track-record",
-      title: "Track record",
-      line: "Every prediction scored, week by week, including the misses.",
+      to: "/live",
+      title: "Live",
+      line: "Points as the matches happen, against what we predicted.",
     },
   ];
   return (

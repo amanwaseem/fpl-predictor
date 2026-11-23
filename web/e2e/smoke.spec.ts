@@ -13,6 +13,7 @@ test("the open data is for developers: in the footer, not the main navigation", 
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link")).toHaveText([
     "Home",
     "Predictions",
+    "Live",
     "My team",
     "Track record",
     "How it works",

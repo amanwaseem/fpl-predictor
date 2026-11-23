@@ -399,6 +399,236 @@
         "title": "Health",
         "type": "object"
       },
+      "Live": {
+        "description": "A gameweek's live points and scores, from FPL, a minute old at most (#199).",
+        "properties": {
+          "fixtures": {
+            "items": {
+              "$ref": "#/components/schemas/LiveFixture"
+            },
+            "title": "Fixtures",
+            "type": "array"
+          },
+          "gameweek": {
+            "title": "Gameweek",
+            "type": "integer"
+          },
+          "in_play": {
+            "title": "In Play",
+            "type": "boolean"
+          },
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/LivePlayer"
+            },
+            "title": "Players",
+            "type": "array"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveTeam"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "season",
+          "gameweek",
+          "in_play",
+          "fixtures",
+          "players",
+          "team"
+        ],
+        "title": "Live",
+        "type": "object"
+      },
+      "LiveFixture": {
+        "properties": {
+          "away": {
+            "title": "Away",
+            "type": "string"
+          },
+          "away_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Away Score"
+          },
+          "fixture_id": {
+            "title": "Fixture Id",
+            "type": "integer"
+          },
+          "home": {
+            "title": "Home",
+            "type": "string"
+          },
+          "home_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Score"
+          },
+          "kickoff_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kickoff Utc"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "not_started",
+              "live",
+              "finished"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fixture_id",
+          "kickoff_utc",
+          "home",
+          "away",
+          "home_score",
+          "away_score",
+          "state",
+          "minutes"
+        ],
+        "title": "LiveFixture",
+        "type": "object"
+      },
+      "LivePick": {
+        "properties": {
+          "is_captain": {
+            "title": "Is Captain",
+            "type": "boolean"
+          },
+          "is_vice_captain": {
+            "title": "Is Vice Captain",
+            "type": "boolean"
+          },
+          "multiplier": {
+            "title": "Multiplier",
+            "type": "integer"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "player_id",
+          "position",
+          "multiplier",
+          "is_captain",
+          "is_vice_captain"
+        ],
+        "title": "LivePick",
+        "type": "object"
+      },
+      "LivePlayer": {
+        "properties": {
+          "bonus": {
+            "title": "Bonus",
+            "type": "integer"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "total_points": {
+            "title": "Total Points",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "player_id",
+          "minutes",
+          "total_points",
+          "bonus"
+        ],
+        "title": "LivePlayer",
+        "type": "object"
+      },
+      "LiveTeam": {
+        "properties": {
+          "active_chip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Chip"
+          },
+          "fpl_team_id": {
+            "title": "Fpl Team Id",
+            "type": "integer"
+          },
+          "picks": {
+            "items": {
+              "$ref": "#/components/schemas/LivePick"
+            },
+            "title": "Picks",
+            "type": "array"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "transfers_cost": {
+            "title": "Transfers Cost",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fpl_team_id",
+          "active_chip",
+          "picks",
+          "transfers_cost",
+          "points"
+        ],
+        "title": "LiveTeam",
+        "type": "object"
+      },
       "Metrics": {
         "properties": {
           "bias": {
@@ -2403,6 +2633,94 @@
           }
         },
         "summary": "List Predictions",
+        "tags": [
+          "gameweeks"
+        ]
+      }
+    },
+    "/v1/live/{gameweek}": {
+      "get": {
+        "description": "Live points and match scores for a gameweek, from FPL, a minute old at most.\nProvisional until FPL confirms them; official scoring waits for that.",
+        "operationId": "get_live_v1_live__gameweek__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gameweek",
+            "required": true,
+            "schema": {
+              "examples": [
+                6
+              ],
+              "maximum": 38,
+              "minimum": 1,
+              "title": "Gameweek",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "An FPL team ID, for its picks and points.",
+            "in": "query",
+            "name": "team",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100000000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An FPL team ID, for its picks and points.",
+              "title": "Team"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Live"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "Get Live",
         "tags": [
           "gameweeks"
         ]
