@@ -281,6 +281,11 @@ class OptimiseRequest(BaseModel):
     ] = None
     bank: Annotated[float, Field(ge=0, le=100, description="£m; with a squad"), Number] = 0.0
     free_transfers: Annotated[int, Field(ge=0, le=5), Number] = 1
+    max_hits: Annotated[
+        int | None,
+        Field(ge=0, le=15, description="The most hits to take; 0 for none. With a squad."),
+        Number,
+    ] = None
     budget: Annotated[float, Field(ge=50, le=200, description="£m; without a squad"), Number] = (
         100.0
     )
@@ -324,6 +329,8 @@ class Plan(BaseModel):
     free_transfers: int
     hits: int
     hit_points: int
+    # The most hits the plan was allowed; null for no limit.
+    max_hits: int | None
     bank: float
     bank_after: float
     # Over keeping the squad, net of hits: in the XI, captain included; and as

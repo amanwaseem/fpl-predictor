@@ -112,6 +112,7 @@ def solve(
     include_unavailable=False,
     entry=None,
     rows=None,
+    max_hits=None,
 ):
     """A result dict shaped like fpl.api.schemas.OptimiseResult.
 
@@ -129,6 +130,7 @@ def solve(
             include_unavailable=include_unavailable,
             bank=bank,
             free_transfers=free_transfers,
+            max_hits=max_hits,
             squad=sorted(squad.items()) if squad is not None else None,
         )
         result = cached(connection, key)
@@ -137,7 +139,7 @@ def solve(
 
     hit = result is not None
     if not hit:
-        result = _solve(rows, squad, bank, free_transfers, budget, include_unavailable)
+        result = _solve(rows, squad, bank, free_transfers, budget, include_unavailable, max_hits)
         store(engine, key, season, gameweek, model, result)
     return {
         "season": season,
@@ -149,7 +151,7 @@ def solve(
     } | result
 
 
-def _solve(rows, squad, bank, free_transfers, budget, include_unavailable):
+def _solve(rows, squad, bank, free_transfers, budget, include_unavailable, max_hits=None):
     try:
         if squad is None:
             result = optimise.best_squad(
@@ -164,6 +166,7 @@ def _solve(rows, squad, bank, free_transfers, budget, include_unavailable):
                 free_transfers,
                 include_unavailable=include_unavailable,
                 time_limit=TIME_LIMIT,
+                max_hits=max_hits,
             )
         )
         return {"squad": plan.pop("squad"), "plan": plan}

@@ -179,6 +179,7 @@ def post_optimise(db: Database, body: schemas.OptimiseRequest):
         bank=body.bank,
         free_transfers=body.free_transfers,
         include_unavailable=body.include_unavailable,
+        max_hits=body.max_hits,
     )
 
 
@@ -196,6 +197,9 @@ def get_advice(
     free_transfers: Annotated[
         int | None,
         Query(ge=0, le=5, description="Overrides the estimate from the manager's history."),
+    ] = None,
+    max_hits: Annotated[
+        int | None, Query(ge=0, le=15, description="The most hits to take; 0 for none.")
     ] = None,
     include_unavailable: bool = False,
 ):
@@ -222,6 +226,7 @@ def get_advice(
         include_unavailable=include_unavailable,
         entry=entry,
         rows=rows,
+        max_hits=max_hits,
     )
     return result | {
         "fpl_team_id": fpl_team_id,

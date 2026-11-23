@@ -101,6 +101,33 @@ class TestOptimise(OptimiseCase):
         self.assertIn(weakest_mid["player_id"], outs)
         self.assertGreater(body["plan"]["xi_gain"], 0)
 
+    def test_no_hits_keeps_to_the_free_transfers_and_is_cached_apart(self):
+        """#198: with no free transfers, a much weakened squad takes hits, unless they are off."""
+        # The six best starters swapped for the weakest players of their
+        # positions, each from a club the squad doesn't have: more than the
+        # bench can cover, so buying some back is worth a hit.
+        clubs = {self.by_id[i]["team"] for i in self.squad_ids}
+        swaps = {}
+        for best in sorted(self.best.xi, key=lambda p: -p.predicted_points)[:6]:
+            weakest = min(
+                (
+                    r
+                    for r in self.rows
+                    if r["position"] == best.position
+                    and r["player_id"] not in self.squad_ids
+                    and r["player_id"] not in swaps.values()
+                    and r["team"] not in clubs
+                ),
+                key=lambda r: (r["predicted_points"], r["price"]),
+            )
+            clubs.add(weakest["team"])
+            swaps[best.player_id] = weakest["player_id"]
+        ids = [swaps.get(i, i) for i in self.squad_ids]
+        request = {"squad": self.owned(ids), "bank": 5.0, "free_transfers": 0}
+        self.assertGreater(self.post(request)["plan"]["hits"], 0)
+        plan = self.post(request | {"max_hits": 0})["plan"]
+        self.assertEqual((plan["hits"], plan["transfers"], plan["max_hits"]), (0, [], 0))
+
     def test_a_repeat_is_served_from_the_cache(self):
         self.assertFalse(self.post({})["cached"])
         again = self.post({})

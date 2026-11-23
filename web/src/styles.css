@@ -622,6 +622,32 @@ main {
   font-weight: 600;
   font-size: 0.88rem;
 }
+/* My team (#198): the team in one line, the box only when it is needed. */
+.team-line {
+  margin: 0.25rem 0 0;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.help-steps {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
+}
+.help-steps li + li {
+  margin-top: 0.3rem;
+}
+.plan-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+.plan-controls + .chips {
+  margin-top: 0.75rem;
+}
 details.help {
   margin-top: 0.75rem;
   font-size: 0.92rem;
