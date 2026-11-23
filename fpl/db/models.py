@@ -118,7 +118,7 @@ class SeasonPlayer(Base):
 
 
 class PlayerClub(Base):
-    """Which club a player was at, for a range of gameweeks (ADR 0013).
+    """Which club a player was at, for a range of gameweeks (ADRs 0013, 0029).
 
     The bootstrap gives only a player's current club, so a mid-season move
     shows up as a new spell starting at the first gameweek after it. Spells of

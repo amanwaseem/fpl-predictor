@@ -1,6 +1,6 @@
 # 0013. Players who change club mid-season
 
-- **Status:** Open
+- **Status:** Superseded by 0029
 - **Date:** 2026-10-03
 - **Issues:** #8, #11
 
