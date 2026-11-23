@@ -124,7 +124,7 @@ test("my team is remembered after asking, and can be forgotten", async ({ page }
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
 
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "See my advice" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Your team · 321/ })).toBeVisible();
   await page.goto("/optimise");
   await expect(page).toHaveURL(/team=321/);
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();

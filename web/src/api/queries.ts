@@ -16,6 +16,27 @@ export function useStatus() {
   return useQuery({ queryKey: ["status"], queryFn: () => unwrap(api.GET("/v1/status")) });
 }
 
+// One gameweek: its deadline, whether it is settled, and its fixtures.
+export function useGameweek(gameweek: number | null | undefined) {
+  return useQuery({
+    queryKey: ["gameweek", gameweek],
+    enabled: !!gameweek,
+    queryFn: () =>
+      unwrap(api.GET("/v1/gameweeks/{gameweek}", { params: { path: { gameweek: gameweek! } } })),
+  });
+}
+
+// Players who may miss the next gameweek, from FPL's latest news, most owned
+// first. The API reads FPL for it and keeps the answer a few minutes.
+export function useNews() {
+  return useQuery({
+    queryKey: ["news"],
+    queryFn: () => unwrap(api.GET("/v1/news")),
+    // Not worth a second request to FPL if the first failed.
+    retry: false,
+  });
+}
+
 // An entry covers every player in the game, about 700; one request holds them all.
 export const ENTRY_LIMIT = 1000;
 

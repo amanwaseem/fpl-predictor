@@ -548,6 +548,22 @@
         "title": "ModelList",
         "type": "object"
       },
+      "NewsList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerNews"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "NewsList",
+        "type": "object"
+      },
       "OptimiseRequest": {
         "additionalProperties": false,
         "description": "A squad to plan transfers from, or none for the best squad from scratch.",
@@ -999,6 +1015,93 @@
           "predictions"
         ],
         "title": "Player",
+        "type": "object"
+      },
+      "PlayerNews": {
+        "description": "A player who may miss the next gameweek, from FPL's latest news (#196).",
+        "properties": {
+          "chance_of_playing": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chance Of Playing"
+          },
+          "news": {
+            "title": "News",
+            "type": "string"
+          },
+          "news_added_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "News Added Utc"
+          },
+          "player_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Player Code"
+          },
+          "player_id": {
+            "title": "Player Id",
+            "type": "integer"
+          },
+          "position": {
+            "title": "Position",
+            "type": "string"
+          },
+          "selected_by_percent": {
+            "title": "Selected By Percent",
+            "type": "number"
+          },
+          "status": {
+            "enum": [
+              "d",
+              "i",
+              "s",
+              "n"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "team": {
+            "title": "Team",
+            "type": "string"
+          },
+          "web_name": {
+            "title": "Web Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "player_id",
+          "player_code",
+          "web_name",
+          "team",
+          "position",
+          "status",
+          "chance_of_playing",
+          "news",
+          "news_added_utc",
+          "selected_by_percent"
+        ],
+        "title": "PlayerNews",
         "type": "object"
       },
       "PlayerPrediction": {
@@ -2322,6 +2425,58 @@
         "summary": "List Models",
         "tags": [
           "models"
+        ]
+      }
+    },
+    "/v1/news": {
+      "get": {
+        "description": "Players who may miss the next gameweek, from FPL's latest news, most owned\nfirst. Read from the FPL API, cached for a few minutes.",
+        "operationId": "get_news_v1_news_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "Get News",
+        "tags": [
+          "players"
         ]
       }
     },

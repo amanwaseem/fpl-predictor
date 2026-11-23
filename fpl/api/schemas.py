@@ -202,6 +202,28 @@ class Status(BaseModel):
     next_gameweek_entries: list[str]
 
 
+class PlayerNews(BaseModel):
+    """A player who may miss the next gameweek, from FPL's latest news (#196)."""
+
+    player_id: int
+    player_code: int | None
+    web_name: str
+    team: str
+    position: str
+    # FPL's codes: d doubtful, i injured, s suspended, n not available.
+    status: Literal["d", "i", "s", "n"]
+    # FPL's chance of playing in the next gameweek, in percent; null when it gives none.
+    chance_of_playing: int | None
+    news: str
+    news_added_utc: datetime | None
+    selected_by_percent: float
+
+
+class NewsList(BaseModel):
+    # Most owned first.
+    items: list[PlayerNews]
+
+
 class Health(BaseModel):
     status: str
 
