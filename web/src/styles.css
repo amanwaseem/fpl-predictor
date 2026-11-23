@@ -878,13 +878,8 @@ details.fold[open] summary {
 /* The week-by-week chart (#195). The going-by-form line is a grey that can be
    told from the accent with any colour vision, and keeps 3:1 on the card. */
 .miss-chart {
-  --chart-form: #8d969e;
+  --chart-form: #7c8496;
   margin: 0;
-}
-@media (prefers-color-scheme: dark) {
-  .miss-chart {
-    --chart-form: #7d8a92;
-  }
 }
 .chart-legend {
   display: flex;
