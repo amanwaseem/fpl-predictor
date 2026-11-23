@@ -10,7 +10,14 @@ export const PLAYER = {
   first_name: "Ada",
   second_name: "Tester",
   position: "MID",
+  price: 6.5,
   clubs: [{ team: "ARS", first_gameweek: 1, last_gameweek: null }],
+  upcoming: [9, 10, 11, 12, 13].map((gameweek, i) => ({
+    gameweek,
+    kickoff_utc: new Date(Date.UTC(2026, 10, 10 + i * 7, 15)).toISOString(),
+    opponent: ["LIV", "MCI", "CHE", "TOT", "NEW"][i]!,
+    was_home: i % 2 === 0,
+  })),
   history: [
     {
       fixture_id: 1,

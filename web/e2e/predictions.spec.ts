@@ -283,6 +283,43 @@ test("a player's page shows the model that was main that week, after a promotion
   await expect(page.getByRole("row", { name: /GW12\b/ })).toContainText("6.50");
 });
 
+test("a player's page shows his price, news, this week and next five matches", async ({ page }) => {
+  // #200. The player and FPL's news are stubbed: CI has neither.
+  await stubPlayer(page);
+  await page.route("**/v1/news", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            player_id: PLAYER.player_id,
+            player_code: PLAYER.player_code,
+            web_name: PLAYER.web_name,
+            team: "ARS",
+            position: "MID",
+            status: "d",
+            chance_of_playing: 75,
+            news: "Hamstring - 75% chance of playing",
+            news_added_utc: null,
+            selected_by_percent: 5,
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(`/players/${PLAYER.player_id}`);
+  await expect(page.getByText("£6.5m")).toBeVisible();
+  await expect(page.locator(".player-news")).toContainText("75% Hamstring");
+  const thisWeek = page.getByRole("region", { name: "Gameweek 8" });
+  await expect(thisWeek).toContainText("5.1");
+  await expect(thisWeek).toContainText("CHE (H)");
+  const next = page.getByRole("list", { name: "Next matches" }).getByRole("listitem");
+  await expect(next).toHaveCount(5);
+  await expect(next.first()).toContainText("GW9");
+  await expect(next.first()).toContainText("LIV");
+  await expect(next.first()).toContainText("Home");
+  await expect(page.getByRole("region", { name: "Season so far" })).toContainText("9");
+});
+
 test("an unknown player is the API's problem, worded as the API words it", async ({ page }) => {
   await page.goto("/players/9999");
   await expect(page.getByRole("alert")).toContainText("No player 9999");

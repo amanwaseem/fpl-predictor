@@ -2,13 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, unwrap, type Schemas } from "../api/client";
-import { POSITION_NAMES, useModels } from "../api/queries";
+import { POSITION_NAMES, useGameweek, useModels, useNews } from "../api/queries";
 import { ClubBadge, Loading, PlayerPhoto } from "../components/bits";
 import { useTitle } from "../useTitle";
 import { Problem } from "../components/Problem";
 import { clubColours, clubName } from "../clubs";
-import { fixed, positiveInt } from "../format";
+import { opponentText } from "../fixtures";
+import { fixed, formatLocal, positiveInt } from "../format";
 import { pickPrediction } from "../models";
+import { chanceText, isOut } from "../news";
 import { NotFound } from "./NotFound";
 
 type Fixture = Schemas["PlayedFixture"];
@@ -28,6 +30,14 @@ function PlayerPage({ playerId }: { playerId: number }) {
   // The roles say which prediction to show (#194). Waited for, so the figures
   // don't change under the reader when they arrive; without them, any model's.
   const models = useModels();
+  // His doubt, if FPL has one now (#200), and the newest predicted gameweek's
+  // fixtures, for who he plays.
+  const news = useNews().data?.items.find((n) => n.player_id === playerId);
+  const predictions = player.data?.predictions ?? [];
+  const newestGameweek = predictions.length
+    ? Math.max(...predictions.map((x) => x.gameweek))
+    : null;
+  const newestFixtures = useGameweek(newestGameweek).data?.fixtures;
 
   if (player.isPending || models.isPending)
     return (
@@ -71,9 +81,23 @@ function PlayerPage({ playerId }: { playerId: number }) {
   const club = p.clubs.at(-1)?.team ?? "";
   const sum = (key: "total_points" | "minutes" | "goals_scored" | "assists" | "clean_sheets") =>
     p.history.reduce((s, f) => s + f[key], 0);
-  // The newest prediction, for the "this gameweek" figure.
-  const newest = p.predictions.length ? Math.max(...p.predictions.map((x) => x.gameweek)) : null;
-  const thisWeek = newest === null ? undefined : predicted(newest);
+  // This week: the newest prediction, who he plays, and, while it is still
+  // to be played, his chance of playing.
+  const thisWeek = newestGameweek === null ? undefined : predicted(newestGameweek);
+  const thisWeekPlayed = thisWeek ? played.has(thisWeek.gameweek) : false;
+  const opponent = !thisWeek
+    ? null
+    : newestFixtures?.length
+      ? opponentText(newestFixtures, club)
+      : played.has(thisWeek.gameweek)
+        ? played
+            .get(thisWeek.gameweek)!
+            .map((f) => `${f.opponent} (${f.was_home ? "H" : "A"})`)
+            .join(", ")
+        : p.upcoming
+            .filter((u) => u.gameweek === thisWeek.gameweek)
+            .map((u) => `${u.opponent} (${u.was_home ? "H" : "A"})`)
+            .join(", ") || null;
 
   return (
     <div className="wrap page">
@@ -99,17 +123,73 @@ function PlayerPage({ playerId }: { playerId: number }) {
                     )
                     .join(", then ")}
             </span>
+            {p.price !== null && <span className="player-price">£{p.price.toFixed(1)}m</span>}
           </p>
+          {news && (
+            <p className={isOut(news) ? "player-news player-news-out" : "player-news"}>
+              <strong>{chanceText(news)}</strong> {news.news || "No details given"}
+            </p>
+          )}
         </div>
-        <dl className="stat-strip" style={{ flexBasis: "100%" }}>
-          {thisWeek && (
+      </section>
+
+      {thisWeek && (
+        <section className="section" aria-labelledby="this-week">
+          <h2 id="this-week">Gameweek {thisWeek.gameweek}</h2>
+          <dl className="card stat-strip this-week">
             <div className="stat">
-              <dt>GW{thisWeek.gameweek} prediction</dt>
+              <dt>Our prediction</dt>
               <dd>{thisWeek.predicted_points.toFixed(1)}</dd>
             </div>
-          )}
+            <div className="stat">
+              <dt>Opponent</dt>
+              <dd className="stat-text">{opponent ?? "–"}</dd>
+            </div>
+            {!thisWeekPlayed && (
+              <div className="stat">
+                <dt>Chance of playing</dt>
+                <dd className="stat-text">{news ? chanceText(news) : "Fit"}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
+
+      <section className="section" aria-labelledby="next">
+        <h2 id="next">Next five matches</h2>
+        {p.upcoming.length === 0 ? (
+          <p className="muted">No matches to come are known yet.</p>
+        ) : (
+          <ol className="card upcoming" aria-label="Next matches">
+            {p.upcoming.map((u) => (
+              <li key={`${u.gameweek}-${u.kickoff_utc}`}>
+                <span className="upcoming-gw">{u.gameweek ? `GW${u.gameweek}` : "TBC"}</span>
+                <ClubBadge team={u.opponent} />
+                <span>{u.was_home ? "Home" : "Away"}</span>
+                <span className="muted small" title={formatLocal(u.kickoff_utc)}>
+                  {new Date(u.kickoff_utc).toLocaleDateString("en-GB", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </span>
+                {/* Predicted only for the gameweek we have predicted. */}
+                {thisWeek && !thisWeekPlayed && u.gameweek === thisWeek.gameweek && (
+                  <strong className="upcoming-points">
+                    {thisWeek.predicted_points.toFixed(1)} pts
+                  </strong>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <section className="section" aria-labelledby="season">
+        <h2 id="season">Season so far</h2>
+        <dl className="card stat-strip">
           <div className="stat">
-            <dt>Season points</dt>
+            <dt>Points</dt>
             <dd>{sum("total_points")}</dd>
           </div>
           <div className="stat">

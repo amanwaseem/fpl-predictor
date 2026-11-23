@@ -342,6 +342,34 @@ class TestRoutes(APICase):
             {"team": "ARS", "first_gameweek": 3, "last_gameweek": None},
         )
 
+    def test_a_player_has_his_price_and_his_clubs_next_matches(self):
+        """#200: the price from the newest entry; the matches by kick-off, not yet played."""
+        entry = self.get("/v1/gameweeks/8/predictions", model="baseline-v1")["items"]
+        soon = datetime.now(UTC) + timedelta(days=3)
+        with self.engine.begin() as c:
+            c.execute(
+                insert(Fixture),
+                [
+                    {
+                        "season": SEASON,
+                        "fixture_id": 90 + i,
+                        "gameweek": 8,
+                        "kickoff_utc": soon + timedelta(days=7 * i),
+                        "team_h": home,
+                        "team_a": away,
+                        "finished": False,
+                    }
+                    # Arsenal away, then at home; GW1, already played, has no kick-off here.
+                    for i, (home, away) in enumerate([(2, 1), (1, 2)])
+                ],
+            )
+        body = self.get("/v1/players/1")
+        self.assertEqual(body["price"], next(p["price"] for p in entry if p["player_id"] == 1))
+        self.assertEqual(
+            [(u["opponent"], u["was_home"]) for u in body["upcoming"]],
+            [("AVL", False), ("AVL", True)],
+        )
+
     def test_a_player_not_in_the_season_is_404(self):
         self.get("/v1/players/999", 404)
 

@@ -121,6 +121,13 @@ class PlayerPrediction(BaseModel):
     actual_minutes: int | None
 
 
+class UpcomingFixture(BaseModel):
+    gameweek: int | None
+    kickoff_utc: datetime
+    opponent: str
+    was_home: bool
+
+
 class Player(BaseModel):
     season: str
     player_id: int
@@ -130,8 +137,12 @@ class Player(BaseModel):
     first_name: str
     second_name: str
     position: str
+    # In the newest entry he is in, as FPL had it then; null if none has him.
+    price: float | None
     clubs: list[Club]
     history: list[PlayedFixture]
+    # His club's next five matches, by kick-off (#200).
+    upcoming: list[UpcomingFixture]
     predictions: list[PlayerPrediction]
 
 

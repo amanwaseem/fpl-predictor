@@ -373,12 +373,65 @@ def player(connection, season, player_id):
         .order_by(Prediction.gameweek, Prediction.model_version)
     ).mappings()
 
+    # His price in the newest entry he is in, as FPL had it at that snapshot
+    # (#200). Null only for a player no entry has.
+    price = connection.scalar(
+        select(Prediction.price)
+        .where(Prediction.season == season, Prediction.player_id == player_id)
+        .order_by(Prediction.gameweek.desc())
+        .limit(1)
+    )
+
     return dict(row) | {
         "season": season,
+        "price": None if price is None else float(price),
         "clubs": clubs,
         "history": [dict(h) for h in history],
+        "upcoming": upcoming(connection, season, player_id),
         "predictions": [dict(p) for p in predicted],
     }
+
+
+# How many of a player's coming matches his page shows (#200).
+UPCOMING = 5
+
+
+def upcoming(connection, season, player_id):
+    """His club's next UPCOMING matches that haven't kicked off, from the fixtures
+    the snapshot loaded. Empty where the database has no football data."""
+    club = connection.scalar(
+        select(PlayerClub.team_id)
+        .where(PlayerClub.season == season, PlayerClub.element_id == player_id)
+        .order_by(PlayerClub.gameweeks.desc())
+        .limit(1)
+    )
+    if club is None:
+        return []
+    names = dict(
+        connection.execute(select(Team.team_id, Team.short_name).where(Team.season == season)).all()
+    )
+    rows = connection.execute(
+        select(Fixture.gameweek, Fixture.kickoff_utc, Fixture.team_h, Fixture.team_a)
+        .where(
+            Fixture.season == season,
+            or_(Fixture.team_h == club, Fixture.team_a == club),
+            # By the clock, not the finished flag: the daily ingest sets that
+            # up to a day late. A postponed match has no kick-off until it is
+            # rearranged.
+            Fixture.kickoff_utc > func.now(),
+        )
+        .order_by(Fixture.kickoff_utc, Fixture.fixture_id)
+        .limit(UPCOMING)
+    )
+    return [
+        {
+            "gameweek": r.gameweek,
+            "kickoff_utc": r.kickoff_utc,
+            "opponent": names.get(r.team_a if r.team_h == club else r.team_h, "?"),
+            "was_home": r.team_h == club,
+        }
+        for r in rows
+    ]
 
 
 def models(connection, season):

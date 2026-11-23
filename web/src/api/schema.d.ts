@@ -726,10 +726,14 @@ export interface components {
             position: string;
             /** Predictions */
             predictions: components["schemas"]["PlayerPrediction"][];
+            /** Price */
+            price: number | null;
             /** Season */
             season: string;
             /** Second Name */
             second_name: string;
+            /** Upcoming */
+            upcoming: components["schemas"]["UpcomingFixture"][];
             /** Web Name */
             web_name: string;
         };
@@ -952,6 +956,20 @@ export interface components {
             out: components["schemas"]["Pick"];
             /** Selling Price */
             selling_price: number;
+        };
+        /** UpcomingFixture */
+        UpcomingFixture: {
+            /** Gameweek */
+            gameweek: number | null;
+            /**
+             * Kickoff Utc
+             * Format: date-time
+             */
+            kickoff_utc: string;
+            /** Opponent */
+            opponent: string;
+            /** Was Home */
+            was_home: boolean;
         };
     };
     responses: never;

@@ -1245,6 +1245,17 @@
             "title": "Predictions",
             "type": "array"
           },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
           "season": {
             "title": "Season",
             "type": "string"
@@ -1252,6 +1263,13 @@
           "second_name": {
             "title": "Second Name",
             "type": "string"
+          },
+          "upcoming": {
+            "items": {
+              "$ref": "#/components/schemas/UpcomingFixture"
+            },
+            "title": "Upcoming",
+            "type": "array"
           },
           "web_name": {
             "title": "Web Name",
@@ -1266,8 +1284,10 @@
           "first_name",
           "second_name",
           "position",
+          "price",
           "clubs",
           "history",
+          "upcoming",
           "predictions"
         ],
         "title": "Player",
@@ -2018,6 +2038,42 @@
           "into"
         ],
         "title": "Transfer",
+        "type": "object"
+      },
+      "UpcomingFixture": {
+        "properties": {
+          "gameweek": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gameweek"
+          },
+          "kickoff_utc": {
+            "format": "date-time",
+            "title": "Kickoff Utc",
+            "type": "string"
+          },
+          "opponent": {
+            "title": "Opponent",
+            "type": "string"
+          },
+          "was_home": {
+            "title": "Was Home",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gameweek",
+          "kickoff_utc",
+          "opponent",
+          "was_home"
+        ],
+        "title": "UpcomingFixture",
         "type": "object"
       }
     }

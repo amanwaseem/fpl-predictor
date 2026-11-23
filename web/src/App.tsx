@@ -31,10 +31,8 @@ export function App() {
             <span className="brand-dot" aria-hidden="true" />
             {SITE_NAME}
           </Link>
+          {/* The logo is the way home; How it works is in the footer (#200). */}
           <nav className="site-nav" aria-label="Main">
-            <NavLink to="/" end>
-              Home
-            </NavLink>
             <NavLink to="/gameweeks">Predictions</NavLink>
             <NavLink to="/live">
               {playing && <span className="pulse" aria-hidden="true" />}
@@ -42,7 +40,6 @@ export function App() {
             </NavLink>
             <NavLink to="/optimise">My team</NavLink>
             <NavLink to="/track-record">Track record</NavLink>
-            <NavLink to="/about">How it works</NavLink>
           </nav>
         </div>
       </header>
