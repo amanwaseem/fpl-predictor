@@ -333,13 +333,22 @@ def add_squad(model, pool, worth, bench_weight, club_cap=True):
 
 
 def _solve(
-    pool, cost, budget, bench_weight, owned=None, free_transfers=0, keep=False, deadline=None
+    pool,
+    cost,
+    budget,
+    bench_weight,
+    owned=None,
+    free_transfers=0,
+    keep=False,
+    deadline=None,
+    max_hits=None,
 ):
     """Build the model and solve it: (squad, starters, captain, value).
 
     `cost` maps player id to tenths of a million and `budget` is in tenths.
     With `owned`, a set of player ids, buying anyone else is a transfer and
-    each beyond `free_transfers` costs HIT points. `keep` forbids transfers and
+    each beyond `free_transfers` costs HIT points, and `max_hits`, if given,
+    caps how many may be taken (0: none, #198). `keep` forbids transfers and
     drops the club cap, which FPL enforces only when a transfer is made, so a
     squad pushed over it by a player moving clubs may still be kept as it is.
     `value` is the optimum in fpl.evaluation.xi's units, net of hits.
@@ -379,6 +388,8 @@ def _solve(
         # max(0, transfers - free_transfers).
         hits = model.addIntegral(lb=0, ub=sum(SQUAD.values()))
         model.addConstr(hits >= transfers - free_transfers)
+        if max_hits is not None:
+            model.addConstr(hits <= max_hits)
         value = value - HIT * SCALE * hits
 
     tiebreak = None
@@ -470,6 +481,8 @@ class Plan:
     # Transfers beyond the free ones, and the points they cost.
     hits: int
     hit_points: int
+    # The most hits the plan was allowed, or None for no limit.
+    max_hits: int | None
     bank: float
     bank_after: float
     # Over the best line-up of the squad as it stands, net of hits. `xi_gain`
@@ -528,6 +541,7 @@ def best_transfers(
     bench_weight=BENCH_WEIGHT,
     include_unavailable=False,
     time_limit=None,
+    max_hits=None,
 ):
     """The transfers from `current` that maximise expected points net of hits.
 
@@ -537,6 +551,7 @@ def best_transfers(
     price: that is FPL's rule, as one budget constraint. Owned players stay
     eligible whatever their status, since a manager may keep anyone.
     `time_limit` is in seconds, for all the solves together (SolverTimeout).
+    `max_hits` caps the transfers beyond the free ones; 0 takes no hits.
     """
     check_positions(players)
     problems = check_current(players, current, bank, free_transfers)
@@ -570,7 +585,14 @@ def best_transfers(
     )
     try:
         squad, starters, captain, value = _solve(
-            pool, cost, budget, bench_weight, owned, free_transfers, deadline=deadline
+            pool,
+            cost,
+            budget,
+            bench_weight,
+            owned,
+            free_transfers,
+            deadline=deadline,
+            max_hits=max_hits,
         )
     except ValueError:
         if not over_cap:
@@ -607,6 +629,7 @@ def best_transfers(
         free_transfers=free_transfers,
         hits=hits,
         hit_points=HIT * hits,
+        max_hits=max_hits,
         bank=bank,
         bank_after=round(budget / 10 - result.cost, 1),
         xi_gain=round(result.expected_points - kept_result.expected_points - HIT * hits, 2),

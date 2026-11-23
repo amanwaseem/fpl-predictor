@@ -1,4 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { fakeStatus, stubPredictionsOut } from "./fixtures";
+
+// Advice is given before a deadline, with the next predictions out (#198).
+test.beforeEach(async ({ page }) => {
+  await stubPredictionsOut(page);
+});
 
 test("the best squad from scratch is fifteen players, solved from the log", async ({ page }) => {
   await page.goto("/optimise");
@@ -53,6 +59,7 @@ test("advice for a team shows its transfers and XI", async ({ page, request }) =
   await expect(page).toHaveURL(/team=123/);
   await expect(page.getByRole("list", { name: "Transfers" })).toContainText(into.web_name);
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
+  await page.getByText("How we worked this out").click();
   await expect(page.getByText("Estimated from purchase prices.")).toBeVisible();
 });
 
@@ -93,10 +100,22 @@ test("a team FPL doesn't know is named, in a manager's words", async ({ page }) 
 
 // Remembering the reader's own team, in this browser only (#176). A small
 // stubbed answer is enough: what is tested is what is remembered, and when.
+// A real best squad, solved once per worker and shared: the advice stubs need
+// one, and CI runs the API with the solver's rate limit on (ten a minute), so
+// asking in every test would run into it.
+let realSquad: Promise<Record<string, any>> | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+function bestSquad(page: Page) {
+  realSquad ??= page.request
+    .post("/v1/optimise", { data: { model: "baseline-v1" } })
+    .then((response) => {
+      if (!response.ok()) throw new Error(`/v1/optimise answered ${response.status()}`);
+      return response.json();
+    });
+  return realSquad;
+}
+
 async function stubAdvice(page: Page, id: number) {
-  const real = await (
-    await page.request.post("/v1/optimise", { data: { model: "baseline-v1" } })
-  ).json();
+  const real = await bestSquad(page);
   await page.route(`**/v1/entries/${id}/advice*`, (route) =>
     route.fulfill({
       json: {
@@ -144,7 +163,7 @@ test("a shared link shows its own team, and leaves mine remembered", async ({ pa
   await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
 
   await page.goto("/optimise?team=654");
-  await expect(page.getByLabel("FPL team ID")).toHaveValue("654");
+  await expect(page.getByText("Team 654 ·")).toBeVisible();
   await expect(page.getByText("Remembered in this browser: team 321.")).toBeVisible();
   await page.goto("/optimise");
   await expect(page).toHaveURL(/team=321/);
@@ -235,4 +254,88 @@ test("the form follows the URL, back and forward included", async ({ page }) => 
   await page.goBack();
   await expect(page.getByLabel("FPL team ID")).toHaveValue("11");
   await expect(page.getByRole("alert")).toContainText("No team 11.");
+});
+
+// #198: straight to the advice, free transfers and hits changed in place, and
+// no stale advice between deadlines.
+test("a remembered team opens straight on its advice, and change brings the box back", async ({
+  page,
+}) => {
+  await stubAdvice(page, 321);
+  await page.addInitScript(() =>
+    window.localStorage.setItem("fpl-predictor:my-team", JSON.stringify({ team: 321 })),
+  );
+  await page.goto("/optimise");
+  await expect(page.getByRole("group", { name: "Advised squad" })).toBeVisible();
+  await expect(page.getByLabel("FPL team ID")).toHaveCount(0);
+  await page.getByRole("button", { name: "change", exact: true }).first().click();
+  await expect(page.getByLabel("FPL team ID")).toHaveValue("321");
+});
+
+test("free transfers and hits change the advice without leaving the page", async ({ page }) => {
+  const asked: URL[] = [];
+  const real = await bestSquad(page);
+  await page.route("**/v1/entries/321/advice*", (route) => {
+    const url = new URL(route.request().url());
+    asked.push(url);
+    const given = url.searchParams.get("free_transfers");
+    return route.fulfill({
+      json: {
+        fpl_team_id: 321,
+        season: real.season,
+        gameweek: real.gameweek,
+        model_version: real.model_version,
+        deadline_utc: real.deadline_utc,
+        deadline_passed: false,
+        picks_gameweek: real.gameweek - 1,
+        cached: false,
+        estimates: {
+          selling_prices: "estimated",
+          free_transfers: given === null ? "from the manager's history" : "given",
+        },
+        squad: real.squad,
+        plan: {
+          transfers: [],
+          free_transfers: given === null ? 1 : Number(given),
+          hits: 0,
+          hit_points: 0,
+          max_hits: url.searchParams.get("max_hits") === null ? null : 0,
+          gain: 0,
+          xi_gain: 0,
+          bank: 0.5,
+          bank_after: 0.5,
+          bench_weight: 0.1,
+          over_cap: {},
+        },
+      },
+    });
+  });
+  await page.goto("/optimise?team=321");
+  await expect(page.getByText("Assuming 1 free transfer ·")).toBeVisible();
+  await page.getByRole("button", { name: "change", exact: true }).last().click();
+  await page
+    .getByRole("group", { name: "Free transfers" })
+    .getByRole("button", { name: "2" })
+    .click();
+  await expect(page.getByText("With 2 free transfers ·")).toBeVisible();
+  await expect(page).toHaveURL(/free=2/);
+
+  await page.getByLabel("Don’t take hits").click();
+  await expect(page).toHaveURL(/hits=0/);
+  await expect.poll(() => asked.at(-1)?.searchParams.get("max_hits")).toBe("0");
+  expect(asked.at(-1)?.searchParams.get("free_transfers")).toBe("2");
+});
+
+test("between deadlines, no stale advice: when the next comes instead", async ({ page }) => {
+  await page.route("**/v1/status", (route) => route.fulfill({ json: fakeStatus(72, []) }));
+  let asked = 0;
+  await page.route("**/v1/entries/321/advice*", (route) => {
+    asked += 1;
+    return route.abort();
+  });
+  await page.goto("/optimise?team=321");
+  await expect(page.getByRole("heading", { name: /^GW12 advice arrives/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /See how gameweek 11 is going/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Pick the best squad/ })).toBeDisabled();
+  expect(asked).toBe(0);
 });

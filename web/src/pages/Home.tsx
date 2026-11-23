@@ -174,7 +174,8 @@ function TeamCard({
 }) {
   const ahead = week?.kind === "predictions";
   const advice = useQuery({
-    queryKey: ["advice", team, model, undefined],
+    // My team's key for the same request: no free transfers given, hits allowed.
+    queryKey: ["advice", team, model, undefined, undefined],
     enabled: ahead && !!model,
     refetchOnWindowFocus: false,
     retry: false,

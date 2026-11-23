@@ -119,6 +119,24 @@ class TestProperties(unittest.TestCase):
         self.assertEqual(plan.hits, max(0, len(plan.transfers) - free))
         self.assertGreaterEqual(plan.bank_after, -1e-9)
 
+    @PROPERTIES
+    @given(
+        pools(),
+        st.integers(0, 30).map(lambda tenths: tenths / 10),
+        st.integers(0, 5),
+        st.integers(0, 2),
+    )
+    def test_a_plan_never_takes_more_hits_than_allowed(self, pool, bank, free, max_hits):
+        """#198: "Don't take hits" is max_hits=0; it holds whatever the squad."""
+        picked = greedy(optimise.eligible(pool))
+        assume(picked is not None)
+        current = {p["player_id"]: p["price"] for p in picked}
+        plan = optimise.best_transfers(pool, current, bank, free, max_hits=max_hits)
+        self.assertLessEqual(plan.hits, max_hits)
+        self.assertLessEqual(len(plan.transfers), free + max_hits)
+        self.assertEqual(optimise.violations(plan.squad), [])
+        self.assertGreaterEqual(plan.gain, -1e-9)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -487,6 +487,11 @@ export interface components {
              */
             include_unavailable?: boolean;
             /**
+             * Max Hits
+             * @description The most hits to take; 0 for none. With a squad.
+             */
+            max_hits?: number | null;
+            /**
              * Model
              * @default baseline-v1
              * @example baseline-v1
@@ -570,6 +575,8 @@ export interface components {
             hit_points: number;
             /** Hits */
             hits: number;
+            /** Max Hits */
+            max_hits: number | null;
             /** Over Cap */
             over_cap: {
                 [key: string]: number;
@@ -918,6 +925,8 @@ export interface operations {
                 season?: string | null;
                 /** @description Overrides the estimate from the manager's history. */
                 free_transfers?: number | null;
+                /** @description The most hits to take; 0 for none. */
+                max_hits?: number | null;
                 include_unavailable?: boolean;
             };
             header?: never;

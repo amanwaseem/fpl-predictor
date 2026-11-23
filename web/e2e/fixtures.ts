@@ -42,3 +42,28 @@ export const PLAYER = {
 export async function stubPlayer(page: Page) {
   await page.route(`**/v1/players/${PLAYER.player_id}`, (route) => route.fulfill({ json: PLAYER }));
 }
+
+// A status for the week's state, stubbed whole so it holds whatever the real
+// calendar says and no request is left in flight when a test ends. Before a
+// deadline with the next predictions out, My team gives advice; between
+// gameweeks it doesn't (#198).
+export function fakeStatus(deadlineInHours: number, entries: string[]) {
+  return {
+    season: "2026/27",
+    last_checked_utc: null,
+    checked_age_seconds: null,
+    snapshot_id: null,
+    snapshot_completed_utc: null,
+    data_age_seconds: null,
+    latest_settled_gameweek: 10,
+    next_gameweek: 12,
+    next_deadline_utc: new Date(Date.now() + deadlineInHours * 3_600_000).toISOString(),
+    next_gameweek_entries: entries,
+  };
+}
+
+export async function stubPredictionsOut(page: Page) {
+  await page.route("**/v1/status", (route) =>
+    route.fulfill({ json: fakeStatus(20, ["gw12_baseline-v1.csv"]) }),
+  );
+}
