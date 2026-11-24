@@ -114,8 +114,7 @@ class TestEntry(fixtures.TempCwd):
             f"snapshot: `{SNAPSHOT_ID}`",
             "included: 1, 2, 3",
             "excluded: none",
-            "prior:",
-            "ratings:",
+            "model:     gbm-v1, artifact",
             "rows:",
         ):
             self.assertIn(line, text)

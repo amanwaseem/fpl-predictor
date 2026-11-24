@@ -22,12 +22,17 @@ BASELINE, MAIN, CHALLENGER, RETIRED_ROLE = "baseline", "main", "challenger", "re
 # Every model logged now, and its role.
 ROLES = {
     "baseline-v1": BASELINE,
-    "form-fixture-v1": MAIN,
-    "gbm-v1": CHALLENGER,
+    "gbm-v1": MAIN,
 }
 
 # Retired models: {model: {"season": "2026/27", "last_gameweek": 12, "reason": "..."}}.
-RETIRED: dict[str, dict] = {}
+RETIRED: dict[str, dict] = {
+    "form-fixture-v1": {
+        "season": "2026/27",
+        "last_gameweek": 11,
+        "reason": "beaten by gbm-v1 over GW9-11, the gameweeks both logged, pooled (#211)",
+    },
+}
 
 
 def last_gameweek(model, season):

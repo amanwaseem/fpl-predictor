@@ -43,15 +43,15 @@ from pathlib import Path
 from fpl.ingest.snapshot import load_snapshot, resolve_target_gw
 from fpl.log import roles, summarise, verify_entry
 from fpl.log.contract import REPORTS, TIMESTAMP, season_directory, season_of_deadline
-from fpl.models import gbm, predict_baseline, predict_fixture
+from fpl.models import gbm, predict_baseline
 from fpl.paths import require_project_root
 
 # The models logged each gameweek, declared here and nowhere else. Adding a
 # model to the log is adding it to this list, in the PR that freezes it.
 LOGGED_MODELS = (
     (predict_baseline.MODEL_VERSION, predict_baseline.main),
-    (predict_fixture.MODEL_VERSION, predict_fixture.main),
-    # From GW9 (#85): its artifact is fetched by hash from its release.
+    # From GW9 (#85): its artifact is fetched by hash from its release. The
+    # main model from GW12, when form-fixture-v1 retired (fpl.log.roles).
     (gbm.MODEL_VERSION, gbm.main),
 )
 
