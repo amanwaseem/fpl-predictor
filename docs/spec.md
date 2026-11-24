@@ -111,6 +111,11 @@ Held out over GW2–5 it beat the baseline on pooled MAE (1.117 vs 1.138) and
 Spearman (0.715 vs 0.712). That is the reason it is logged, not evidence that it
 is better: only its committed entries can show that.
 
+It was the main model from GW6 to GW11, and retired after GW11, when gbm-v1
+(`fpl/models/gbm.py`, ADR 0019), logged beside it from GW9, beat it over the
+gameweeks both logged (#211, ADR 0020). Its code stays: the multi-gameweek plan
+(`fpl/plan.py`) predicts with it.
+
 ### Input requirements
 
 Features are built only from gameweeks whose results are final — `data_checked`

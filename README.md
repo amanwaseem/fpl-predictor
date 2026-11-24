@@ -105,11 +105,11 @@ a fixed baseline as the yardstick, the main model, and at most one challenger. A
 cannot beat the baseline on held-out past seasons is never logged
 ([ADR 0007](docs/adr/0007-the-baseline-is-the-ship-gate.md)).
 
-| Model | Logged from | What it does |
+| Model | Logged | What it does |
 |---|---|---|
-| `baseline-v1` | GW4 | Rolling form: recent minutes and scoring rate, adjusted for availability and fixture count. No training |
-| `form-fixture-v1` | GW6 | Predicts each scoring component (minutes, goals, assists, clean sheets, saves, defensive contributions, bonus) separately, with last-season priors and opponent-aware team strength |
-| `gbm-v1` | GW9 | LightGBM trained on ten past seasons: minutes in two stages, points by a Tweedie model ([held-out report](reports/gbm-v1.md)) |
+| `baseline-v1` | From GW4 | Rolling form: recent minutes and scoring rate, adjusted for availability and fixture count. No training |
+| `form-fixture-v1` | GW6–GW11, then retired: gbm-v1 beat it ([#211](https://github.com/amanwaseem/fpl-predictor/issues/211)) | Predicts each scoring component (minutes, goals, assists, clean sheets, saves, defensive contributions, bonus) separately, with last-season priors and opponent-aware team strength |
+| `gbm-v1` | From GW9; the main model from GW12 | LightGBM trained on ten past seasons: minutes in two stages, points by a Tweedie model ([held-out report](reports/gbm-v1.md)) |
 
 Squad selection is a constrained optimisation over the predictions: an integer programme that
 maximises expected points under the £100m budget, a valid formation, at most three players per

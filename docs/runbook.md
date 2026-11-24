@@ -47,7 +47,7 @@ Work out three things and write them down:
 |---|---|
 | **N** | the gameweek to predict |
 | **Deadline** | GW N's `deadline_time`, UTC — see below |
-| **Model version** | `baseline-v1`; from GW6, `form-fixture-v1`; from GW9, `gbm-v1` — one entry each |
+| **Model version** | `baseline-v1` and `gbm-v1`, one entry each (`form-fixture-v1` was logged GW6–GW11) |
 
 The entry will be written to `predictions/gwNN_<model-version>.csv` in
 2026/27, and to `predictions-<season>/` from 2027/28 (`predictions-2027-28/`),
@@ -60,7 +60,6 @@ Each model has its own command, and every step below runs once per model:
 | Model | Command |
 |---|---|
 | `baseline-v1` | `fpl-predict-baseline` |
-| `form-fixture-v1` | `fpl-predict-fixture` |
 | `gbm-v1` | `fpl-predict-gbm` (fetches its trained model once, by SHA-256, from the `model-gbm-v1` release) |
 
 Run them all from **the same snapshot**. Head-to-head scoring compares them
@@ -326,7 +325,7 @@ committed: fix the cause, delete them, and run it again. It prints a digest for 
 `scratch/entry-gwNN-*/digest.md`. It never commits or pushes. §7 is still yours.
 
 Read its output exactly as §3 says to read each command's: `included:`,
-`excluded:`, `prior:`, `ratings:` and the verifier's verdict. Steps 3–6 below
+`excluded:`, gbm-v1's `model:` line and the verifier's verdict. Steps 3–6 below
 remain the explanation of each check, and the fallback if `fpl-entry` itself is
 what fails.
 
@@ -336,7 +335,7 @@ what fails.
 
 ```
 fpl-predict-baseline --gw N --out scratch/
-fpl-predict-fixture --gw N --out scratch/
+fpl-predict-gbm --gw N --out scratch/
 ```
 
 `scratch/` is gitignored. **Never point an exploratory run at `predictions/`,
@@ -361,14 +360,9 @@ excluded: none
   step 5, but a surprise here usually means the snapshot is wrong, not that the
   fixture list is.
 - **`deadline:`** — confirm it matches the deadline you wrote down in §0.
-- **`prior:`** (form-fixture-v1) — of the players it predicts (a fixture this
-  gameweek, settled recent minutes), how many are shrunk toward last season
-  rather than a positional guess. Around 80 in 2026/27, fewer if clubs blank. A number near
-  zero means the snapshot's `history_past` is missing or its season names
-  have changed.
-- **`ratings:`** (form-fixture-v1) — club-matches the team ratings rest on: two
-  per settled fixture. Well short of 20 × the included rounds means fixtures
-  are missing from the snapshot.
+- **`model:`** (gbm-v1) — the first 12 characters of its trained model's
+  SHA-256, which must match `fpl/models/registry.json`. A run that fetched a
+  file with any other hash refuses to predict.
 
 Then look at the top-20 table for anything absurd, and confirm the row count
 matches the snapshot's player count.
@@ -383,7 +377,7 @@ once GW N-1 has settled, not a retry.
 
 ```
 fpl-predict-baseline --gw N
-fpl-predict-fixture --gw N
+fpl-predict-gbm --gw N
 ```
 
 Writes `predictions/gwNN_<model-version>.csv` (or the season's
@@ -607,8 +601,8 @@ fpl-fetch                                                  # ~6 min, after press
 fpl-entry                                                  # steps 3-6, every logged model — or by hand:
 fpl-predict-baseline --gw N --out scratch/                 # exploratory — read included:/excluded:
 fpl-predict-baseline --gw N                                # writes predictions/gwNN_<model>.csv
-fpl-predict-fixture --gw N --out scratch/                  # form-fixture-v1, from GW6: same two steps
-fpl-predict-fixture --gw N
+fpl-predict-gbm --gw N --out scratch/                      # gbm-v1: same two steps
+fpl-predict-gbm --gw N
 fpl-verify predictions/gwNN_<model>.csv                    # gate: non-zero means do not commit
 fpl-summarise predictions/gwNN_<model>.csv --out reports/
 python tools/check_log_immutable.py --ref origin/main      # rule 1, mechanically
